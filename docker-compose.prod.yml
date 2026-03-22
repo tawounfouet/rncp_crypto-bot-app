@@ -1,0 +1,132 @@
+# Docker Compose pour environnement PRODUCTION
+# =============================================
+# Ports: Backend 9009, Postgres 5435, Mongo 27018 (cohabite avec staging)
+
+services:
+  mongo:
+    image: mongo
+    container_name: prod-mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PWD}
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - prod_mongo_data:/data/db
+    networks:
+      - prod-network
+
+  postgres:
+    image: postgres:14
+    container_name: prod-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PWD:-postgres}
+      POSTGRES_DB: crypto_bot_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - prod_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - prod-network
+
+  minio:
+    image: minio/minio
+    container_name: prod-minio
+    restart: always
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER_ADMIN:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PWD_ADMIN:-minioadmin}
+    volumes:
+      - prod_minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    networks:
+      - prod-network
+
+  crypto-bot-backend:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/backend:${IMAGE_TAG:-latest}
+    container_name: prod-backend
+    restart: always
+    ports:
+      - "9009:8009"
+    environment:
+      - MONGODB_USER=${MONGODB_USER}
+      - MONGODB_PWD=${MONGODB_PWD}
+      - MONGODB_HOST=mongo
+      - MONGODB_PORT=27017
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=crypto_bot_db
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - ENVIRONMENT=production
+      - DEBUG=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - prod-network
+
+  crypto-bot-frontend:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/frontend:${IMAGE_TAG:-latest}
+    container_name: prod-frontend
+    restart: always
+    ports:
+      - "8502:8501"
+    environment:
+      - API_URL=http://crypto-bot-backend:8009
+      - ENVIRONMENT=production
+      - APP_VERSION=${APP_VERSION:-latest}
+    depends_on:
+      crypto-bot-backend:
+        condition: service_healthy
+    networks:
+      - prod-network
+
+volumes:
+  prod_mongo_data:
+  prod_postgres_data:
+  prod_minio_data:
+
+networks:
+  prod-network:
+    name: prod-network

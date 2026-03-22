@@ -1,0 +1,199 @@
+# Docker Compose pour environnement de DEVELOPPEMENT
+# ===================================================
+
+services:
+  # MongoDB
+  mongo:
+    image: mongo:4.4
+    container_name: mongo-nosql-db
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PWD}
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - dev-network
+
+  # MongoDB Admin UI
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-admin-ui
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGODB_USER_ADMIN}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGODB_PWD_ADMIN}
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USER}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PWD}
+      ME_CONFIG_MONGODB_URL: "mongodb://${MONGODB_USER}:${MONGODB_PWD}@mongo:27017/admin?authSource=admin"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - dev-network
+
+  # PostgreSQL
+  postgres:
+    image: postgres:14
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PWD:-postgres}
+      POSTGRES_DB: crypto_bot_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - dev-network
+
+  # PostgreSQL Admin UI
+  adminer:
+    image: adminer
+    container_name: postgres-admin-ui
+    restart: always
+    ports:
+      - "8085:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dev-network
+
+  # MinIO (S3-compatible storage)
+  minio:
+    image: minio/minio
+    container_name: minio-s3-service
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER_ADMIN:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PWD_ADMIN:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+    networks:
+      - dev-network
+
+  # MinIO bucket creation (one-time)
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb --ignore-existing myminio/crypto-bot-data;
+      /usr/bin/mc anonymous set download myminio/crypto-bot-data;
+      echo 'Buckets created successfully.';
+      exit 0;
+      "
+    profiles:
+      - tools
+    networks:
+      - dev-network
+
+  # Backend FastAPI
+  crypto-bot-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crypto-bot-backend
+    restart: always
+    ports:
+      - "8009:8009"
+    volumes:
+      - ./backend/src:/app/src
+      - ./data:/app/data
+    environment:
+      - MONGODB_USER=${MONGODB_USER}
+      - MONGODB_PWD=${MONGODB_PWD}
+      - MONGODB_HOST=mongo
+      - MONGODB_PORT=27017
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=crypto_bot_db
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - ENVIRONMENT=development
+      - DEBUG=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - dev-network
+
+  # Frontend Streamlit
+  crypto-bot-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: crypto-bot-frontend
+    restart: always
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./frontend/src:/app/src
+    environment:
+      - API_URL=http://crypto-bot-backend:8009
+      - ENVIRONMENT=development
+      - APP_VERSION=${APP_VERSION:-dev}
+    depends_on:
+      crypto-bot-backend:
+        condition: service_healthy
+    networks:
+      - dev-network
+
+volumes:
+  mongo_data:
+  postgres_data:
+  minio_data:
+
+networks:
+  dev-network:
+    name: dev-network

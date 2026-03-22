@@ -1,0 +1,94 @@
+rules:
+  # ==========================================================================
+  # PYTHON — Injection de code
+  # ==========================================================================
+
+  - id: python-eval-usage
+    patterns:
+      - pattern: eval(...)
+    languages: [python]
+    message: >
+      eval() interdit — risque d'injection de code arbitraire.
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-94: Code Injection"
+
+  - id: python-exec-usage
+    patterns:
+      - pattern: exec(...)
+    languages: [python]
+    message: >
+      exec() interdit — risque d'injection de code arbitraire.
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-94: Code Injection"
+
+  # ==========================================================================
+  # PYTHON — Injection SQL
+  # ==========================================================================
+
+  - id: python-sql-fstring
+    patterns:
+      - pattern: $DB.execute(f"...", ...)
+    languages: [python]
+    message: >
+      Utiliser des requetes parametrees (placeholders %s ou :param).
+      Les f-strings dans execute() sont un vecteur d'injection SQL.
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+
+  - id: python-sql-format
+    patterns:
+      - pattern: $DB.execute("...".format(...), ...)
+    languages: [python]
+    message: >
+      Utiliser des requetes parametrees (placeholders %s ou :param).
+      .format() dans execute() est un vecteur d'injection SQL.
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+
+  - id: python-sql-concat
+    patterns:
+      - pattern: $DB.execute($X + $Y, ...)
+    languages: [python]
+    message: >
+      Utiliser des requetes parametrees (placeholders %s ou :param).
+      La concatenation dans execute() est un vecteur d'injection SQL.
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-89: SQL Injection"
+
+  # ==========================================================================
+  # PYTHON — SSRF / Requetes non validees
+  # ==========================================================================
+
+  - id: python-requests-no-timeout
+    patterns:
+      - pattern: requests.get(...)
+      - pattern-not: requests.get(..., timeout=..., ...)
+    languages: [python]
+    message: >
+      Ajouter un timeout aux appels requests pour eviter les blocages.
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-400: Resource Exhaustion"
+
+  - id: python-requests-post-no-timeout
+    patterns:
+      - pattern: requests.post(...)
+      - pattern-not: requests.post(..., timeout=..., ...)
+    languages: [python]
+    message: >
+      Ajouter un timeout aux appels requests pour eviter les blocages.
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-400: Resource Exhaustion"
