@@ -59,7 +59,7 @@ lint:dockerfile:backend:
   image: hadolint/hadolint:latest-debian
   script:
     - echo "Verification bonnes pratiques Dockerfile backend..."
-    - hadolint backend/Dockerfile
+    - hadolint --failure-threshold error backend/Dockerfile
     - echo "Dockerfile backend OK"
   rules:
     - if: $CI_COMMIT_TAG
@@ -74,7 +74,7 @@ lint:dockerfile:frontend:
   image: hadolint/hadolint:latest-debian
   script:
     - echo "Verification bonnes pratiques Dockerfile frontend..."
-    - hadolint frontend/Dockerfile
+    - hadolint --failure-threshold error frontend/Dockerfile
     - echo "Dockerfile frontend OK"
   rules:
     - if: $CI_COMMIT_TAG
@@ -214,13 +214,14 @@ scan:images:
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
+  variables:
+    TRIVY_USERNAME: $CI_REGISTRY_USER
+    TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
   needs:
     - job: build:docker
       artifacts: false
   script:
     - |
-      docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-
       for COMPONENT in backend frontend; do
         if [ -n "$CI_COMMIT_TAG" ]; then
           IMAGE_TAG="$CI_COMMIT_TAG"
