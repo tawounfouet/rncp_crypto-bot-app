@@ -3,20 +3,20 @@ Trading domain models for the Crypto Trading Bot.
 Contains Order, OrderFill, and Transaction models with Binance API compatibility.
 """
 
-from decimal import Decimal
 from datetime import datetime
+from decimal import Decimal
+
+from shared.models.base import BaseModel, register_model
 from sqlalchemy import (
-    Column,
-    String,
     DECIMAL,
     Boolean,
+    Column,
     DateTime,
     ForeignKey,
+    String,
     Text,
 )
 from sqlalchemy.orm import relationship
-
-from shared.models.base import BaseModel, register_model
 
 
 @register_model

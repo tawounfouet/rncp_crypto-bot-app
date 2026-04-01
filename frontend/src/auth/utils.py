@@ -3,12 +3,12 @@ Utility functions for authentication operations.
 Based on notebook: 01_auth_endpoints_testing.ipynb
 """
 
-import uuid
 import time
-from typing import Dict, Any
+import uuid
+from typing import Any
 
 
-def generate_test_user_data() -> Dict[str, Any]:
+def generate_test_user_data() -> dict[str, Any]:
     """
     Generate test user data with unique identifiers.
 
@@ -68,7 +68,7 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     return True, "Password is strong"
 
 
-def format_user_display(user_data: Dict[str, Any]) -> str:
+def format_user_display(user_data: dict[str, Any]) -> str:
     """
     Format user data for display.
 

@@ -1,0 +1,10 @@
+# =============================================================================
+# Hadolint configuration
+# =============================================================================
+# Les versions apt sont gerees via apt-get upgrade (patchs securite).
+# Les versions pip sont pinnees dans requirements.txt (source unique).
+# Hadolint ne sait pas parser ces sources, donc ces regles sont ignorees.
+# =============================================================================
+ignored:
+  - DL3008  # apt pin versions — gerees via apt-get upgrade
+  - DL3013  # pip pin versions — pinnees dans requirements.txt

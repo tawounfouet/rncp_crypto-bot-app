@@ -3,11 +3,10 @@ User-related Pydantic schemas for the Crypto Trading Bot application.
 Contains schemas for user creation, authentication, and responses.
 """
 
-from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from enum import Enum
 
+from pydantic import BaseModel, EmailStr, Field
 from shared.schemas.common import BaseResponse
 
 
@@ -32,8 +31,8 @@ class UserCreate(BaseModel):
 
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50)
-    first_name: Optional[str] = Field(None, max_length=100)
-    last_name: Optional[str] = Field(None, max_length=100)
+    first_name: str | None = Field(None, max_length=100)
+    last_name: str | None = Field(None, max_length=100)
     password: str = Field(..., min_length=8, max_length=100)
 
     class Config:
@@ -51,9 +50,9 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """Schema for user updates."""
 
-    first_name: Optional[str] = Field(None, max_length=100)
-    last_name: Optional[str] = Field(None, max_length=100)
-    email: Optional[EmailStr] = None
+    first_name: str | None = Field(None, max_length=100)
+    last_name: str | None = Field(None, max_length=100)
+    email: EmailStr | None = None
 
     class Config:
         json_schema_extra = {"example": {"first_name": "John", "last_name": "Doe Updated"}}
@@ -71,9 +70,9 @@ class PasswordChange(BaseModel):
 class UserSettingsUpdate(BaseModel):
     """Schema for user settings updates."""
 
-    theme: Optional[ThemeEnum] = None
-    risk_profile: Optional[RiskProfileEnum] = None
-    notification_preferences: Optional[dict] = None
+    theme: ThemeEnum | None = None
+    risk_profile: RiskProfileEnum | None = None
+    notification_preferences: dict | None = None
 
     class Config:
         json_schema_extra = {
@@ -96,8 +95,8 @@ class UserBase(BaseModel):
     id: str
     email: EmailStr
     username: str
-    first_name: Optional[str]
-    last_name: Optional[str]
+    first_name: str | None
+    last_name: str | None
     is_active: bool
     is_admin: bool
     created_at: datetime
@@ -116,7 +115,7 @@ class UserPublic(BaseModel):
 
     id: str
     username: str
-    first_name: Optional[str]
+    first_name: str | None
 
     class Config:
         from_attributes = True
@@ -136,7 +135,7 @@ class UserSettings(BaseModel):
 class UserProfile(UserResponse):
     """Extended user profile with settings."""
 
-    settings: Optional[UserSettings] = None
+    settings: UserSettings | None = None
 
     class Config:
         from_attributes = True
@@ -172,7 +171,7 @@ class TokenRefresh(BaseModel):
 class LogoutRequest(BaseModel):
     """Logout request (optional token for specific session)."""
 
-    refresh_token: Optional[str] = None
+    refresh_token: str | None = None
 
 
 # User Lists and Statistics

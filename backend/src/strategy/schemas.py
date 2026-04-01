@@ -3,12 +3,12 @@ Strategy-related Pydantic schemas for the Crypto Trading Bot application.
 Contains schemas for strategy creation, deployment, and management.
 """
 
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 
+from pydantic import BaseModel, Field
 from shared.schemas.common import BaseResponse
 
 
@@ -56,9 +56,9 @@ class StrategyCreate(BaseModel):
     """Schema for creating a new strategy."""
 
     name: str = Field(..., min_length=3, max_length=200, description="Strategy name")
-    description: Optional[str] = Field(None, max_length=1000, description="Strategy description")
+    description: str | None = Field(None, max_length=1000, description="Strategy description")
     strategy_type: StrategyTypeEnum
-    parameters: Dict[str, Any] = Field(..., description="Strategy parameters")
+    parameters: dict[str, Any] = Field(..., description="Strategy parameters")
     asset_class: AssetClassEnum = AssetClassEnum.CRYPTO
     is_public: bool = Field(False, description="Make strategy public")
     version: str = Field("1.0", description="Strategy version")
@@ -84,11 +84,11 @@ class StrategyCreate(BaseModel):
 class StrategyUpdate(BaseModel):
     """Schema for updating a strategy."""
 
-    name: Optional[str] = Field(None, min_length=3, max_length=200)
-    description: Optional[str] = Field(None, max_length=1000)
-    parameters: Optional[Dict[str, Any]] = None
-    is_public: Optional[bool] = None
-    is_active: Optional[bool] = None
+    name: str | None = Field(None, min_length=3, max_length=200)
+    description: str | None = Field(None, max_length=1000)
+    parameters: dict[str, Any] | None = None
+    is_public: bool | None = None
+    is_active: bool | None = None
 
 
 # Strategy Deployment
@@ -100,7 +100,7 @@ class StrategyDeploymentCreate(BaseModel):
     symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
     timeframe: str = Field(..., description="Timeframe (e.g., 1h, 4h, 1d)")
     amount: Decimal = Field(..., gt=0, description="Amount to trade")
-    parameters: Optional[Dict[str, Any]] = Field(None, description="Deployment-specific parameters")
+    parameters: dict[str, Any] | None = Field(None, description="Deployment-specific parameters")
 
     class Config:
         json_schema_extra = {
@@ -118,10 +118,10 @@ class StrategyDeploymentCreate(BaseModel):
 class StrategyDeploymentUpdate(BaseModel):
     """Schema for updating a deployment."""
 
-    status: Optional[DeploymentStatusEnum] = None
-    amount: Optional[Decimal] = Field(None, gt=0)
-    parameters: Optional[Dict[str, Any]] = None
-    end_time: Optional[datetime] = None
+    status: DeploymentStatusEnum | None = None
+    amount: Decimal | None = Field(None, gt=0)
+    parameters: dict[str, Any] | None = None
+    end_time: datetime | None = None
 
 
 # Trading Session
@@ -130,15 +130,15 @@ class TradingSessionCreate(BaseModel):
 
     deployment_id: str
     initial_balance: Decimal = Field(..., gt=0)
-    max_trades: Optional[int] = Field(None, gt=0)
+    max_trades: int | None = Field(None, gt=0)
 
 
 class TradingSessionUpdate(BaseModel):
     """Schema for updating a trading session."""
 
-    status: Optional[SessionStatusEnum] = None
-    final_balance: Optional[Decimal] = None
-    stop_reason: Optional[str] = None
+    status: SessionStatusEnum | None = None
+    final_balance: Decimal | None = None
+    stop_reason: str | None = None
 
 
 # Backtest
@@ -151,7 +151,7 @@ class BacktestCreate(BaseModel):
     start_date: datetime = Field(..., description="Backtest start date")
     end_date: datetime = Field(..., description="Backtest end date")
     initial_balance: Decimal = Field(..., gt=0, description="Initial balance")
-    parameters: Optional[Dict[str, Any]] = Field(None, description="Backtest parameters")
+    parameters: dict[str, Any] | None = Field(None, description="Backtest parameters")
 
     class Config:
         json_schema_extra = {
@@ -174,7 +174,7 @@ class StrategyBase(BaseModel):
     id: str
     user_id: str
     name: str
-    description: Optional[str]
+    description: str | None
     strategy_type: StrategyTypeEnum
     asset_class: AssetClassEnum
     is_public: bool
@@ -187,8 +187,8 @@ class StrategyBase(BaseModel):
 class StrategyResponse(StrategyBase):
     """Complete strategy response."""
 
-    parameters: Dict[str, Any]
-    parameter_hash: Optional[str]
+    parameters: dict[str, Any]
+    parameter_hash: str | None
 
     class Config:
         from_attributes = True
@@ -199,7 +199,7 @@ class StrategyPublic(BaseModel):
 
     id: str
     name: str
-    description: Optional[str]
+    description: str | None
     strategy_type: StrategyTypeEnum
     asset_class: AssetClassEnum
     version: str
@@ -219,10 +219,10 @@ class StrategyDeploymentResponse(BaseModel):
     symbol: str
     timeframe: str
     amount: Decimal
-    parameters: Optional[Dict[str, Any]]
+    parameters: dict[str, Any] | None
     status: DeploymentStatusEnum
     start_time: datetime
-    end_time: Optional[datetime]
+    end_time: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -235,10 +235,10 @@ class StrategyStateResponse(BaseModel):
 
     id: str
     deployment_id: str
-    position: Optional[str]
+    position: str | None
     position_size: Decimal
-    entry_price: Optional[Decimal]
-    entry_time: Optional[datetime]
+    entry_price: Decimal | None
+    entry_time: datetime | None
     total_trades: int
     winning_trades: int
     losing_trades: int
@@ -246,10 +246,10 @@ class StrategyStateResponse(BaseModel):
     cumulative_profit_loss: Decimal
     max_drawdown: Decimal
     is_active: bool
-    last_signal: Optional[str]
-    last_signal_time: Optional[datetime]
-    last_price: Optional[Decimal]
-    last_update: Optional[datetime]
+    last_signal: str | None
+    last_signal_time: datetime | None
+    last_price: Decimal | None
+    last_update: datetime | None
 
     class Config:
         from_attributes = True
@@ -262,17 +262,17 @@ class TradingSessionResponse(BaseModel):
     deployment_id: str
     user_id: str
     start_time: datetime
-    end_time: Optional[datetime]
-    duration_seconds: Optional[int]
+    end_time: datetime | None
+    duration_seconds: int | None
     initial_balance: Decimal
-    final_balance: Optional[Decimal]
-    max_trades: Optional[int]
+    final_balance: Decimal | None
+    max_trades: int | None
     total_trades: int
     profitable_trades: int
     total_profit_loss: Decimal
-    win_rate: Optional[Decimal]
+    win_rate: Decimal | None
     status: SessionStatusEnum
-    stop_reason: Optional[str]
+    stop_reason: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -290,10 +290,10 @@ class BacktestResponse(BaseModel):
     timeframe: str
     start_date: datetime
     end_date: datetime
-    parameters: Optional[Dict[str, Any]]
-    results: Dict[str, Any]
-    metrics: Dict[str, Any]
-    transactions: Optional[List[Dict[str, Any]]]
+    parameters: dict[str, Any] | None
+    results: dict[str, Any]
+    metrics: dict[str, Any]
+    transactions: list[dict[str, Any]] | None
     created_at: datetime
     updated_at: datetime
 
@@ -327,13 +327,13 @@ class StrategyCreateResponse(BaseResponse):
 class StrategyListResponse(BaseResponse):
     """Response for strategy list."""
 
-    strategies: List[StrategyResponse]
+    strategies: list[StrategyResponse]
 
 
 class StrategyPublicListResponse(BaseResponse):
     """Response for public strategy list."""
 
-    strategies: List[StrategyPublic]
+    strategies: list[StrategyPublic]
 
 
 class DeploymentCreateResponse(BaseResponse):
@@ -345,7 +345,7 @@ class DeploymentCreateResponse(BaseResponse):
 class DeploymentListResponse(BaseResponse):
     """Response for deployment list."""
 
-    deployments: List[StrategyDeploymentResponse]
+    deployments: list[StrategyDeploymentResponse]
 
 
 class TradingSessionCreateResponse(BaseResponse):

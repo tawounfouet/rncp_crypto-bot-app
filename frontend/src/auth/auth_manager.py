@@ -2,9 +2,11 @@
 Authentication Manager for handling auth state in Streamlit.
 """
 
+from typing import Any
+
 import streamlit as st
-from typing import Optional, Dict, Any, Tuple
-from .api_client import AuthAPIClient, APIResponse
+
+from .api_client import APIResponse, AuthAPIClient
 
 
 class AuthManager:
@@ -18,7 +20,7 @@ class AuthManager:
     - Integration with Streamlit session state
     """
 
-    def __init__(self, api_client: Optional[AuthAPIClient] = None):
+    def __init__(self, api_client: AuthAPIClient | None = None):
         """
         Initialize the authentication manager.
 
@@ -44,9 +46,9 @@ class AuthManager:
         email: str,
         username: str,
         password: str,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
-    ) -> Tuple[bool, str]:
+        first_name: str | None = None,
+        last_name: str | None = None,
+    ) -> tuple[bool, str]:
         """
         Register a new user.
 
@@ -70,7 +72,7 @@ class AuthManager:
             error_msg = self._extract_error_message(response)
             return False, f"Registration failed: {error_msg}"
 
-    def login(self, username: str, password: str, use_json: bool = True) -> Tuple[bool, str]:
+    def login(self, username: str, password: str, use_json: bool = True) -> tuple[bool, str]:
         """
         Login user with credentials.
 
@@ -95,7 +97,7 @@ class AuthManager:
             error_msg = self._extract_error_message(response)
             return False, f"Login failed: {error_msg}"
 
-    def logout(self) -> Tuple[bool, str]:
+    def logout(self) -> tuple[bool, str]:
         """
         Logout current user.
 
@@ -117,7 +119,7 @@ class AuthManager:
             # Still clear local data even if server request failed
             return True, "Logged out (local session cleared)"
 
-    def logout_all_sessions(self) -> Tuple[bool, str]:
+    def logout_all_sessions(self) -> tuple[bool, str]:
         """
         Logout all sessions for current user.
 
@@ -139,7 +141,7 @@ class AuthManager:
             error_msg = self._extract_error_message(response)
             return False, f"Logout all failed: {error_msg}"
 
-    def refresh_access_token(self) -> Tuple[bool, str]:
+    def refresh_access_token(self) -> tuple[bool, str]:
         """
         Refresh the access token using refresh token.
 
@@ -162,7 +164,7 @@ class AuthManager:
             error_msg = self._extract_error_message(response)
             return False, f"Token refresh failed: {error_msg}"
 
-    def get_current_user(self) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    def get_current_user(self) -> tuple[bool, dict[str, Any] | None]:
         """
         Get current user information.
 
@@ -201,7 +203,7 @@ class AuthManager:
         """
         return st.session_state.get("authenticated", False)
 
-    def check_health(self) -> Tuple[bool, str]:
+    def check_health(self) -> tuple[bool, str]:
         """
         Check API health status.
 
@@ -216,7 +218,7 @@ class AuthManager:
             error_msg = self._extract_error_message(response)
             return False, f"API health check failed: {error_msg}"
 
-    def _store_auth_data(self, data: Dict[str, Any]):
+    def _store_auth_data(self, data: dict[str, Any]):
         """Store authentication data in session state."""
         if "access_token" in data:
             st.session_state["access_token"] = data["access_token"]

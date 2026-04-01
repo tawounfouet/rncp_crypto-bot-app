@@ -3,15 +3,15 @@ User service for the Crypto Trading Bot application.
 Handles user CRUD operations and business logic.
 """
 
-from typing import List, Optional
-from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
 import uuid
 
-from auth.models import User, UserSettings
-from auth.schemas import UserCreate, UserUpdate, UserSettingsUpdate
-from auth.service import auth_service
+from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
+from sqlalchemy.orm import Session
+
+from auth.models import User, UserSettings
+from auth.schemas import UserCreate, UserSettingsUpdate, UserUpdate
+from auth.service import auth_service
 
 # Constants
 USER_NOT_FOUND = "User not found"
@@ -90,17 +90,17 @@ class UserService:
         )
         session.add(default_settings)
 
-    def get_user_by_id(self, user_id: str) -> Optional[User]:
+    def get_user_by_id(self, user_id: str) -> User | None:
         """Get user by ID."""
         with get_db_session() as session:
             return session.query(User).filter(User.id == user_id).first()
 
-    def get_user_by_username(self, username: str) -> Optional[User]:
+    def get_user_by_username(self, username: str) -> User | None:
         """Get user by username."""
         with get_db_session() as session:
             return session.query(User).filter(User.username == username).first()
 
-    def get_user_by_email(self, email: str) -> Optional[User]:
+    def get_user_by_email(self, email: str) -> User | None:
         """Get user by email."""
         with get_db_session() as session:
             return session.query(User).filter(User.email == email).first()
@@ -153,12 +153,12 @@ class UserService:
             session.delete(user)
             return True
 
-    def get_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+    def get_users(self, skip: int = 0, limit: int = 100) -> list[User]:
         """Get list of users with pagination."""
         with get_db_session() as session:
             return session.query(User).offset(skip).limit(limit).all()
 
-    def get_user_settings(self, user_id: str) -> Optional[UserSettings]:
+    def get_user_settings(self, user_id: str) -> UserSettings | None:
         """Get user settings."""
         with get_db_session() as session:
             return session.query(UserSettings).filter(UserSettings.user_id == user_id).first()

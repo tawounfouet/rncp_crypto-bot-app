@@ -3,11 +3,12 @@ Market data service for handling market data operations.
 """
 
 import logging
-import pandas as pd
-import numpy as np
-from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Any
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class MarketDataService:
         timeframe: str,
         start_date: datetime,
         end_date: datetime,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         """
         Get historical market data.
@@ -72,7 +73,7 @@ class MarketDataService:
         timeframe: str,
         start_date: datetime,
         end_date: datetime,
-        limit: Optional[int] = None,
+        limit: int | None = None,
     ) -> pd.DataFrame:
         """Generate simulated OHLCV data for testing."""
         # Calculate time delta based on timeframe
@@ -129,7 +130,7 @@ class MarketDataService:
 
         return pd.DataFrame(data)
 
-    async def get_available_symbols(self) -> List[str]:
+    async def get_available_symbols(self) -> list[str]:
         """Get list of available trading symbols."""
         # In production, this would query the exchange API
         return [
@@ -150,7 +151,7 @@ class MarketDataService:
             "ATOMUSDT",
         ]
 
-    async def get_symbol_info(self, symbol: str) -> Dict[str, Any]:
+    async def get_symbol_info(self, symbol: str) -> dict[str, Any]:
         """Get detailed information about a symbol."""
         # In production, this would query the exchange API
         base_asset = symbol[:-4] if len(symbol) > 4 else symbol[:3]

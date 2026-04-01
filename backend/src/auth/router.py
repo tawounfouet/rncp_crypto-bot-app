@@ -3,11 +3,12 @@ Authentication router for the Crypto Trading Bot API.
 Provides endpoints for user authentication, registration, and token management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordRequestForm
 from typing import Annotated
 
-from auth.schemas import UserCreate, TokenResponse, LoginRequest
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordRequestForm
+
+from auth.schemas import LoginRequest, TokenResponse, UserCreate
 from auth.service import auth_service
 from auth.user_service import user_service
 
@@ -43,8 +44,8 @@ async def register(request: Request, user_data: UserCreate) -> TokenResponse:
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register user: {str(e)}",
-        )
+            detail=f"Failed to register user: {e!s}",
+        ) from None
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -81,8 +82,8 @@ async def login(request: Request, form_data: Annotated[OAuth2PasswordRequestForm
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {str(e)}",
-        )
+            detail=f"Login failed: {e!s}",
+        ) from None
 
 
 @router.post("/login/json", response_model=TokenResponse)
@@ -119,8 +120,8 @@ async def login_json(request: Request, login_data: LoginRequest) -> TokenRespons
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {str(e)}",
-        )
+            detail=f"Login failed: {e!s}",
+        ) from None
 
 
 @router.post("/refresh")
@@ -140,8 +141,8 @@ async def refresh_token(refresh_token: str) -> dict:
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Token refresh failed: {str(e)}",
-        )
+            detail=f"Token refresh failed: {e!s}",
+        ) from None
 
 
 @router.post("/logout")
@@ -164,8 +165,8 @@ async def logout(refresh_token: str) -> dict:
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Logout failed: {str(e)}",
-        )
+            detail=f"Logout failed: {e!s}",
+        ) from None
 
 
 @router.post("/logout-all")
@@ -186,5 +187,5 @@ async def logout_all_sessions(user_id: str) -> dict:
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Logout all failed: {str(e)}",
-        )
+            detail=f"Logout all failed: {e!s}",
+        ) from None

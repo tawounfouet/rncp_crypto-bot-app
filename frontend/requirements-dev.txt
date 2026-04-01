@@ -7,5 +7,4 @@
 pytest==9.0.2
 
 # Linting & Formatting
-flake8==7.3.0
-black==26.3.1
+ruff==0.8.1

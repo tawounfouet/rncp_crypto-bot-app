@@ -9,8 +9,4 @@ pytest-cov==7.0.0
 pytest-timeout==2.4.0
 
 # Linting & Formatage
-flake8==7.2.0
-black==26.1.0
-
-# Sécurité
-bandit==1.8.3
+ruff==0.8.1

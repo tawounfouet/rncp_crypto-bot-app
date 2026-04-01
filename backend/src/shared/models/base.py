@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Column, String, DateTime, Boolean, func
+from sqlalchemy import Boolean, Column, DateTime, String, func
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import declarative_base
 

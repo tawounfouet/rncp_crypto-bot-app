@@ -1,5 +1,6 @@
-import streamlit as st
 import re
+
+import streamlit as st
 
 
 def is_valid_email(email):

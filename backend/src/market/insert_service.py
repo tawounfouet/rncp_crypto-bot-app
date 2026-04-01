@@ -3,14 +3,14 @@ Service for inserting historical market data from Binance into PostgreSQL and Mi
 This service handles fetching real data from Binance and persisting it to the database and object storage.
 """
 
-import logging
 import json
-import pandas as pd
-from typing import List, Optional
-from datetime import datetime, timezone
+import logging
+from datetime import UTC, datetime
 from decimal import Decimal
-from sqlalchemy.orm import Session
+
+import pandas as pd
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
 
 from market.clients.binance import ClientBinance
 from market.clients.minio import ClientMinIO
@@ -53,7 +53,7 @@ class MarketDataInsertService:
         symbol: str,
         interval: str,
         start_time: datetime,
-        end_time: Optional[datetime] = None,
+        end_time: datetime | None = None,
         limit: int = 1000,
     ) -> dict:
         """
@@ -70,7 +70,7 @@ class MarketDataInsertService:
             dict: Statistics about the insertion (inserted, updated, failed)
         """
         if end_time is None:
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(UTC)
 
         logger.info(
             f"Fetching historical data for {symbol} ({interval}) " f"from {start_time} to {end_time}, limit={limit}"
@@ -102,7 +102,7 @@ class MarketDataInsertService:
 
         return result
 
-    def _convert_interval(self, interval: str) -> Optional[str]:
+    def _convert_interval(self, interval: str) -> str | None:
         """
         Convert our interval format to Binance interval format.
 
@@ -121,7 +121,7 @@ class MarketDataInsertService:
         start_time: datetime,
         end_time: datetime,
         limit: int,
-    ) -> List:
+    ) -> list:
         """
         Fetch klines data from Binance.
 
@@ -153,7 +153,7 @@ class MarketDataInsertService:
             return klines
 
         except Exception as e:
-            logger.error(f"Error fetching data from Binance: {str(e)}")
+            logger.error(f"Error fetching data from Binance: {e!s}")
             raise
 
     def _save_to_minio(
@@ -162,7 +162,7 @@ class MarketDataInsertService:
         interval: str,
         start_time: datetime,
         end_time: datetime,
-        klines: List,
+        klines: list,
     ) -> bool:
         """
         Save klines data to MinIO in JSON and CSV formats.
@@ -179,7 +179,7 @@ class MarketDataInsertService:
         """
         try:
             # Generate timestamp for filename
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
             # Generate folder structure: market_data/{symbol}/{interval}/
             folder_prefix = f"market_data/{symbol}/{interval}"
@@ -193,7 +193,7 @@ class MarketDataInsertService:
                 "end_time": end_time.isoformat(),
                 "count": len(klines),
                 "data": klines,
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "fetched_at": datetime.now(UTC).isoformat(),
             }
 
             # Convert to JSON string
@@ -223,13 +223,13 @@ class MarketDataInsertService:
             for kline in klines:
                 df_data.append(
                     {
-                        "open_time": datetime.fromtimestamp(kline[0] / 1000, tz=timezone.utc).isoformat(),
+                        "open_time": datetime.fromtimestamp(kline[0] / 1000, tz=UTC).isoformat(),
                         "open": float(kline[1]),
                         "high": float(kline[2]),
                         "low": float(kline[3]),
                         "close": float(kline[4]),
                         "volume": float(kline[5]),
-                        "close_time": datetime.fromtimestamp(kline[6] / 1000, tz=timezone.utc).isoformat(),
+                        "close_time": datetime.fromtimestamp(kline[6] / 1000, tz=UTC).isoformat(),
                         "quote_asset_volume": float(kline[7]),
                         "number_of_trades": int(kline[8]),
                         "taker_buy_base_volume": float(kline[9]),
@@ -250,10 +250,10 @@ class MarketDataInsertService:
             return True
 
         except Exception as e:
-            logger.error(f"❌ Error saving data to MinIO: {str(e)}")
+            logger.error(f"❌ Error saving data to MinIO: {e!s}")
             return False
 
-    def _insert_klines_to_db(self, symbol: str, interval: str, klines: List) -> dict:
+    def _insert_klines_to_db(self, symbol: str, interval: str, klines: list) -> dict:
         """
         Insert klines data into PostgreSQL database with upsert logic.
 
@@ -278,13 +278,13 @@ class MarketDataInsertService:
                     "symbol": symbol,
                     "exchange": "binance",
                     "interval_timeframe": interval,
-                    "open_time": datetime.fromtimestamp(kline[0] / 1000, tz=timezone.utc),
+                    "open_time": datetime.fromtimestamp(kline[0] / 1000, tz=UTC),
                     "open_price": Decimal(str(kline[1])),
                     "high_price": Decimal(str(kline[2])),
                     "low_price": Decimal(str(kline[3])),
                     "close_price": Decimal(str(kline[4])),
                     "volume": Decimal(str(kline[5])),
-                    "close_time": datetime.fromtimestamp(kline[6] / 1000, tz=timezone.utc),
+                    "close_time": datetime.fromtimestamp(kline[6] / 1000, tz=UTC),
                     "quote_asset_volume": Decimal(str(kline[7])),
                     "number_of_trades": int(kline[8]),
                     "taker_buy_base_volume": Decimal(str(kline[9])),
@@ -311,7 +311,7 @@ class MarketDataInsertService:
                         "number_of_trades": stmt.excluded.number_of_trades,
                         "taker_buy_base_volume": stmt.excluded.taker_buy_base_volume,
                         "taker_buy_quote_volume": stmt.excluded.taker_buy_quote_volume,
-                        "updated_at": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(UTC),
                     },
                 )
 
@@ -327,7 +327,7 @@ class MarketDataInsertService:
                     updated += 1
 
             except Exception as e:
-                logger.error(f"Error inserting kline: {str(e)}")
+                logger.error(f"Error inserting kline: {e!s}")
                 self.db.rollback()
                 failed += 1
                 continue
@@ -365,7 +365,7 @@ class MarketDataInsertService:
             )
             return count
         except Exception as e:
-            logger.error(f"Error counting records: {str(e)}")
+            logger.error(f"Error counting records: {e!s}")
             return 0
 
     def validate_symbol(self, symbol: str) -> bool:
@@ -382,10 +382,10 @@ class MarketDataInsertService:
             info = self.binance_client.client.get_symbol_info(symbol)
             return info is not None
         except Exception as e:
-            logger.warning(f"Symbol validation failed for {symbol}: {str(e)}")
+            logger.warning(f"Symbol validation failed for {symbol}: {e!s}")
             return False
 
-    def get_latest_data(self, symbol: str, interval: str, limit: int = 100) -> List[dict]:
+    def get_latest_data(self, symbol: str, interval: str, limit: int = 100) -> list[dict]:
         """
         Retrieve the latest market data from PostgreSQL database.
 
@@ -441,5 +441,5 @@ class MarketDataInsertService:
             return data_list
 
         except Exception as e:
-            logger.error(f"Error retrieving data from database: {str(e)}")
+            logger.error(f"Error retrieving data from database: {e!s}")
             return []

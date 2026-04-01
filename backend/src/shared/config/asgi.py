@@ -13,8 +13,8 @@ For deployment with:
 - Docker: CMD ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
 """
 
-import os
 import logging
+import os
 
 # Set up logging before importing our modules
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

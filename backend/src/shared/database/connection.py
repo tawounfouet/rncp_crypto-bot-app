@@ -5,12 +5,14 @@ This module handles database connections, session management, and provides
 automatic fallback from PostgreSQL to SQLite for development environments.
 """
 
-import os
 import logging
-from typing import Optional, Any, Generator
+import os
+from collections.abc import Generator
 from contextlib import contextmanager
-from sqlalchemy import create_engine, Engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from typing import Any
+
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from shared.config.settings import get_settings
 from shared.models.base import Base
@@ -32,11 +34,11 @@ class DatabaseManager:
 
     def __init__(self):
         self.settings = get_settings()
-        self._engine: Optional[Engine] = None
-        self._session_factory: Optional[sessionmaker] = None
-        self._database_url: Optional[str] = None
+        self._engine: Engine | None = None
+        self._session_factory: sessionmaker | None = None
+        self._database_url: str | None = None
 
-    def _get_postgresql_url(self) -> Optional[str]:
+    def _get_postgresql_url(self) -> str | None:
         """Construct PostgreSQL URL from environment variables."""
         try:
             # Use settings values directly for consistency

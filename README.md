@@ -17,11 +17,18 @@ Crypto-bot-app/                 # Monorepo applicatif
 ├── scripts/
 │   ├── push.sh                 # Push sur le remote
 │   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev
-│   ├── run_lint.sh             # Linting local
-│   └── run_tests.sh            # Tests locaux
+│   ├── run_lint.sh             # Linting local (ruff)
+│   ├── run_tests.sh            # Tests locaux
+│   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles
+│   └── docker_status.sh        # Statut des containers Docker
+├── init-scripts/               # Scripts d'init PostgreSQL
 ├── docker-compose.yml          # Developpement local
 ├── docker-compose.staging.yml  # Environnement staging (VM AWS)
 ├── docker-compose.prod.yml     # Environnement production (VM AWS)
+├── versions.env                # Versions des images Docker (source unique)
+├── Makefile                    # Point d'entree (charge versions.env), taper `make` pour l'aide
+├── pyproject.toml              # Configuration Ruff (linting + formatting)
+├── .pre-commit-config.yaml     # Hooks pre-commit (ruff, semgrep, check-infra)
 ├── .gitlab-ci.yml              # CI/CD
 └── README.md
 ```
@@ -44,20 +51,27 @@ cp .env.example .env
 
 ```bash
 # Demarrer tous les services
-docker compose up -d
+make dev-up
 
 # Voir les logs
-docker compose logs -f
+make dev-logs
 
 # Arreter
-docker compose down
+make dev-down
+
+# Initialiser les buckets MinIO (premiere fois)
+make dev-init
 ```
+
+> Le `Makefile` charge automatiquement `versions.env` (versions des images Docker)
+> et `.env` (secrets). Toutes les commandes Docker Compose doivent passer par `make`
+> pour garantir la resolution des variables.
 
 ## Services (developpement local)
 
 | Service | Port | URL |
 |---------|------|-----|
-| Backend API | 8009 | http://localhost:8009/docs |
+| Backend API | 8009 | http://localhost:8009/api/v1/docs |
 | Frontend | 8501 | http://localhost:8501 |
 | PostgreSQL | 5434 | - |
 | MongoDB | 27017 | - |
@@ -72,17 +86,18 @@ docker compose down
 ```
 feature/* ou dev_*                                   Branches de travail
     |
-    |  push --> CI : lint + tests
+    |  push --> CI : lint seul (feedback rapide)
     |
     |  MR (0 approbation requise)
     v
 staging                                              Integration
     |
-    |  push --> CI : lint + tests + build + deploy VM AWS
+    |  MR --> CI : lint + tests + build
+    |  push --> CI : build + deploy VM AWS
     |
     |  MR (1+ approbation requise)
     v
-main                                                 Branche stable
+main                                                 Branche stable (pas de pipeline)
     |
     |  tag vX.X --> CI : build + deploy production (manuel)
     v
@@ -145,10 +160,23 @@ sur la VM et sur le cluster K8s.
 
 | Environnement | Repertoire | Compose file | Ports |
 |---------------|------------|--------------|-------|
-| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` | Backend 8009, Frontend 8501, PostgreSQL 5434, MongoDB 27017, MinIO 9000/9001 |
-| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` | Backend 9009, PostgreSQL 5435, MongoDB 27018, MinIO 9002/9003 |
+| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` | Backend 8009, Frontend 8501, PostgreSQL 5434, MongoDB 27017, MinIO 9000/9001, Adminer 8085, Mongo Express 8081 |
+| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` | Backend 9009, Frontend 8502, PostgreSQL 5435, MongoDB 27018, MinIO 9002/9003, Adminer 8086*, Mongo Express 8082* |
 
-## Scripts utilitaires
+\* En production, Adminer et Mongo Express sont sous le profile `debug` et ne demarrent pas par defaut.
+Pour les activer ponctuellement : `make prod-debug-up` / `make prod-debug-down`.
+
+## Scripts et commandes utilitaires
+
+Taper `make` pour afficher toutes les commandes disponibles.
+
+### Linting et qualite
+
+```bash
+make lint                        # Verifier le code (ruff check + format)
+make lint-fix                    # Corriger automatiquement
+make check-infra                 # Valider coherence versions.env / Dockerfiles
+```
 
 ### `scripts/push.sh` -- Push sur le remote
 

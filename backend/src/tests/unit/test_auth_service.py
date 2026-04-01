@@ -3,65 +3,49 @@ Tests unitaires pour services/auth_service.py
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
-
-
-# Mock des settings AVANT l'import du module
-@pytest.fixture(autouse=True)
-def mock_settings():
-    """Mock les settings pour éviter les erreurs de validation."""
-    mock_settings = MagicMock()
-    mock_settings.SECRET_KEY.get_secret_value.return_value = "test-secret-key-for-testing"
-    mock_settings.ALGORITHM = "HS256"
-    mock_settings.ACCESS_TOKEN_EXPIRE_MINUTES = 30
-    mock_settings.REFRESH_TOKEN_EXPIRE_DAYS = 7
-
-    with patch("src.shared.config.settings.get_settings", return_value=mock_settings):
-        with patch("src.shared.config.settings.settings", mock_settings):
-            yield mock_settings
 
 
 class TestAuthServicePasswordHashing:
     """Tests pour le hachage de mots de passe."""
 
-    def test_get_password_hash_returns_hash(self, mock_settings):
-        """Le hash retourné est différent du mot de passe original."""
+    def test_get_password_hash_returns_hash(self):
+        """Le hash retourne est different du mot de passe original."""
         from src.auth.service import AuthService
 
         auth = AuthService()
-        password = "TestPassword123!"
+        password = "TestPassword123!"  # noqa: S105
         hashed = auth.get_password_hash(password)
 
         assert hashed != password
         assert len(hashed) > 0
-        assert hashed.startswith("$argon2")  # argon2 format
+        assert hashed.startswith("$argon2")
 
-    def test_verify_password_correct(self, mock_settings):
-        """Vérification réussie avec le bon mot de passe."""
+    def test_verify_password_correct(self):
+        """Verification reussie avec le bon mot de passe."""
         from src.auth.service import AuthService
 
         auth = AuthService()
-        password = "TestPassword123!"
+        password = "TestPassword123!"  # noqa: S105
         hashed = auth.get_password_hash(password)
 
         assert auth.verify_password(password, hashed) is True
 
-    def test_verify_password_incorrect(self, mock_settings):
-        """Vérification échoue avec un mauvais mot de passe."""
+    def test_verify_password_incorrect(self):
+        """Verification echoue avec un mauvais mot de passe."""
         from src.auth.service import AuthService
 
         auth = AuthService()
-        password = "TestPassword123!"
-        wrong_password = "WrongPassword456!"
+        password = "TestPassword123!"  # noqa: S105
+        wrong_password = "WrongPassword456!"  # noqa: S105
         hashed = auth.get_password_hash(password)
 
         assert auth.verify_password(wrong_password, hashed) is False
 
 
 class TestAuthServiceTokens:
-    """Tests pour la création de tokens JWT."""
+    """Tests pour la creation de tokens JWT."""
 
-    def test_create_access_token_returns_string(self, mock_settings):
+    def test_create_access_token_returns_string(self):
         """create_access_token retourne un token string."""
         from src.auth.service import AuthService
 
@@ -73,7 +57,7 @@ class TestAuthServiceTokens:
         assert len(token) > 0
         assert token.count(".") == 2  # JWT format: header.payload.signature
 
-    def test_create_refresh_token_returns_string(self, mock_settings):
+    def test_create_refresh_token_returns_string(self):
         """create_refresh_token retourne un token string."""
         from src.auth.service import AuthService
 
@@ -85,8 +69,8 @@ class TestAuthServiceTokens:
         assert len(token) > 0
         assert token.count(".") == 2
 
-    def test_verify_token_valid_access_token(self, mock_settings):
-        """verify_token décode un token valide."""
+    def test_verify_token_valid_access_token(self):
+        """verify_token decode un token valide."""
         from src.auth.service import AuthService
 
         auth = AuthService()
@@ -98,8 +82,8 @@ class TestAuthServiceTokens:
         assert payload["username"] == "testuser"
         assert payload["type"] == "access"
 
-    def test_verify_token_wrong_type_raises(self, mock_settings):
-        """verify_token lève une exception si le type ne correspond pas."""
+    def test_verify_token_wrong_type_raises(self):
+        """verify_token leve une exception si le type ne correspond pas."""
         from src.auth.service import AuthService
         from fastapi import HTTPException
 

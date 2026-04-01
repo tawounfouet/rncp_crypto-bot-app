@@ -3,10 +3,10 @@ Strategy registry system for the Crypto Trading Bot.
 Manages registration, discovery, and instantiation of trading strategies.
 """
 
-from typing import Dict, Type, Any, List, Optional
 import importlib
-import pkgutil
 import logging
+import pkgutil
+from typing import Any
 
 from .base_strategy import BaseStrategy
 
@@ -22,14 +22,14 @@ class StrategyRegistry:
     """
 
     def __init__(self):
-        self._strategies: Dict[str, Type[BaseStrategy]] = {}
-        self._strategy_metadata: Dict[str, Dict[str, Any]] = {}
+        self._strategies: dict[str, type[BaseStrategy]] = {}
+        self._strategy_metadata: dict[str, dict[str, Any]] = {}
 
     def register(
         self,
         name: str,
-        strategy_class: Type[BaseStrategy],
-        metadata: Optional[Dict[str, Any]] = None,
+        strategy_class: type[BaseStrategy],
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Register a strategy class.
@@ -68,7 +68,7 @@ class StrategyRegistry:
         else:
             logger.warning(f"Strategy '{name}' not found for unregistration")
 
-    def get_strategy_class(self, name: str) -> Type[BaseStrategy]:
+    def get_strategy_class(self, name: str) -> type[BaseStrategy]:
         """
         Get a strategy class by name.
 
@@ -86,7 +86,7 @@ class StrategyRegistry:
 
         return self._strategies[name]
 
-    def create_strategy(self, name: str, params: Optional[Dict[str, Any]] = None) -> BaseStrategy:
+    def create_strategy(self, name: str, params: dict[str, Any] | None = None) -> BaseStrategy:
         """
         Create a strategy instance.
 
@@ -105,10 +105,10 @@ class StrategyRegistry:
             strategy_class = self.get_strategy_class(name)
             return strategy_class(name=name, params=params)
         except Exception as e:
-            logger.error(f"Failed to create strategy '{name}': {str(e)}")
+            logger.error(f"Failed to create strategy '{name}': {e!s}")
             raise
 
-    def list_strategies(self) -> List[str]:
+    def list_strategies(self) -> list[str]:
         """
         Get list of all registered strategy names.
 
@@ -117,7 +117,7 @@ class StrategyRegistry:
         """
         return list(self._strategies.keys())
 
-    def get_strategy_info(self, name: str) -> Dict[str, Any]:
+    def get_strategy_info(self, name: str) -> dict[str, Any]:
         """
         Get information about a strategy.
 
@@ -144,7 +144,7 @@ class StrategyRegistry:
             "metadata": metadata,
         }
 
-    def get_all_strategies_info(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_strategies_info(self) -> dict[str, dict[str, Any]]:
         """
         Get information about all registered strategies.
 
@@ -177,7 +177,7 @@ class StrategyRegistry:
                 return 0
 
             # Walk through all modules in the package
-            for importer, modname, ispkg in pkgutil.walk_packages([package_dir]):
+            for _importer, modname, ispkg in pkgutil.walk_packages([package_dir]):
                 if ispkg:
                     continue
 
@@ -192,26 +192,25 @@ class StrategyRegistry:
 
                         # Check if it's a strategy class
                         if isinstance(attr, type) and issubclass(attr, BaseStrategy) and attr != BaseStrategy:
-
                             # Register the strategy
                             strategy_name = getattr(attr, "STRATEGY_NAME", attr.__name__.lower())
                             self.register(strategy_name, attr)
                             discovered_count += 1
 
                 except ImportError as e:
-                    logger.warning(f"Could not import module {modname}: {str(e)}")
+                    logger.warning(f"Could not import module {modname}: {e!s}")
                     continue
                 except Exception as e:
-                    logger.error(f"Error processing module {modname}: {str(e)}")
+                    logger.error(f"Error processing module {modname}: {e!s}")
                     continue
 
         except ImportError as e:
-            logger.error(f"Could not import package {package_path}: {str(e)}")
+            logger.error(f"Could not import package {package_path}: {e!s}")
 
         logger.info(f"Discovered and registered {discovered_count} strategies")
         return discovered_count
 
-    def validate_strategy(self, name: str, params: Optional[Dict[str, Any]] = None) -> tuple[bool, Optional[str]]:
+    def validate_strategy(self, name: str, params: dict[str, Any] | None = None) -> tuple[bool, str | None]:
         """
         Validate a strategy and its parameters.
 
@@ -237,7 +236,7 @@ class StrategyRegistry:
             return True, None
 
         except Exception as e:
-            return False, f"Strategy validation failed: {str(e)}"
+            return False, f"Strategy validation failed: {e!s}"
 
     def clear(self) -> None:
         """Clear all registered strategies."""
@@ -250,7 +249,7 @@ class StrategyRegistry:
 registry = StrategyRegistry()
 
 
-def register_strategy(name: str, metadata: Optional[Dict[str, Any]] = None):
+def register_strategy(name: str, metadata: dict[str, Any] | None = None):
     """
     Decorator for registering strategy classes.
 
@@ -259,14 +258,14 @@ def register_strategy(name: str, metadata: Optional[Dict[str, Any]] = None):
         metadata: Optional metadata about the strategy
     """
 
-    def decorator(strategy_class: Type[BaseStrategy]):
+    def decorator(strategy_class: type[BaseStrategy]):
         registry.register(name, strategy_class, metadata)
         return strategy_class
 
     return decorator
 
 
-def get_strategy(name: str, params: Optional[Dict[str, Any]] = None) -> BaseStrategy:
+def get_strategy(name: str, params: dict[str, Any] | None = None) -> BaseStrategy:
     """
     Convenience function to create a strategy instance.
 
@@ -280,7 +279,7 @@ def get_strategy(name: str, params: Optional[Dict[str, Any]] = None) -> BaseStra
     return registry.create_strategy(name, params)
 
 
-def list_available_strategies() -> List[str]:
+def list_available_strategies() -> list[str]:
     """
     Get list of all available strategies.
 
@@ -290,7 +289,7 @@ def list_available_strategies() -> List[str]:
     return registry.list_strategies()
 
 
-def get_strategy_info(name: str) -> Dict[str, Any]:
+def get_strategy_info(name: str) -> dict[str, Any]:
     """
     Get information about a specific strategy.
 
