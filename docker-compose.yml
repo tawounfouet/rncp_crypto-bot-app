@@ -134,6 +134,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: crypto-bot-backend
     restart: always
     ports:
@@ -179,6 +181,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: crypto-bot-frontend
     restart: always
     ports:

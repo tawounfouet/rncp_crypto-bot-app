@@ -7,7 +7,7 @@
 # Inspire du pattern litho.
 # =============================================================================
 
-set -e
+set -uo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,6 +46,7 @@ REQUIRED_VARS=(
     PYTHON_CI_IMAGE
     SEMGREP_IMAGE
     HADOLINT_IMAGE
+    RELEASE_CLI_IMAGE
 )
 
 if [ ! -f versions.env ]; then
@@ -77,13 +78,19 @@ echo "=== 2. Verification docker-compose config ==="
 # Charger versions.env pour la validation
 export $(grep -v '^\s*#' versions.env | grep '=' | xargs) 2>/dev/null
 
-for compose_file in docker-compose.yml docker-compose.staging.yml docker-compose.prod.yml; do
+for compose_file in docker-compose.yml docker-compose.staging.yml docker-compose.prod.yml ci/docker-compose.test.yml; do
     if [ ! -f "$compose_file" ]; then
         fail "$compose_file introuvable"
         continue
     fi
 
-    if docker compose -f "$compose_file" config > /dev/null 2>&1; then
+    # Le compose test a besoin de IMAGE_TAG pour valider
+    EXTRA_ENV=""
+    if echo "$compose_file" | grep -q "test"; then
+        EXTRA_ENV="IMAGE_TAG=test:ci"
+    fi
+
+    if env $EXTRA_ENV docker compose -f "$compose_file" config > /dev/null 2>&1; then
         # Compter les services (hors profiles)
         services=$(docker compose -f "$compose_file" config --services 2>/dev/null | wc -l)
         pass "$compose_file valide ($services services)"
@@ -142,6 +149,110 @@ if [ "$found_secrets" = false ]; then
 fi
 
 # =============================================================================
+# 5. Coherence des versions entre backend et frontend requirements
+# =============================================================================
+echo ""
+echo "=== 5. Coherence versions requirements backend/frontend ==="
+
+if [ -f backend/requirements.txt ] && [ -f frontend/requirements.txt ]; then
+    # Extraire les packages communs et comparer les versions
+    backend_pkgs=$(grep -E '^[a-zA-Z]' backend/requirements.txt | grep '==' | sort)
+    frontend_pkgs=$(grep -E '^[a-zA-Z]' frontend/requirements.txt | grep '==' | sort)
+
+    # Trouver les packages presents dans les deux fichiers
+    common_pkgs=$(comm -12 \
+        <(echo "$backend_pkgs" | cut -d= -f1 | tr '[:upper:]' '[:lower:]' | sort) \
+        <(echo "$frontend_pkgs" | cut -d= -f1 | tr '[:upper:]' '[:lower:]' | sort))
+
+    version_mismatch=false
+    for pkg in $common_pkgs; do
+        backend_ver=$(echo "$backend_pkgs" | grep -i "^${pkg}==" | head -1)
+        frontend_ver=$(echo "$frontend_pkgs" | grep -i "^${pkg}==" | head -1)
+        if [ "$backend_ver" != "$frontend_ver" ]; then
+            fail "Version mismatch pour $pkg : backend=$backend_ver, frontend=$frontend_ver"
+            version_mismatch=true
+        fi
+    done
+
+    if [ "$version_mismatch" = false ]; then
+        count=$(echo "$common_pkgs" | wc -w)
+        pass "Versions coherentes ($count packages communs)"
+    fi
+else
+    warn "requirements.txt manquant (backend ou frontend)"
+fi
+
+# =============================================================================
+# 6. Resolution Makefile (dry-run)
+# =============================================================================
+echo ""
+echo "=== 6. Verification resolution Makefile ==="
+
+if [ -f Makefile ]; then
+    if make -n dev-config > /dev/null 2>&1; then
+        pass "Makefile resout les variables correctement"
+    else
+        fail "Makefile ne resout pas les variables (make -n dev-config echoue)"
+    fi
+else
+    fail "Makefile introuvable"
+fi
+
+# =============================================================================
+# 7. Dockerfiles — ARG sans valeur par defaut pour les variables de versions.env
+# =============================================================================
+echo ""
+echo "=== 7. Verification ARG Dockerfiles (pas de valeur par defaut) ==="
+
+for dockerfile in backend/Dockerfile frontend/Dockerfile; do
+    if [ ! -f "$dockerfile" ]; then
+        continue
+    fi
+
+    # Chercher les ARG avec valeur par defaut pour des variables presentes dans versions.env
+    hardcoded_args=$(grep -E '^ARG\s+(PYTHON_VERSION)=' "$dockerfile" || true)
+    if [ -n "$hardcoded_args" ]; then
+        fail "$dockerfile contient des ARG avec valeur par defaut :\n  $hardcoded_args\n  Les valeurs doivent venir de versions.env via --build-arg"
+    else
+        pass "$dockerfile ARG sans valeur par defaut"
+    fi
+done
+
+# =============================================================================
+# 8. Synchronisation versions.env <-> .gitlab-ci.yml
+# =============================================================================
+echo ""
+echo "=== 8. Synchronisation versions.env / .gitlab-ci.yml ==="
+
+if [ -f .gitlab-ci.yml ]; then
+    CI_VARS="PYTHON_CI_IMAGE SEMGREP_IMAGE HADOLINT_IMAGE RELEASE_CLI_IMAGE"
+    sync_ok=true
+
+    for var in $CI_VARS; do
+        env_val=$(grep "^${var}=" versions.env | cut -d= -f2-)
+        ci_val=$(grep "${var}:" .gitlab-ci.yml | head -1 | sed 's/.*: *"\(.*\)"/\1/')
+
+        if [ -z "$env_val" ]; then
+            fail "$var absent de versions.env"
+            sync_ok=false
+        elif [ -z "$ci_val" ]; then
+            fail "$var absent de .gitlab-ci.yml"
+            sync_ok=false
+        elif [ "$env_val" != "$ci_val" ]; then
+            fail "$var desynchronise : versions.env=$env_val, .gitlab-ci.yml=$ci_val"
+            sync_ok=false
+        fi
+    done
+
+    if [ "$sync_ok" = true ]; then
+        count=$(echo "$CI_VARS" | wc -w)
+        pass "versions.env et .gitlab-ci.yml synchronises ($count variables)"
+    fi
+else
+    warn ".gitlab-ci.yml introuvable"
+fi
+
+# =============================================================================
 # Resultat
 # =============================================================================
 echo ""
@@ -149,6 +260,6 @@ if [ $ERRORS -gt 0 ]; then
     echo -e "${RED}=== $ERRORS erreur(s) detectee(s) ===${NC}"
     exit 1
 else
-    echo -e "${GREEN}=== Toutes les verifications passent ===${NC}"
+    echo -e "${GREEN}=== Toutes les verifications passent (8 checks) ===${NC}"
     exit 0
 fi

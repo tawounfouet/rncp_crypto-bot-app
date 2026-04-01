@@ -86,18 +86,8 @@ docker run -p 8501:8501 crypto-bot-frontend
 | `ENVIRONMENT` | Environnement (development/staging/production) | development |
 | `APP_VERSION` | Version affichee dans l'UI | dev |
 
-## CI/CD et workflow submodule
+## CI/CD
 
-Ce repo dispose de son propre `.gitlab-ci.yml` qui execute le stage **lint** sur chaque MR et branche feature (ruff check + ruff format).
+Le frontend fait partie du monorepo `Crypto-bot-app`. La CI est definie dans `.gitlab-ci.yml` a la racine.
 
-### Synchronisation automatique avec le repo parent
-
-Lorsqu'une MR est mergee dans `staging`, un job `sync:parent` met a jour automatiquement le pointeur de submodule dans la branche `staging` du repo `crypto-bot`. Le repo parent detecte alors le changement et declenche sa propre CI pour construire les images Docker et deployer.
-
-### Mecanisme anti-boucle
-
-Les commits de synchronisation sont prefixes avec `ci(...)` dans leur message. Le job `sync:parent` est configure pour ne pas se declencher sur ces commits, ce qui evite une boucle infinie entre les deux pipelines.
-
-### Variable CI requise
-
-La variable `GROUP_PAT_TOKEN` (definie au niveau du groupe `dst_crypto`) est necessaire pour que le job `sync:parent` puisse pousser le commit de mise a jour du submodule dans le repo parent.
+Le lint Python (ruff check + ruff format) couvre backend et frontend dans un seul job `lint:python`.

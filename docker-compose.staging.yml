@@ -128,6 +128,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: staging-backend
     restart: always
     ports:
@@ -170,6 +172,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: staging-frontend
     restart: always
     ports:
