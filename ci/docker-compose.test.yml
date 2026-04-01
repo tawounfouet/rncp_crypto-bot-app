@@ -61,29 +61,21 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      echo '=== Installing test dependencies ===';
-      pip install --quiet pytest pytest-cov pytest-asyncio httpx;
-      echo '=== Running tests ===';
-      mkdir -p /tmp/test-results;
-      pytest src/tests -v
-        --junitxml=/tmp/test-results/report.xml
-        --cov=src
-        --cov-report=term-missing
-        --cov-report=xml:/tmp/test-results/coverage.xml;
-      TEST_EXIT=\$$?;
-      echo '=== Copying results ===';
-      cp /tmp/test-results/* /app/test-results/ 2>/dev/null || true;
-      exit \$$TEST_EXIT;
-      "
     volumes:
-      - test-results:/app/test-results
+      - ./test-results:/tmp/test-results
+      - ./parse_test_report.py:/app/parse_test_report.py:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /tmp/test-results &&
+        echo '=== Running tests ===' &&
+        pytest src/tests -v --junitxml=/tmp/test-results/report.xml --cov=src --cov-report=term-missing --cov-report=xml:/tmp/test-results/coverage.xml ;
+        TEST_EXIT=$$? ;
+        echo '=== Generating report ===' &&
+        python /app/parse_test_report.py /tmp/test-results/report.xml /tmp/test-results/test_report.txt ;
+        exit $$TEST_EXIT
     networks:
       - test-network
-
-volumes:
-  test-results:
 
 networks:
   test-network:
