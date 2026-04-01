@@ -18,6 +18,9 @@ workflow:
     # MR → pipeline complet (lint + test + build)
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     # Branches dev/feature → lint seul (feedback rapide)
+    # Pas de pipeline branche si une MR est ouverte (evite les doublons)
+    - if: '$CI_COMMIT_BRANCH =~ /^(dev_|feature\/)/ && $CI_OPEN_MERGE_REQUESTS'
+      when: never
     - if: '$CI_COMMIT_BRANCH =~ /^(dev_|feature\/)/'
     # staging → build + deploy
     - if: '$CI_COMMIT_BRANCH == "staging"'
