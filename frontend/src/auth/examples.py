@@ -6,8 +6,9 @@ with existing Streamlit login/signup pages.
 """
 
 import streamlit as st
+
 from auth.auth_manager import AuthManager
-from auth.utils import validate_email, validate_password_strength, format_user_display
+from auth.utils import format_user_display, validate_email, validate_password_strength
 
 
 def example_login_page():

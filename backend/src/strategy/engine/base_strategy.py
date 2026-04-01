@@ -3,11 +3,12 @@ Base strategy abstract class for the Crypto Trading Bot.
 All trading strategies must inherit from this base class.
 """
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Tuple
-import pandas as pd
-from datetime import datetime
 import logging
+from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Any
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class BaseStrategy(ABC):
     and provides common functionality for data processing and signal management.
     """
 
-    def __init__(self, name: str, params: Optional[Dict[str, Any]] = None):
+    def __init__(self, name: str, params: dict[str, Any] | None = None):
         """
         Initialize the strategy.
 
@@ -112,7 +113,7 @@ class BaseStrategy(ABC):
             return final_signals
 
         except Exception as e:
-            self.logger.error(f"Error running strategy {self.name}: {str(e)}")
+            self.logger.error(f"Error running strategy {self.name}: {e!s}")
             raise
 
     def get_parameter(self, key: str, default: Any = None) -> Any:
@@ -123,7 +124,7 @@ class BaseStrategy(ABC):
         """Set a parameter value."""
         self.params[key] = value
 
-    def get_required_indicators(self) -> List[str]:
+    def get_required_indicators(self) -> list[str]:
         """
         Get list of technical indicators required by this strategy.
         Override this method to specify required indicators.
@@ -133,7 +134,7 @@ class BaseStrategy(ABC):
         """
         return []
 
-    def validate_parameters(self) -> Tuple[bool, Optional[str]]:
+    def validate_parameters(self) -> tuple[bool, str | None]:
         """
         Validate strategy parameters.
         Override this method to implement parameter validation.
@@ -143,7 +144,7 @@ class BaseStrategy(ABC):
         """
         return True, None
 
-    def get_strategy_info(self) -> Dict[str, Any]:
+    def get_strategy_info(self) -> dict[str, Any]:
         """
         Get strategy information and metadata.
 

@@ -3,12 +3,13 @@ Authentication dependencies for route protection.
 Provides dependency injection for user authentication and authorization.
 """
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Annotated
 
-from auth.service import auth_service
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
 from auth.models import User
+from auth.service import auth_service
 
 # Security scheme for JWT Bearer tokens
 security = HTTPBearer()
@@ -39,7 +40,7 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
 
 def get_current_active_user(

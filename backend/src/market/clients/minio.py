@@ -1,9 +1,9 @@
-import os
 import logging
-from typing import Dict, List, Optional  # , Any, Union, BinaryIO
-import pandas as pd
-from io import BytesIO
+import os
 from datetime import datetime
+from io import BytesIO
+
+import pandas as pd
 
 # Import MinIO client
 from minio import Minio
@@ -62,7 +62,7 @@ class ClientMinIO:
                 raise
         return self._client
 
-    def upload_file(self, file_path: str, object_name: str, bucket: Optional[str] = None) -> bool:
+    def upload_file(self, file_path: str, object_name: str, bucket: str | None = None) -> bool:
         """
         Upload un fichier vers MinIO
 
@@ -87,7 +87,7 @@ class ClientMinIO:
         self,
         df: pd.DataFrame,
         object_name: str,
-        bucket: Optional[str] = None,
+        bucket: str | None = None,
         format: str = "csv",
     ) -> bool:
         """
@@ -132,7 +132,7 @@ class ClientMinIO:
             logger.error(f"Erreur upload DataFrame: {e} (format={format}, bucket={bucket_name}, object={object_name})")
             return False
 
-    def download_file(self, object_name: str, file_path: str, bucket: Optional[str] = None) -> bool:
+    def download_file(self, object_name: str, file_path: str, bucket: str | None = None) -> bool:
         """
         Télécharge un fichier depuis MinIO
 
@@ -156,8 +156,8 @@ class ClientMinIO:
             return False
 
     def download_dataframe(
-        self, object_name: str, bucket: Optional[str] = None, format: str = "csv"
-    ) -> Optional[pd.DataFrame]:
+        self, object_name: str, bucket: str | None = None, format: str = "csv"
+    ) -> pd.DataFrame | None:
         """
         Télécharge un fichier depuis MinIO et le charge comme DataFrame
 
@@ -198,7 +198,7 @@ class ClientMinIO:
             )
             return None
 
-    def list_objects(self, prefix: str = "", bucket: Optional[str] = None) -> List[Dict]:
+    def list_objects(self, prefix: str = "", bucket: str | None = None) -> list[dict]:
         """
         Liste les objets dans un bucket MinIO
 
@@ -226,7 +226,7 @@ class ClientMinIO:
             logger.error(f"Erreur liste objets: {e} (bucket={bucket_name}, prefix={prefix})")
             return []
 
-    def delete_object(self, object_name: str, bucket: Optional[str] = None) -> bool:
+    def delete_object(self, object_name: str, bucket: str | None = None) -> bool:
         """
         Supprime un objet de MinIO
 
@@ -250,7 +250,7 @@ class ClientMinIO:
         self,
         collection_name: str,
         db_name: str = "crypto_market_data",
-        bucket: Optional[str] = None,
+        bucket: str | None = None,
     ) -> bool:
         """
         Sauvegarde une collection MongoDB dans MinIO
@@ -264,6 +264,7 @@ class ClientMinIO:
             bool: True si réussi, False sinon
         """
         import json
+
         from src.tools.client_mongodb import ClientMongoDB
 
         mongo_client = None

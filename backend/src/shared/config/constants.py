@@ -230,7 +230,7 @@ class ErrorCode(Enum):
 
     # Authentication errors
     INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
-    TOKEN_EXPIRED = "TOKEN_EXPIRED"  # nosec B105 - error code, not a password
+    TOKEN_EXPIRED = "TOKEN_EXPIRED"  # noqa: S105
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
 

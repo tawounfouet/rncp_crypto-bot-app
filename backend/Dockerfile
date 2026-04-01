@@ -2,7 +2,8 @@
 # ===============================================
 
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim as builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -26,7 +27,8 @@ RUN pip install --upgrade pip && \
 
 
 # Stage 2: Runtime
-FROM python:3.11-slim as runtime
+ARG PYTHON_VERSION=3.11
+FROM python:${PYTHON_VERSION}-slim as runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

@@ -1,10 +1,34 @@
-[tool.black]
+[project]
+name = "crypto-bot-app"
+
+[tool.ruff]
 line-length = 120
-exclude = '''
-/(
-    \.git
-    | \.venv
-    | venv
-    | tests
-)/
-'''
+target-version = "py311"
+exclude = [".git", ".venv", "venv", "tests", "__pycache__"]
+
+[tool.ruff.lint]
+select = [
+    "F",      # pyflakes
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "I",      # isort
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "S",      # flake8-bandit
+    "RUF",    # ruff-specific
+]
+ignore = [
+    "E501",    # line too long (gere par le formatter)
+    "S110",    # try-except-pass
+    "B008",    # Depends() dans les args — pattern standard FastAPI
+    "RUF012",  # ClassVar sur Pydantic models — faux positif
+    "RUF013",  # PEP 484 implicit Optional — faux positif Pydantic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]  # assert et hardcoded passwords OK dans les tests
+"**/test_*" = ["S101", "S105", "S106"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -3,22 +3,22 @@ Strategy domain models for the Crypto Trading Bot.
 Contains Strategy, StrategyDeployment, StrategyState, TradingSession, and BacktestResult models.
 """
 
-from decimal import Decimal
 from datetime import datetime
-from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    JSON,
-    Boolean,
-    DECIMAL,
-    Integer,
-    DateTime,
-    ForeignKey,
-)
-from sqlalchemy.orm import relationship
+from decimal import Decimal
 
 from shared.models.base import BaseModel, register_model
+from sqlalchemy import (
+    DECIMAL,
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import relationship
 
 
 @register_model

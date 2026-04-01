@@ -3,11 +3,11 @@ Market data models for the Crypto Trading Bot.
 Contains MarketData model for OHLCV data storage.
 """
 
-from decimal import Decimal
 from datetime import datetime
-from sqlalchemy import Column, String, DECIMAL, Integer, DateTime, UniqueConstraint
+from decimal import Decimal
 
 from shared.models.base import BaseModel, register_model
+from sqlalchemy import DECIMAL, Column, DateTime, Integer, String, UniqueConstraint
 
 
 @register_model

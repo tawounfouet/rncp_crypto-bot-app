@@ -3,13 +3,12 @@ Users router for the Crypto Trading Bot API.
 Provides endpoints for user management, profiles, and settings.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from auth.schemas import UserResponse, UserUpdate, UserSettingsUpdate
-from auth.user_service import user_service
-from auth.dependencies import get_current_user, get_current_admin_user
+from auth.dependencies import get_current_admin_user, get_current_user
 from auth.models import User as UserModel
+from auth.schemas import UserResponse, UserSettingsUpdate, UserUpdate
+from auth.user_service import user_service
 
 # Define a constant for the error message
 USER_NOT_FOUND_MSG = "User not found"
@@ -50,8 +49,8 @@ async def update_current_user_profile(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update user profile: {str(e)}",
-        )
+            detail=f"Failed to update user profile: {e!s}",
+        ) from None
 
 
 @router.delete("/me")
@@ -79,8 +78,8 @@ async def delete_current_user_account(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete account: {str(e)}",
-        )
+            detail=f"Failed to delete account: {e!s}",
+        ) from None
 
 
 @router.get("/me/settings")
@@ -97,8 +96,8 @@ async def get_user_settings(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user settings: {str(e)}",
-        )
+            detail=f"Failed to get user settings: {e!s}",
+        ) from None
 
 
 @router.put("/me/settings")
@@ -122,20 +121,20 @@ async def update_user_settings(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update user settings: {str(e)}",
-        )
+            detail=f"Failed to update user settings: {e!s}",
+        ) from None
 
 
 # Admin-only endpoints
-@router.get("/", response_model=List[UserResponse])
+@router.get("/", response_model=list[UserResponse])
 async def list_users(
     skip: int = Query(0, ge=0, description="Number of users to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of users to return"),
-    search: Optional[str] = Query(None, description="Search users by username or email"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    is_admin: Optional[bool] = Query(None, description="Filter by admin status"),
+    search: str | None = Query(None, description="Search users by username or email"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    is_admin: bool | None = Query(None, description="Filter by admin status"),
     current_admin: UserModel = Depends(get_current_admin_user),
-) -> List[UserResponse]:
+) -> list[UserResponse]:
     """
     List all users (admin only).
 
@@ -154,8 +153,8 @@ async def list_users(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list users: {str(e)}",
-        )
+            detail=f"Failed to list users: {e!s}",
+        ) from None
 
 
 @router.get("/{user_id}", response_model=UserResponse)
@@ -178,8 +177,8 @@ async def get_user_by_id(user_id: str, current_admin: UserModel = Depends(get_cu
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user: {str(e)}",
-        )
+            detail=f"Failed to get user: {e!s}",
+        ) from None
 
 
 @router.put("/{user_id}", response_model=UserResponse)
@@ -212,8 +211,8 @@ async def update_user_by_id(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update user: {str(e)}",
-        )
+            detail=f"Failed to update user: {e!s}",
+        ) from None
 
 
 @router.delete("/{user_id}")
@@ -248,8 +247,8 @@ async def delete_user_by_id(user_id: str, current_admin: UserModel = Depends(get
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete user: {str(e)}",
-        )
+            detail=f"Failed to delete user: {e!s}",
+        ) from None
 
 
 @router.post("/{user_id}/activate")
@@ -277,8 +276,8 @@ async def activate_user(user_id: str, current_admin: UserModel = Depends(get_cur
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to activate user: {str(e)}",
-        )
+            detail=f"Failed to activate user: {e!s}",
+        ) from None
 
 
 @router.post("/{user_id}/deactivate")
@@ -313,5 +312,5 @@ async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_c
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to deactivate user: {str(e)}",
-        )
+            detail=f"Failed to deactivate user: {e!s}",
+        ) from None

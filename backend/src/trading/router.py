@@ -3,32 +3,32 @@ Trading router for handling trading-related API endpoints.
 Includes order management, transaction tracking, and trading operations.
 """
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
-from sqlalchemy.orm import Session
 import logging
 
 from auth.dependencies import get_current_user
-from shared.database import get_db
 from auth.models import User
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from shared.core.exceptions import (
+    BusinessLogicError,
+    InsufficientFundsError,
+    NotFoundError,
+    ValidationError,
+)
+from shared.database import get_db
+from shared.schemas.common import BaseResponse, PaginatedResponse
+from sqlalchemy.orm import Session
+
 from trading.schemas import (
     OrderCreate,
     OrderResponse,
     OrderSummary,
+    PortfolioResponse,
+    TradingStatsResponse,
     TransactionCreate,
     TransactionResponse,
     TransactionSummary,
-    PortfolioResponse,
-    TradingStatsResponse,
 )
-from shared.schemas.common import BaseResponse, PaginatedResponse
 from trading.service import TradingService
-from shared.core.exceptions import (
-    ValidationError,
-    NotFoundError,
-    BusinessLogicError,
-    InsufficientFundsError,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -86,35 +86,35 @@ async def create_order(
                 "message": e.message,
                 "details": e.details,
             },
-        )
+        ) from None
     except InsufficientFundsError as e:
         logger.warning(f"Insufficient funds for order: {e.message}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "INSUFFICIENT_FUNDS", "message": e.message},
-        )
+        ) from None
     except BusinessLogicError as e:
         logger.error(f"Business logic error creating order: {e.message}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"error": "BUSINESS_LOGIC_ERROR", "message": e.message},
-        )
+        ) from None
     except Exception as e:
-        logger.error(f"Unexpected error creating order: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error creating order: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "INTERNAL_ERROR", "message": "Failed to create order"},
-        )
+        ) from None
 
 
 @router.get("/orders", response_model=PaginatedResponse[OrderSummary])
 async def get_user_orders(
-    deployment_id: Optional[str] = Query(None, description="Filter by deployment ID"),
-    symbol: Optional[str] = Query(None, description="Filter by symbol"),
-    status: Optional[str] = Query(None, description="Filter by order status"),
-    side: Optional[str] = Query(None, description="Filter by order side (BUY/SELL)"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    deployment_id: str | None = Query(None, description="Filter by deployment ID"),
+    symbol: str | None = Query(None, description="Filter by symbol"),
+    status: str | None = Query(None, description="Filter by order status"),
+    side: str | None = Query(None, description="Filter by order side (BUY/SELL)"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     current_user: User = Depends(get_current_user),
@@ -158,11 +158,11 @@ async def get_user_orders(
         return result
 
     except Exception as e:
-        logger.error(f"Error retrieving orders: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving orders: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "INTERNAL_ERROR", "message": "Failed to retrieve orders"},
-        )
+        ) from None
 
 
 @router.get("/orders/{order_id}", response_model=OrderResponse)
@@ -201,13 +201,13 @@ async def get_order_by_id(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "NOT_FOUND", "message": e.message},
-        )
+        ) from None
     except Exception as e:
-        logger.error(f"Error retrieving order {order_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving order {order_id}: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "INTERNAL_ERROR", "message": "Failed to retrieve order"},
-        )
+        ) from None
 
 
 @router.delete("/orders/{order_id}", response_model=BaseResponse)
@@ -244,18 +244,18 @@ async def cancel_order(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "NOT_FOUND", "message": e.message},
-        )
+        ) from None
     except BusinessLogicError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"error": "BUSINESS_LOGIC_ERROR", "message": e.message},
-        )
+        ) from None
     except Exception as e:
-        logger.error(f"Error cancelling order {order_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error cancelling order {order_id}: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "INTERNAL_ERROR", "message": "Failed to cancel order"},
-        )
+        ) from None
 
 
 @router.get("/orders/{order_id}/status")
@@ -284,16 +284,16 @@ async def get_order_status(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "NOT_FOUND", "message": e.message},
-        )
+        ) from None
     except Exception as e:
-        logger.error(f"Error getting order status for {order_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error getting order status for {order_id}: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"error": "INTERNAL_ERROR", "message": "Failed to get order status"},
-        )
+        ) from None
 
 
-@router.get("/orders/deployment/{deployment_id}", response_model=List[OrderSummary])
+@router.get("/orders/deployment/{deployment_id}", response_model=list[OrderSummary])
 async def get_deployment_orders(
     deployment_id: str = Path(..., description="Deployment ID"),
     current_user: User = Depends(get_current_user),
@@ -319,10 +319,10 @@ async def get_deployment_orders(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "NOT_FOUND", "message": e.message},
-        )
+        ) from None
     except Exception as e:
         logger.error(
-            f"Error getting orders for deployment {deployment_id}: {str(e)}",
+            f"Error getting orders for deployment {deployment_id}: {e!s}",
             exc_info=True,
         )
         raise HTTPException(
@@ -331,7 +331,7 @@ async def get_deployment_orders(
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to retrieve deployment orders",
             },
-        )
+        ) from None
 
 
 # ============================================================================
@@ -378,24 +378,24 @@ async def create_transaction(
                 "message": e.message,
                 "details": e.details,
             },
-        )
+        ) from None
     except Exception as e:
-        logger.error(f"Error creating transaction: {str(e)}", exc_info=True)
+        logger.error(f"Error creating transaction: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to create transaction",
             },
-        )
+        ) from None
 
 
 @router.get("/transactions", response_model=PaginatedResponse[TransactionSummary])
 async def get_user_transactions(
-    transaction_type: Optional[str] = Query(None, description="Filter by type"),
-    asset: Optional[str] = Query(None, description="Filter by asset"),
-    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
-    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    transaction_type: str | None = Query(None, description="Filter by type"),
+    asset: str | None = Query(None, description="Filter by asset"),
+    start_date: str | None = Query(None, description="Start date (ISO format)"),
+    end_date: str | None = Query(None, description="End date (ISO format)"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(20, ge=1, le=100, description="Page size"),
     current_user: User = Depends(get_current_user),
@@ -435,14 +435,14 @@ async def get_user_transactions(
         return result
 
     except Exception as e:
-        logger.error(f"Error retrieving transactions: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving transactions: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to retrieve transactions",
             },
-        )
+        ) from None
 
 
 @router.get("/transactions/{transaction_id}", response_model=TransactionResponse)
@@ -480,16 +480,16 @@ async def get_transaction_by_id(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"error": "NOT_FOUND", "message": e.message},
-        )
+        ) from None
     except Exception as e:
-        logger.error(f"Error retrieving transaction {transaction_id}: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving transaction {transaction_id}: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to retrieve transaction",
             },
-        )
+        ) from None
 
 
 # ============================================================================
@@ -499,7 +499,7 @@ async def get_transaction_by_id(
 
 @router.get("/portfolio", response_model=PortfolioResponse)
 async def get_user_portfolio(
-    exchange: Optional[str] = Query(None, description="Filter by exchange"),
+    exchange: str | None = Query(None, description="Filter by exchange"),
     current_user: User = Depends(get_current_user),
     trading_service: TradingService = Depends(get_trading_service),
 ):
@@ -520,20 +520,20 @@ async def get_user_portfolio(
         return portfolio
 
     except Exception as e:
-        logger.error(f"Error retrieving portfolio: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving portfolio: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to retrieve portfolio",
             },
-        )
+        ) from None
 
 
 @router.get("/stats", response_model=TradingStatsResponse)
 async def get_trading_statistics(
     period: str = Query("30d", description="Period for statistics (7d, 30d, 90d, 1y, all)"),
-    deployment_id: Optional[str] = Query(None, description="Filter by deployment"),
+    deployment_id: str | None = Query(None, description="Filter by deployment"),
     current_user: User = Depends(get_current_user),
     trading_service: TradingService = Depends(get_trading_service),
 ):
@@ -560,21 +560,21 @@ async def get_trading_statistics(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "VALIDATION_ERROR", "message": e.message},
-        )
+        ) from None
     except Exception as e:
-        logger.error(f"Error retrieving trading stats: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving trading stats: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to retrieve statistics",
             },
-        )
+        ) from None
 
 
 @router.get("/positions")
 async def get_open_positions(
-    symbol: Optional[str] = Query(None, description="Filter by symbol"),
+    symbol: str | None = Query(None, description="Filter by symbol"),
     current_user: User = Depends(get_current_user),
     trading_service: TradingService = Depends(get_trading_service),
 ):
@@ -595,14 +595,14 @@ async def get_open_positions(
         return positions
 
     except Exception as e:
-        logger.error(f"Error retrieving positions: {str(e)}", exc_info=True)
+        logger.error(f"Error retrieving positions: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to retrieve positions",
             },
-        )
+        ) from None
 
 
 # ============================================================================
@@ -614,7 +614,7 @@ async def get_open_positions(
 async def quick_market_buy(
     symbol: str = Query(..., description="Trading symbol"),
     quote_amount: float = Query(..., gt=0, description="Amount in quote asset"),
-    deployment_id: Optional[str] = Query(None, description="Link to deployment"),
+    deployment_id: str | None = Query(None, description="Link to deployment"),
     current_user: User = Depends(get_current_user),
     trading_service: TradingService = Depends(get_trading_service),
 ):
@@ -642,21 +642,21 @@ async def quick_market_buy(
         return order
 
     except Exception as e:
-        logger.error(f"Error executing market buy: {str(e)}", exc_info=True)
+        logger.error(f"Error executing market buy: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to execute market buy",
             },
-        )
+        ) from None
 
 
 @router.post("/orders/market/sell")
 async def quick_market_sell(
     symbol: str = Query(..., description="Trading symbol"),
     quantity: float = Query(..., gt=0, description="Quantity to sell"),
-    deployment_id: Optional[str] = Query(None, description="Link to deployment"),
+    deployment_id: str | None = Query(None, description="Link to deployment"),
     current_user: User = Depends(get_current_user),
     trading_service: TradingService = Depends(get_trading_service),
 ):
@@ -684,14 +684,14 @@ async def quick_market_sell(
         return order
 
     except Exception as e:
-        logger.error(f"Error executing market sell: {str(e)}", exc_info=True)
+        logger.error(f"Error executing market sell: {e!s}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "INTERNAL_ERROR",
                 "message": "Failed to execute market sell",
             },
-        )
+        ) from None
 
 
 # ============================================================================
@@ -714,7 +714,7 @@ async def trading_health_check(
         return health_status
 
     except Exception as e:
-        logger.error(f"Trading health check failed: {str(e)}", exc_info=True)
+        logger.error(f"Trading health check failed: {e!s}", exc_info=True)
         return {
             "status": "unhealthy",
             "error": str(e),

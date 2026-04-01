@@ -7,58 +7,58 @@ since domain model files import from shared.models.base.
 """
 
 from .base import (
+    AuditMixin,
     Base,
-    BaseModel,
-    BaseModelWithSoftDelete,
     BaseAuditModel,
     BaseFullAuditModel,
-    UUIDMixin,
-    TimestampMixin,
-    SoftDeleteMixin,
-    AuditMixin,
+    BaseModel,
+    BaseModelWithSoftDelete,
     ModelRegistry,
-    register_model,
-    get_or_create,
+    SoftDeleteMixin,
+    TimestampMixin,
+    UUIDMixin,
     bulk_create_or_update,
+    get_or_create,
+    register_model,
 )
 
 __all__ = [
+    "AuditMixin",
     # Base classes
     "Base",
-    "BaseModel",
-    "BaseModelWithSoftDelete",
     "BaseAuditModel",
     "BaseFullAuditModel",
-    "UUIDMixin",
-    "TimestampMixin",
-    "SoftDeleteMixin",
-    "AuditMixin",
+    "BaseModel",
+    "BaseModelWithSoftDelete",
     "ModelRegistry",
-    "register_model",
-    "get_or_create",
+    "SoftDeleteMixin",
+    "TimestampMixin",
+    "UUIDMixin",
     "bulk_create_or_update",
-    # Registry functions
-    "get_all_models",
-    "get_models_by_domain",
-    "get_model_by_table_name",
     "create_all_tables",
     "drop_all_tables",
+    # Registry functions
+    "get_all_models",
+    "get_model_by_table_name",
+    "get_models_by_domain",
+    "get_or_create",
+    "register_model",
     "validate_model_relationships",
 ]
 
 
 def _import_domain_models():
     """Lazily import all domain models to avoid circular imports."""
-    from auth.models import User, UserSession, UserAccount, UserSettings
+    from auth.models import User, UserAccount, UserSession, UserSettings
+    from market.models import MarketData
     from strategy.models import (
+        BacktestResult,
         Strategy,
         StrategyDeployment,
         StrategyState,
         TradingSession,
-        BacktestResult,
     )
     from trading.models import Order, OrderFill, Transaction
-    from market.models import MarketData
 
     return {
         "all": [

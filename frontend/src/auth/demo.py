@@ -11,12 +11,12 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from auth import (  # noqa: E402
+from auth import (
     AuthAPIClient,
-    validate_email,
-    validate_password_strength,
     generate_test_user_data,
     mask_token,
+    validate_email,
+    validate_password_strength,
 )
 
 
@@ -73,11 +73,11 @@ def demo_api_client():
     else:
         print(f"   ❌ Enregistrement échoué: {response.data}")
         # L'utilisateur existe peut-être déjà, essayons de nous connecter
-        print("   ℹ️  Tentative de connexion avec un utilisateur existant...")
+        print("   i  Tentative de connexion avec un utilisateur existant...")
 
         # Utiliser des credentials de test connus
         test_login = "testuser"
-        test_password = "TestPassword123!"  # nosec B105 - demo credentials
+        test_password = "TestPassword123!"  # noqa: S105
         response = client.login_json(test_login, test_password)
 
         if response.success:

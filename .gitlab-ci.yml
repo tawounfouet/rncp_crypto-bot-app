@@ -10,6 +10,22 @@
 #   GROUP_PAT_TOKEN : PAT avec scope write_repository sur le groupe dst_crypto
 #   SSH_PRIVATE_KEY, VM_HOST, SSH_USER : pour deploy VM AWS
 
+# Controle global : quand creer un pipeline
+workflow:
+  rules:
+    # Tags v* → pipeline build + deploy
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+/'
+    # MR → pipeline complet (lint + test + build)
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    # Branches dev/feature → lint seul (feedback rapide)
+    - if: '$CI_COMMIT_BRANCH =~ /^(dev_|feature\/)/'
+    # staging → build + deploy
+    - if: '$CI_COMMIT_BRANCH == "staging"'
+    # main → pas de pipeline (deploy via tag)
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: never
+    - when: never
+
 stages:
   - lint
   - test
@@ -17,7 +33,11 @@ stages:
   - deploy
 
 variables:
-  PYTHON_VERSION: "3.11"
+  # Outils CI — epingles par version (pas de latest !)
+  # Mettre a jour manuellement et verifier les changelogs avant upgrade
+  PYTHON_CI_IMAGE: "python:3.11-slim"
+  SEMGREP_IMAGE: "semgrep/semgrep:1.121.0"
+  HADOLINT_IMAGE: "hadolint/hadolint:v2.12.0-debian"
 
 # ------------------------------
 # CACHE & TEMPLATES
@@ -31,7 +51,7 @@ variables:
       - venv/
 
 .python_job:
-  image: python:${PYTHON_VERSION}
+  image: $PYTHON_CI_IMAGE
   <<: *python_cache
   before_script:
     - python -m venv venv
@@ -56,47 +76,44 @@ variables:
 
 lint:dockerfile:backend:
   stage: lint
-  image: hadolint/hadolint:latest-debian
+  image: $HADOLINT_IMAGE
   script:
     - echo "Verification bonnes pratiques Dockerfile backend..."
     - hadolint --failure-threshold error backend/Dockerfile
     - echo "Dockerfile backend OK"
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_TAG'
       when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH =~ /^feature\//
-    - if: $CI_COMMIT_BRANCH =~ /^dev_/
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH =~ /^(dev_|feature\/)/'
   allow_failure: true
 
 lint:dockerfile:frontend:
   stage: lint
-  image: hadolint/hadolint:latest-debian
+  image: $HADOLINT_IMAGE
   script:
     - echo "Verification bonnes pratiques Dockerfile frontend..."
     - hadolint --failure-threshold error frontend/Dockerfile
     - echo "Dockerfile frontend OK"
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_TAG'
       when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH =~ /^feature\//
-    - if: $CI_COMMIT_BRANCH =~ /^dev_/
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH =~ /^(dev_|feature\/)/'
   allow_failure: true
 
 semgrep_sast:
   stage: lint
-  image: semgrep/semgrep:latest
+  image: $SEMGREP_IMAGE
   script:
     - echo "Scan SAST Semgrep (Python)..."
     - semgrep --config .semgrep/security.yml backend/src/ frontend/src/ --error --no-git-ignore
     - echo "Aucune faille de securite detectee"
   rules:
-    - if: $CI_COMMIT_TAG
+    - if: '$CI_COMMIT_TAG'
       when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH =~ /^feature\//
-    - if: $CI_COMMIT_BRANCH =~ /^dev_/
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH =~ /^(dev_|feature\/)/'
   allow_failure: false
 
 
@@ -110,8 +127,8 @@ check:backend:
   variables:
     PYTHONPATH: "${CI_PROJECT_DIR}/backend"
   script:
-    - flake8 backend/src/ --max-line-length=120 --statistics --exclude=tests
-    - black --check backend/src/ --exclude='tests/'
+    - ruff check backend/src/ --output-format=concise
+    - ruff format --check backend/src/
     - cd backend
     - pytest src/tests -v --cov=src --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=report.xml
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
@@ -125,28 +142,22 @@ check:backend:
     expire_in: 1 week
   allow_failure: false
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH =~ /^feature\//
-    - if: $CI_COMMIT_BRANCH =~ /^dev_/
-    - if: $CI_COMMIT_BRANCH == "staging"
-    - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+/
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+/'
 
 lint:frontend:
-  image: python:${PYTHON_VERSION}
+  image: $PYTHON_CI_IMAGE
   stage: test
   script:
-    - pip install flake8==7.2.0 black==26.1.0
-    - flake8 frontend/src/ --max-line-length=120 --statistics --exclude=tests
-    - black --check frontend/src/ --exclude='tests/'
+    - pip install ruff==0.8.1
+    - ruff check frontend/src/ --output-format=concise
+    - ruff format --check frontend/src/
   allow_failure: true
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH =~ /^feature\//
-    - if: $CI_COMMIT_BRANCH =~ /^dev_/
-    - if: $CI_COMMIT_BRANCH == "staging"
-    - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+/
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+/'
 
 
 # ============================================
@@ -186,9 +197,12 @@ build:docker:
         TAGS_FRONTEND="latest"
       fi
 
+      # Charger les versions
+      export $(grep -v '^\s*#' versions.env | grep '=' | xargs)
+
       # Build backend
       echo "Building backend image..."
-      docker build -t $CI_REGISTRY_IMAGE/backend:build ./backend
+      docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t $CI_REGISTRY_IMAGE/backend:build ./backend
       for TAG in $TAGS_BACKEND; do
         docker tag $CI_REGISTRY_IMAGE/backend:build $CI_REGISTRY_IMAGE/backend:$TAG
         docker push $CI_REGISTRY_IMAGE/backend:$TAG
@@ -197,7 +211,7 @@ build:docker:
 
       # Build frontend
       echo "Building frontend image (APP_VERSION=$FRONTEND_VERSION)..."
-      docker build --build-arg APP_VERSION=$FRONTEND_VERSION -t $CI_REGISTRY_IMAGE/frontend:build ./frontend
+      docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg APP_VERSION=$FRONTEND_VERSION -t $CI_REGISTRY_IMAGE/frontend:build ./frontend
       for TAG in $TAGS_FRONTEND; do
         docker tag $CI_REGISTRY_IMAGE/frontend:build $CI_REGISTRY_IMAGE/frontend:$TAG
         docker push $CI_REGISTRY_IMAGE/frontend:$TAG
@@ -205,9 +219,8 @@ build:docker:
       done
 
   rules:
-    - if: $CI_COMMIT_BRANCH == "staging"
-    - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+/
+    - if: '$CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+/'
 
 scan:images:
   stage: build
@@ -291,6 +304,9 @@ deploy:staging:
         cp .env.staging .env 2>/dev/null || true
         echo "APP_VERSION=$VERSION" >> .env
 
+        echo "=== Loading versions ==="
+        export \$(grep -v '^\s*#' versions.env | grep '=' | xargs)
+
         echo "=== Login to registry ==="
         docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
@@ -321,7 +337,7 @@ stop:staging:
     name: staging
     action: stop
   script:
-    - ssh $SSH_USER@$VM_HOST "cd /opt/crypto-bot-staging && docker compose -f docker-compose.staging.yml down"
+    - ssh $SSH_USER@$VM_HOST "cd /opt/crypto-bot-staging && export \$(grep -v '^\s*#' versions.env | grep '=' | xargs) && docker compose -f docker-compose.staging.yml down"
   rules:
     - if: $CI_COMMIT_BRANCH == "staging"
   when: manual
@@ -350,6 +366,9 @@ deploy:production:
         echo "=== Loading environment ==="
         cp .env.production .env 2>/dev/null || true
         echo "APP_VERSION=$CI_COMMIT_TAG" >> .env
+
+        echo "=== Loading versions ==="
+        export \$(grep -v '^\s*#' versions.env | grep '=' | xargs)
 
         echo "=== Backup database ==="
         docker exec prod-postgres pg_dump -U postgres crypto_bot_db > /tmp/backup_prod_\$(date +%Y%m%d_%H%M%S).sql 2>/dev/null || true
@@ -384,7 +403,7 @@ stop:production:
     name: production
     action: stop
   script:
-    - ssh $SSH_USER@$VM_HOST "cd /opt/crypto-bot-prod && docker compose -f docker-compose.prod.yml down"
+    - ssh $SSH_USER@$VM_HOST "cd /opt/crypto-bot-prod && export \$(grep -v '^\s*#' versions.env | grep '=' | xargs) && docker compose -f docker-compose.prod.yml down"
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+/
   when: manual

@@ -3,7 +3,8 @@ Database dependencies for FastAPI.
 Provides database session management for route handlers.
 """
 
-from typing import Generator
+from collections.abc import Generator
+
 from sqlalchemy.orm import Session
 
 from .connection import db_manager

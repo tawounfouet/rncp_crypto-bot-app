@@ -202,8 +202,8 @@ pytest src/tests -v --cov=src --cov-report=html
 
 ## Documentation interactive
 
-- Swagger UI : http://localhost:8009/docs
-- ReDoc : http://localhost:8009/redoc
+- Swagger UI : http://localhost:8009/api/v1/docs
+- ReDoc : http://localhost:8009/api/v1/redoc
 
 ## Variables d'environnement
 

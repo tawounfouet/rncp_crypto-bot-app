@@ -10,7 +10,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from auth import AuthAPIClient, validate_email, validate_password_strength  # noqa: E402
+from auth import AuthAPIClient, validate_email, validate_password_strength
 
 
 def test_api_client():

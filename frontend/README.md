@@ -88,7 +88,7 @@ docker run -p 8501:8501 crypto-bot-frontend
 
 ## CI/CD et workflow submodule
 
-Ce repo dispose de son propre `.gitlab-ci.yml` qui execute le stage **lint** sur chaque MR et branche feature (flake8 + black).
+Ce repo dispose de son propre `.gitlab-ci.yml` qui execute le stage **lint** sur chaque MR et branche feature (ruff check + ruff format).
 
 ### Synchronisation automatique avec le repo parent
 

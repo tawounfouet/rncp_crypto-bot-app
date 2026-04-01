@@ -1,10 +1,16 @@
 # Docker Compose pour environnement de DEVELOPPEMENT
 # ===================================================
+# IMPORTANT : ne pas lancer directement avec "docker compose up".
+# Utiliser le Makefile qui charge automatiquement versions.env :
+#   make dev-up       Demarrer
+#   make dev-down     Arreter
+#   make dev-logs     Suivre les logs
+#   make dev-config   Valider la configuration
 
 services:
   # MongoDB
   mongo:
-    image: mongo:4.4
+    image: ${MONGO_IMAGE}
     container_name: mongo-nosql-db
     restart: always
     environment:
@@ -25,7 +31,7 @@ services:
 
   # MongoDB Admin UI
   mongo-express:
-    image: mongo-express
+    image: ${MONGO_EXPRESS_IMAGE}
     container_name: mongo-admin-ui
     restart: always
     ports:
@@ -44,7 +50,7 @@ services:
 
   # PostgreSQL
   postgres:
-    image: postgres:14
+    image: ${POSTGRES_IMAGE}
     container_name: postgres-db
     restart: always
     environment:
@@ -67,7 +73,7 @@ services:
 
   # PostgreSQL Admin UI
   adminer:
-    image: adminer
+    image: ${ADMINER_IMAGE}
     container_name: postgres-admin-ui
     restart: always
     ports:
@@ -82,7 +88,7 @@ services:
 
   # MinIO (S3-compatible storage)
   minio:
-    image: minio/minio
+    image: ${MINIO_IMAGE}
     container_name: minio-s3-service
     restart: always
     ports:
@@ -105,7 +111,7 @@ services:
 
   # MinIO bucket creation (one-time)
   createbuckets:
-    image: minio/mc
+    image: ${MINIO_MC_IMAGE}
     depends_on:
       minio:
         condition: service_healthy

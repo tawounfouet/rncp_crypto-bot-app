@@ -1,36 +1,59 @@
 # See https://pre-commit.com for more information
+exclude: 'node_modules|.git'
+default_stages: [pre-commit]
+fail_fast: false
+
 repos:
+  # Hooks generiques
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ".*\\.md$"
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
       - id: check-added-large-files
+      - id: debug-statements
 
-  - repo: https://github.com/PyCQA/bandit
-    rev: '1.8.3'
+  # Ruff (remplace black + flake8 + isort + bandit)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.1
     hooks:
-      - id: bandit
-        args: ["-c", "bandit.yaml"]
+      - id: ruff
+        name: "Run ruff linter"
+        args: ["--fix"]
+        files: ^(backend|frontend)/src/
+      - id: ruff-format
+        name: "Run ruff formatter"
         files: ^(backend|frontend)/src/
 
-  - repo: https://github.com/psf/black
-    rev: 26.1.0
+  # Semgrep securite
+  - repo: https://github.com/semgrep/semgrep
+    rev: v1.156.0
     hooks:
-      - id: black
-        files: ^(backend|frontend)/src/
+      - id: semgrep
+        name: "Semgrep security scan"
+        args: ['--config', '.semgrep/security.yml', '--error']
+        types_or: [python]
 
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.2.0
-    hooks:
-      - id: flake8
-        files: ^(backend|frontend)/src/
-
+  # Hooks locaux
   - repo: local
     hooks:
+      - id: check-infra
+        name: "Check Docker/Makefile infrastructure"
+        entry: scripts/check-infra.sh
+        language: script
+        files: '(Dockerfile|docker-compose.*\.yml|Makefile|versions\.env|requirements.*\.txt|pyproject\.toml)'
+        pass_filenames: false
+
       - id: run-tests
         name: Run backend tests
         entry: bash -c 'cd backend && python -m pytest src/tests/ -v'
         language: system
         pass_filenames: false
+
+ci:
+  skip: [check-infra, run-tests]

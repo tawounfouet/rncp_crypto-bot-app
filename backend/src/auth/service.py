@@ -3,19 +3,19 @@ Authentication service for the Crypto Trading Bot application.
 Handles user authentication, JWT tokens, and session management.
 """
 
-from typing import Optional
-from datetime import datetime, timedelta, timezone
-from fastapi import HTTPException, status
-from fastapi.security import HTTPBearer
+import uuid
+from datetime import UTC, datetime, timedelta
+
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from fastapi import HTTPException, status
+from fastapi.security import HTTPBearer
 from jose import JWTError, jwt
-import uuid
-
 from shared.config.settings import get_settings
+from shared.database.connection import get_db_session
+
 from auth.models import User, UserSession
 from auth.schemas import TokenResponse, UserResponse
-from shared.database.connection import get_db_session
 
 settings = get_settings()
 security = HTTPBearer()
@@ -42,13 +42,13 @@ class AuthService:
         """Generate password hash."""
         return ph.hash(password)
 
-    def create_access_token(self, data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create access token."""
         to_encode = data.copy()
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = datetime.now(UTC) + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
+            expire = datetime.now(UTC) + timedelta(minutes=self.access_token_expire_minutes)
 
         to_encode.update({"exp": expire, "type": "access"})
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
@@ -57,12 +57,12 @@ class AuthService:
     def create_refresh_token(self, data: dict) -> str:
         """Create refresh token."""
         to_encode = data.copy()
-        expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
+        expire = datetime.now(UTC) + timedelta(days=self.refresh_token_expire_days)
         to_encode.update({"exp": expire, "type": "refresh"})
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
 
-    def verify_token(self, token: str, token_type: str = "access") -> dict:  # nosec B107
+    def verify_token(self, token: str, token_type: str = "access") -> dict:  # noqa: S107
         """Verify and decode token."""
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
@@ -74,9 +74,9 @@ class AuthService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
-            )
+            ) from None
 
-    def authenticate_user(self, username: str, password: str) -> Optional[User]:
+    def authenticate_user(self, username: str, password: str) -> User | None:
         """Authenticate user with username/email and password."""
         with get_db_session() as session:
             # Try to find user by username or email
@@ -128,16 +128,16 @@ class AuthService:
                 id=str(uuid.uuid4()),
                 user_id=user.id,
                 token=refresh_token,
-                expires_at=datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days),
+                expires_at=datetime.now(UTC) + timedelta(days=self.refresh_token_expire_days),
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
             session.add(db_session)
 
-        return TokenResponse(  # nosec B106 - token_type is not a password
+        return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            token_type="bearer",
+            token_type="bearer",  # noqa: S106
             expires_in=self.access_token_expire_minutes * 60,
             user=user_response,
         )
@@ -157,7 +157,7 @@ class AuthService:
                 session.query(UserSession)
                 .filter(
                     UserSession.token == refresh_token,
-                    UserSession.expires_at > datetime.now(timezone.utc),
+                    UserSession.expires_at > datetime.now(UTC),
                 )
                 .first()
             )

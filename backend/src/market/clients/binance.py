@@ -1,12 +1,12 @@
 # client_binance.py
 
-import os
 import logging
-from typing import Dict, List, Optional, Union  # Any,
-from dotenv import load_dotenv
+import os
+
+from binance import ThreadedWebsocketManager
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
-from binance import ThreadedWebsocketManager
+from dotenv import load_dotenv
 
 # Configurer le logger
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -29,7 +29,7 @@ class ClientBinance:
         self.client = Client(self.api_key, self.api_secret)
         self._ws_manager = None
 
-    def get_price(self, symbol: str = "BTCUSDT") -> Optional[Dict]:
+    def get_price(self, symbol: str = "BTCUSDT") -> dict | None:
         """
         Récupère le prix actuel d'un symbole
 
@@ -48,7 +48,7 @@ class ClientBinance:
             logger.error(f"Erreur de requête: {e} (symbol={symbol})")
             return None
 
-    def get_historical_klines(self, symbol: str, interval: str, start_str: str) -> Optional[List]:
+    def get_historical_klines(self, symbol: str, interval: str, start_str: str) -> list | None:
         """
         Récupère les données historiques de chandeliers (klines)
 
@@ -66,7 +66,7 @@ class ClientBinance:
             logger.error(f"Erreur récupération historique: {e} (symbol={symbol}, interval={interval})")
             return None
 
-    def get_account_balances(self) -> Optional[Dict[str, float]]:
+    def get_account_balances(self) -> dict[str, float] | None:
         """
         Récupère les soldes positifs du compte
 
@@ -86,8 +86,8 @@ class ClientBinance:
         side: str,
         order_type: str,
         quantity: float,
-        price: Optional[float] = None,
-    ) -> Optional[Dict]:
+        price: float | None = None,
+    ) -> dict | None:
         """
         Place un ordre sur le marché
 
@@ -120,7 +120,7 @@ class ClientBinance:
             logger.error(f"Erreur création d'ordre: {e} (symbol={symbol}, side={side}, type={order_type})")
             return None
 
-    def cancel_order(self, symbol: str, order_id: int) -> Optional[Dict]:
+    def cancel_order(self, symbol: str, order_id: int) -> dict | None:
         """
         Annule un ordre existant
 
@@ -143,7 +143,7 @@ class ClientBinance:
             logger.error(f"Erreur inconnue: {e} (symbol={symbol}, order_id={order_id})")
             return None
 
-    def get_open_orders(self, symbol: str) -> Optional[List[Dict]]:
+    def get_open_orders(self, symbol: str) -> list[dict] | None:
         """
         Récupère les ordres ouverts pour un symbole
 
@@ -165,7 +165,7 @@ class ClientBinance:
             logger.error(f"Erreur inconnue: {e} (symbol={symbol})")
             return None
 
-    def get_account_info(self) -> Optional[Dict]:
+    def get_account_info(self) -> dict | None:
         """
         Récupère les informations du compte
 
@@ -184,7 +184,7 @@ class ClientBinance:
             logger.error(f"Erreur inconnue: {e}")
             return None
 
-    def get_asset_balance(self, asset: str) -> Optional[Dict]:
+    def get_asset_balance(self, asset: str) -> dict | None:
         """
         Récupère le solde d'un actif spécifique
 
@@ -206,7 +206,7 @@ class ClientBinance:
             logger.error(f"Erreur inconnue: {e} (asset={asset})")
             return None
 
-    def get_exchange_info(self) -> Optional[Dict]:
+    def get_exchange_info(self) -> dict | None:
         """
         Récupère les informations de l'échange
 
@@ -225,7 +225,7 @@ class ClientBinance:
             logger.error(f"Erreur inconnue: {e}")
             return None
 
-    def get_server_time(self) -> Optional[Dict]:
+    def get_server_time(self) -> dict | None:
         """
         Récupère l'heure du serveur Binance
 
@@ -244,7 +244,7 @@ class ClientBinance:
             logger.error(f"Erreur inconnue: {e}")
             return None
 
-    def get_symbol_info(self, symbol: str) -> Optional[Dict]:
+    def get_symbol_info(self, symbol: str) -> dict | None:
         """
         Récupère les informations d'un symbole
 
@@ -273,8 +273,8 @@ class ClientBinance:
         symbol: str,
         quantity: float,
         stop_price: float,
-        limit_price: Optional[float] = None,
-    ) -> Optional[Dict]:
+        limit_price: float | None = None,
+    ) -> dict | None:
         """
         Place un ordre stop-loss
 
@@ -316,8 +316,8 @@ class ClientBinance:
         symbol: str,
         quantity: float,
         stop_price: float,
-        limit_price: Optional[float] = None,
-    ) -> Optional[Dict]:
+        limit_price: float | None = None,
+    ) -> dict | None:
         """
         Place un ordre take-profit
 
@@ -362,7 +362,7 @@ class ClientBinance:
         price: float,
         stop_price: float,
         stop_limit_price: float,
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         """
         Place un ordre OCO (One-Cancels-the-Other)
 
@@ -394,7 +394,7 @@ class ClientBinance:
             )
             return None
 
-    def get_order_book(self, symbol: str, limit: int = 100) -> Optional[Dict]:
+    def get_order_book(self, symbol: str, limit: int = 100) -> dict | None:
         """
         Récupère le carnet d'ordres d'un symbole
 
@@ -411,7 +411,7 @@ class ClientBinance:
             logger.error(f"Erreur récupération du carnet d'ordres: {e} (symbol={symbol}, limit={limit})")
             return None
 
-    def get_recent_trades(self, symbol: str, limit: int = 500) -> Optional[List[Dict]]:
+    def get_recent_trades(self, symbol: str, limit: int = 500) -> list[dict] | None:
         """
         Récupère les trades récents pour un symbole
 
@@ -428,9 +428,7 @@ class ClientBinance:
             logger.error(f"Erreur récupération des trades récents: {e} (symbol={symbol}, limit={limit})")
             return None
 
-    def get_historical_trades(
-        self, symbol: str, limit: int = 500, from_id: Optional[int] = None
-    ) -> Optional[List[Dict]]:
+    def get_historical_trades(self, symbol: str, limit: int = 500, from_id: int | None = None) -> list[dict] | None:
         """
         Récupère les trades historiques pour un symbole
 
@@ -451,7 +449,7 @@ class ClientBinance:
             logger.error(f"Erreur récupération des trades historiques: {e} (symbol={symbol}, limit={limit})")
             return None
 
-    def get_aggregate_trades(self, symbol: str, limit: int = 500) -> Optional[List[Dict]]:
+    def get_aggregate_trades(self, symbol: str, limit: int = 500) -> list[dict] | None:
         """
         Récupère les trades agrégés pour un symbole
 
@@ -468,7 +466,7 @@ class ClientBinance:
             logger.error(f"Erreur récupération des trades agrégés: {e} (symbol={symbol}, limit={limit})")
             return None
 
-    def get_all_tickers(self) -> Optional[List[Dict]]:
+    def get_all_tickers(self) -> list[dict] | None:
         """
         Récupère les tickers de tous les symboles
 
@@ -481,7 +479,7 @@ class ClientBinance:
             logger.error(f"Erreur récupération de tous les tickers: {e}")
             return None
 
-    def get_ticker_24h(self, symbol: Optional[str] = None) -> Optional[Union[Dict, List[Dict]]]:
+    def get_ticker_24h(self, symbol: str | None = None) -> dict | list[dict] | None:
         """
         Récupère les statistiques sur 24h pour un ou tous les symboles
 
@@ -509,7 +507,7 @@ class ClientBinance:
             self._ws_manager.start()
             logger.info("WebSocket manager initié")
 
-    def start_kline_socket(self, symbol: str, interval: str, callback) -> Optional[str]:
+    def start_kline_socket(self, symbol: str, interval: str, callback) -> str | None:
         """
         Démarre un socket pour recevoir les données de klines en temps réel
 
@@ -528,7 +526,7 @@ class ClientBinance:
             logger.error(f"Erreur démarrage du socket kline: {e} (symbol={symbol}, interval={interval})")
             return None
 
-    def start_symbol_ticker_socket(self, symbol: str, callback) -> Optional[str]:
+    def start_symbol_ticker_socket(self, symbol: str, callback) -> str | None:
         """
         Démarre un socket pour recevoir les mises à jour des tickers
 
@@ -546,7 +544,7 @@ class ClientBinance:
             logger.error(f"Erreur démarrage du socket ticker: {e} (symbol={symbol})")
             return None
 
-    def start_depth_socket(self, symbol: str, callback, depth: str = "5") -> Optional[str]:
+    def start_depth_socket(self, symbol: str, callback, depth: str = "5") -> str | None:
         """
         Démarre un socket pour recevoir les mises à jour du carnet d'ordres
 

@@ -6,21 +6,22 @@ with all the necessary middleware, routes, and database connections.
 """
 
 import logging
-import uvicorn
 from contextlib import asynccontextmanager
+
+import uvicorn
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-from sqlalchemy.exc import SQLAlchemyError
+from shared.config.constants import ErrorCode
 
 # Configuration imports
 from shared.config.settings import get_settings
-from shared.config.constants import ErrorCode
 
 # Database imports
-from shared.database.connection import init_database, get_database_info
+from shared.database.connection import get_database_info, init_database
+from sqlalchemy.exc import SQLAlchemyError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -232,9 +233,9 @@ async def api_info():
 # Router includes (after app configuration)
 from auth.router import router as auth_router  # noqa: E402
 from auth.users_router import router as users_router  # noqa: E402
-from trading.router import router as trading_router  # noqa: E402
 from market.router import router as market_router  # noqa: E402
 from strategy.router import router as strategies_router  # noqa: E402
+from trading.router import router as trading_router  # noqa: E402
 
 # Include authentication and user management routers
 app.include_router(auth_router, prefix=settings.API_PREFIX)

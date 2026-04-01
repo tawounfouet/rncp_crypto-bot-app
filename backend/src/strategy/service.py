@@ -3,27 +3,27 @@ Strategy service for managing strategy execution and lifecycle.
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-import pandas as pd
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
+import pandas as pd
+from market.service import MarketDataService
+from shared.core.exceptions import BusinessLogicError, NotFoundError, ValidationError
+from shared.database import get_db_session
 from sqlalchemy import and_, or_
 
-from shared.database import get_db_session
+from strategy.engine import get_strategy, registry
 from strategy.models import Strategy, StrategyDeployment, StrategyState
 
 # from models.order import Order
 from strategy.schemas import (
     StrategyCreate,
-    StrategyUpdate,
     StrategyDeploymentCreate,
-    StrategyResponse,
     StrategyDeploymentResponse,
+    StrategyResponse,
+    StrategyUpdate,
 )
-from strategy.engine import registry, get_strategy
-from market.service import MarketDataService
-from shared.core.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +249,7 @@ class StrategyService:
             logger.info(f"Deployed strategy {deployment_data.strategy_id} as deployment {deployment.id}")
             return deployment_response
 
-    async def execute_strategy(self, deployment_id: str, data: pd.DataFrame) -> Dict[str, Any]:
+    async def execute_strategy(self, deployment_id: str, data: pd.DataFrame) -> dict[str, Any]:
         """
         Execute a strategy on market data.
 
@@ -336,16 +336,16 @@ class StrategyService:
                 return execution_result
 
             except Exception as e:
-                logger.error(f"Strategy execution failed for deployment {deployment_id}: {str(e)}")
+                logger.error(f"Strategy execution failed for deployment {deployment_id}: {e!s}")
 
                 # Update deployment status to error
                 deployment.status = "error"
                 if deployment.state:
                     deployment.state.is_active = False
-                    deployment.state.stop_reason = f"Execution error: {str(e)}"
+                    deployment.state.stop_reason = f"Execution error: {e!s}"
 
                 session.commit()
-                raise BusinessLogicError(f"Strategy execution failed: {str(e)}")
+                raise BusinessLogicError(f"Strategy execution failed: {e!s}") from None
 
     def stop_deployment(self, user_id: str, deployment_id: str, reason: str = None) -> StrategyDeploymentResponse:
         """
@@ -401,7 +401,7 @@ class StrategyService:
             logger.info(f"Stopped deployment {deployment_id}")
             return deployment_response
 
-    async def get_user_strategies(self, user_id: str, include_public: bool = True) -> List[StrategyResponse]:
+    async def get_user_strategies(self, user_id: str, include_public: bool = True) -> list[StrategyResponse]:
         """
         Get all strategies for a user.
 
@@ -445,7 +445,7 @@ class StrategyService:
 
             return strategy_responses
 
-    async def get_user_deployments(self, user_id: str, active_only: bool = False) -> List[StrategyDeploymentResponse]:
+    async def get_user_deployments(self, user_id: str, active_only: bool = False) -> list[StrategyDeploymentResponse]:
         """
         Get all deployments for a user.
 
@@ -486,7 +486,7 @@ class StrategyService:
 
             return deployment_responses
 
-    def get_available_strategies(self) -> Dict[str, Dict[str, Any]]:
+    def get_available_strategies(self) -> dict[str, dict[str, Any]]:
         """
         Get information about all available strategies.
 
@@ -496,8 +496,8 @@ class StrategyService:
         return registry.get_all_strategies_info()
 
     async def validate_strategy_parameters(
-        self, strategy_type: str, parameters: Dict[str, Any]
-    ) -> Tuple[bool, Optional[str]]:
+        self, strategy_type: str, parameters: dict[str, Any]
+    ) -> tuple[bool, str | None]:
         """
         Validate strategy parameters.
 
