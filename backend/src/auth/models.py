@@ -38,6 +38,7 @@ class User(BaseModel):
     # Status flags
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     is_admin = Column(Boolean, default=False, nullable=False)
+    last_active_at = Column(DateTime, nullable=True, index=True)
 
     # Relationships
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
@@ -90,7 +91,7 @@ class UserSession(BaseModel):
     __tablename__ = "user_sessions"
 
     # Foreign key to user
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Session information
     token = Column(String(255), unique=True, nullable=False, index=True)
@@ -122,7 +123,7 @@ class UserAccount(BaseModel):
     __tablename__ = "user_accounts"
 
     # Foreign key to user
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Provider information
     provider = Column(String(50), nullable=False, default="credentials")
@@ -184,7 +185,7 @@ class UserSettings(BaseModel):
     __tablename__ = "user_settings"
 
     # Foreign key to user (one-to-one relationship)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
 
     # UI preferences
     theme = Column(String(20), default="light", nullable=False)

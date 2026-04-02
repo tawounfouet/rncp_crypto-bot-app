@@ -4,6 +4,7 @@ Handles user CRUD operations and business logic.
 """
 
 import uuid
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
@@ -53,6 +54,7 @@ class UserService:
                 last_name=user_data.last_name,
                 is_active=True,
                 is_admin=False,
+                last_active_at=datetime.now(datetime.timezone.utc),
             )
 
             session.add(db_user)
@@ -162,6 +164,61 @@ class UserService:
         """Get user settings."""
         with get_db_session() as session:
             return session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+
+    def export_user_data(self, user_id: str) -> dict:
+        """Return the user's personal data for portability export."""
+        with get_db_session() as session:
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND)
+
+            settings = user.settings
+            settings_data = None
+            if settings:
+                settings_data = {
+                    "theme": settings.theme,
+                    "risk_profile": settings.risk_profile,
+                    "notification_preferences": settings.notification_preferences,
+                    "has_binance_credentials": bool(settings.api_keys and "binance" in settings.api_keys),
+                }
+
+            accounts_data = [
+                {
+                    "provider": account.provider,
+                    "provider_id": account.provider_id,
+                    "account_id": account.account_id,
+                    "is_oauth": account.is_oauth_provider,
+                }
+                for account in user.accounts
+            ]
+
+            return {
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "is_active": user.is_active,
+                    "is_admin": user.is_admin,
+                    "last_active_at": user.last_active_at,
+                    "created_at": user.created_at,
+                    "updated_at": user.updated_at,
+                },
+                "settings": settings_data,
+                "accounts": accounts_data,
+            }
+
+    def delete_inactive_users_older_than(self, days: int = 730) -> int:
+        """Delete users whose last_active_at is older than the configured threshold."""
+        cutoff = datetime.now(datetime.timezone.utc) - timedelta(days=days)
+        with get_db_session() as session:
+            users = session.query(User).filter(User.last_active_at != None, User.last_active_at < cutoff).all()
+            deleted_count = 0
+            for user in users:
+                session.delete(user)
+                deleted_count += 1
+            return deleted_count
 
     def update_user_settings(self, user_id: str, settings_data: UserSettingsUpdate) -> UserSettings:
         """Update user settings."""

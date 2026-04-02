@@ -100,6 +100,25 @@ async def get_user_settings(
         ) from None
 
 
+@router.get("/me/export")
+async def export_current_user_data(
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    """
+    Export current user's personal data for portability.
+    """
+    try:
+        return user_service.export_user_data(current_user.id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export user data: {str(e)}",
+        )
+
+
 @router.put("/me/settings")
 async def update_user_settings(
     settings_update: UserSettingsUpdate,
