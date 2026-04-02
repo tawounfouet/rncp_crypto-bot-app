@@ -73,6 +73,8 @@ class UserSettingsUpdate(BaseModel):
     theme: ThemeEnum | None = None
     risk_profile: RiskProfileEnum | None = None
     notification_preferences: dict | None = None
+    binance_api_key: str | None = None
+    binance_api_secret: str | None = None
 
     class Config:
         json_schema_extra = {
@@ -84,6 +86,8 @@ class UserSettingsUpdate(BaseModel):
                     "push": False,
                     "trading_alerts": True,
                 },
+                "binance_api_key": "your_binance_api_key",
+                "binance_api_secret": "your_binance_api_secret",
             }
         }
 

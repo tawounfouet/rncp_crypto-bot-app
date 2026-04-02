@@ -14,20 +14,28 @@ logger = logging.getLogger("ClientBinance")
 
 
 class ClientBinance:
-    def __init__(self):
+    def __init__(self, api_key: str | None = None, api_secret: str | None = None):
         """
-        Initialisation du client Binance avec les clés API stockées dans .env
+        Initialisation du client Binance avec les clés API fournies ou stockées dans .env.
         """
         load_dotenv()
-        self.api_key = os.getenv("BINANCE_TESTNET_API_KEY")
-        self.api_secret = os.getenv("BINANCE_TESTNET_API_SECRET")
+        self.api_key = api_key or os.getenv("BINANCE_TESTNET_API_KEY")
+        self.api_secret = api_secret or os.getenv("BINANCE_TESTNET_API_SECRET")
 
         if not self.api_key or not self.api_secret:
             logger.error("Clés API Binance manquantes")
-            raise ValueError("Clés API Binance manquantes dans le fichier .env")
+            raise ValueError("Clés API Binance manquantes dans le fichier .env ou dans les paramètres du client")
 
         self.client = Client(self.api_key, self.api_secret)
         self._ws_manager = None
+
+    @classmethod
+    def from_user_settings(cls, settings):
+        """Créer un client Binance à partir des identifiants enregistrés de l'utilisateur."""
+        return cls(
+            api_key=settings.get_api_key("binance"),
+            api_secret=settings.get_api_secret("binance"),
+        )
 
     def get_price(self, symbol: str = "BTCUSDT") -> dict | None:
         """

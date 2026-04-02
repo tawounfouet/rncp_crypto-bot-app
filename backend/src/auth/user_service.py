@@ -192,8 +192,23 @@ class UserService:
                 )
                 session.add(settings)
 
-            # Update settings fields if provided
+            # Update API credentials if provided
             update_data = settings_data.model_dump(exclude_unset=True)
+            binance_api_key = update_data.pop("binance_api_key", None)
+            binance_api_secret = update_data.pop("binance_api_secret", None)
+
+            if binance_api_key is not None or binance_api_secret is not None:
+                if binance_api_key is None or binance_api_secret is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Both binance_api_key and binance_api_secret are required together.",
+                    )
+                if binance_api_key == "" and binance_api_secret == "":
+                    settings.remove_api_credentials("binance")
+                else:
+                    settings.set_api_credentials("binance", binance_api_key, binance_api_secret)
+
+            # Update other settings fields if provided
             for field, value in update_data.items():
                 if hasattr(settings, field):
                     setattr(settings, field, value)

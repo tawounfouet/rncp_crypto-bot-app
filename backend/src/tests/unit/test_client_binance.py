@@ -2,6 +2,9 @@
 Tests unitaires pour utils/client_binance.py
 """
 
+import base64
+import os
+
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -34,6 +37,17 @@ class TestClientBinanceInit:
 
         with pytest.raises(ValueError, match="Clés API Binance manquantes"):
             ClientBinance()
+
+    @patch("src.market.clients.binance.Client")
+    def test_init_with_explicit_credentials(self, mock_client):
+        """Initialisation réussie avec des credentials fournis explicitement."""
+        from src.market.clients.binance import ClientBinance
+
+        client = ClientBinance(api_key="explicit_key", api_secret="explicit_secret")
+
+        assert client.api_key == "explicit_key"
+        assert client.api_secret == "explicit_secret"
+        mock_client.assert_called_once_with("explicit_key", "explicit_secret")
 
 
 class TestClientBinanceGetPrice:

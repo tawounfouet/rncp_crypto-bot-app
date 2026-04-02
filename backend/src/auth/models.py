@@ -16,6 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+from shared.config.security import decrypt_secret, encrypt_secret
 
 @register_model
 class User(BaseModel):
@@ -210,24 +211,38 @@ class UserSettings(BaseModel):
         """Check if push notifications are enabled."""
         return self.notification_preferences.get("push", False)
 
+    def _decrypt_value(self, stored_value):
+        if stored_value is None:
+            return None
+
+        if isinstance(stored_value, dict) and "ciphertext" in stored_value and "nonce" in stored_value:
+            return decrypt_secret(stored_value["ciphertext"], stored_value["nonce"])
+
+        return stored_value
+
     def get_api_key(self, exchange: str) -> str | None:
         """Get API key for a specific exchange."""
         if not self.api_keys:
             return None
-        return self.api_keys.get(exchange, {}).get("api_key")
+        api_key = self.api_keys.get(exchange, {}).get("api_key")
+        return self._decrypt_value(api_key)
 
     def get_api_secret(self, exchange: str) -> str | None:
         """Get API secret for a specific exchange."""
         if not self.api_keys:
             return None
-        return self.api_keys.get(exchange, {}).get("api_secret")
+        api_secret = self.api_keys.get(exchange, {}).get("api_secret")
+        return self._decrypt_value(api_secret)
 
     def set_api_credentials(self, exchange: str, api_key: str, api_secret: str) -> None:
-        """Set API credentials for an exchange."""
+        """Set encrypted API credentials for an exchange."""
         if not self.api_keys:
             self.api_keys = {}
 
-        self.api_keys[exchange] = {"api_key": api_key, "api_secret": api_secret}
+        self.api_keys[exchange] = {
+            "api_key": encrypt_secret(api_key),
+            "api_secret": encrypt_secret(api_secret),
+        }
 
     def remove_api_credentials(self, exchange: str) -> None:
         """Remove API credentials for an exchange."""
