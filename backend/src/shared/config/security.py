@@ -6,8 +6,8 @@ Handles authentication, authorization, and secret management.
 import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta
 from base64 import b64decode, b64encode
+from datetime import datetime, timedelta
 from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -18,9 +18,7 @@ BINANCE_ENC_KEY_ENV = "BINANCE_ENC_KEY"
 def _get_binance_aes_key() -> bytes:
     key_b64 = os.getenv(BINANCE_ENC_KEY_ENV)
     if not key_b64:
-        raise RuntimeError(
-            "Missing required environment variable BINANCE_ENC_KEY for Binance API key encryption"
-        )
+        raise RuntimeError("Missing required environment variable BINANCE_ENC_KEY for Binance API key encryption")
 
     key = b64decode(key_b64)
     if len(key) not in (16, 24, 32):

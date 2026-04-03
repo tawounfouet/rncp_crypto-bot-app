@@ -50,6 +50,37 @@ class TestClientBinanceInit:
         mock_client.assert_called_once_with("explicit_key", "explicit_secret")
 
 
+class TestClientBinanceFromUserSettings:
+    """Tests pour la classmethod from_user_settings."""
+
+    @patch("src.market.clients.binance.Client")
+    def test_from_user_settings_uses_decrypted_credentials(self, mock_client_class):
+        """from_user_settings cree un client avec les credentials dechiffres du user."""
+        from src.market.clients.binance import ClientBinance
+
+        mock_settings = MagicMock()
+        mock_settings.get_api_key.return_value = "decrypted_key"
+        mock_settings.get_api_secret.return_value = "decrypted_secret"
+
+        client = ClientBinance.from_user_settings(mock_settings)
+
+        mock_settings.get_api_key.assert_called_once_with("binance")
+        mock_settings.get_api_secret.assert_called_once_with("binance")
+        assert client.api_key == "decrypted_key"
+        assert client.api_secret == "decrypted_secret"
+
+    def test_from_user_settings_raises_without_credentials(self):
+        """from_user_settings leve ValueError si les credentials sont absents."""
+        from src.market.clients.binance import ClientBinance
+
+        mock_settings = MagicMock()
+        mock_settings.get_api_key.return_value = None
+        mock_settings.get_api_secret.return_value = None
+
+        with pytest.raises(ValueError, match="Clés API Binance manquantes"):
+            ClientBinance.from_user_settings(mock_settings)
+
+
 class TestClientBinanceGetPrice:
     """Tests pour la méthode get_price."""
 

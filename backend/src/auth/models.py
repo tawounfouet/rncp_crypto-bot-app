@@ -3,6 +3,7 @@ User domain models for the Crypto Trading Bot.
 Contains User, UserSession, UserAccount, and UserSettings models.
 """
 
+from shared.config.security import decrypt_secret, encrypt_secret
 from shared.models.base import BaseModel, register_model
 from sqlalchemy import (
     JSON,
@@ -16,7 +17,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from shared.config.security import decrypt_secret, encrypt_secret
 
 @register_model
 class User(BaseModel):

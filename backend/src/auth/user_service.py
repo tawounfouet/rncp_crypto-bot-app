@@ -4,7 +4,7 @@ Handles user CRUD operations and business logic.
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
@@ -54,7 +54,7 @@ class UserService:
                 last_name=user_data.last_name,
                 is_active=True,
                 is_admin=False,
-                last_active_at=datetime.now(datetime.timezone.utc),
+                last_active_at=datetime.now(UTC),
             )
 
             session.add(db_user)
@@ -211,9 +211,9 @@ class UserService:
 
     def delete_inactive_users_older_than(self, days: int = 730) -> int:
         """Delete users whose last_active_at is older than the configured threshold."""
-        cutoff = datetime.now(datetime.timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         with get_db_session() as session:
-            users = session.query(User).filter(User.last_active_at != None, User.last_active_at < cutoff).all()
+            users = session.query(User).filter(User.last_active_at.isnot(None), User.last_active_at < cutoff).all()
             deleted_count = 0
             for user in users:
                 session.delete(user)

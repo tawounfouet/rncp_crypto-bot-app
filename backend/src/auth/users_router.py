@@ -115,8 +115,8 @@ async def export_current_user_data(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to export user data: {str(e)}",
-        )
+            detail=f"Failed to export user data: {e!s}",
+        ) from e
 
 
 @router.put("/me/settings")

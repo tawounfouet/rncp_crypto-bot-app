@@ -103,7 +103,7 @@ class UserBase(BaseModel):
     last_name: str | None
     is_active: bool
     is_admin: bool
-    last_active_at: Optional[datetime] = None
+    last_active_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

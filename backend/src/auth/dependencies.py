@@ -7,11 +7,10 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from shared.config.security import decrypt_secret, encrypt_secret
 
 from auth.models import User
 from auth.service import auth_service
-
-from shared.config.security import decrypt_secret, encrypt_secret
 
 # Security scheme for JWT Bearer tokens
 security = HTTPBearer()
@@ -101,6 +100,7 @@ def get_current_user_optional(
 
 def encrypt_value(plaintext: str) -> dict:
     return encrypt_secret(plaintext)
+
 
 def decrypt_value(ciphertext_b64: str, nonce_b64: str) -> str:
     return decrypt_secret(ciphertext_b64, nonce_b64)
