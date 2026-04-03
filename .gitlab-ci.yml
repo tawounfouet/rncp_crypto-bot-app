@@ -225,6 +225,10 @@ test:integration:
       # Recuperer les resultats depuis le container
       mkdir -p ci/test-results
       docker cp "$(docker compose -f ci/docker-compose.test.yml ps -q test-runner)":/tmp/test-results/. ci/test-results/ 2>/dev/null || true
+
+      # Cleanup ici (pas en after_script) pour eviter un race condition
+      # avec l'upload des artifacts qui cause un 403 "Job is not processing"
+      docker compose --env-file versions.env -f ci/docker-compose.test.yml down -v 2>/dev/null || true
   after_script:
     - docker compose --env-file versions.env -f ci/docker-compose.test.yml down -v 2>/dev/null || true
   artifacts:
