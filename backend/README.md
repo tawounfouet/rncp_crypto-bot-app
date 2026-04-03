@@ -235,6 +235,7 @@ pytest src/tests/integration -v
 | `MINIO_SECRET_KEY` | Cle secrete MinIO | - |
 | `BINANCE_API_KEY` | Cle API Binance (optionnel) | - |
 | `BINANCE_API_SECRET` | Secret API Binance (optionnel) | - |
+| `BINANCE_ENC_KEY` | Cle AES-GCM base64 pour le chiffrement des clés Binance | - |
 
 ## CI/CD
 

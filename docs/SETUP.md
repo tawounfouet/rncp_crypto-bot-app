@@ -67,6 +67,7 @@ POSTGRES_DB=crypto_bot_db
 # API Binance (optionnel pour dev)
 BINANCE_TESTNET_API_KEY=your_key
 BINANCE_TESTNET_API_SECRET=your_secret
+BINANCE_ENC_KEY=your_base64_encoded_32_byte_key
 
 # JWT
 SECRET_KEY=your_secret_key

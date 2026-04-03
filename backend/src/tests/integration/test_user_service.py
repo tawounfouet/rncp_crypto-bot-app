@@ -276,3 +276,189 @@ class TestUserAdminOperations:
 
         db_user = patch_db_session.query(User).filter(User.id == created.id).first()
         assert db_user.is_admin is False
+
+
+class TestUserExportData:
+    """Tests pour l'export des donnees utilisateur."""
+
+    def test_export_user_data_structure(self, patch_db_session):
+        """export_user_data retourne un dict avec les cles user, settings, accounts."""
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+        created = service.create_user(UserCreate(
+            email="export@test.com",
+            username="exportuser",
+            password="SecurePass123!",  # noqa: S106
+            first_name="Export",
+            last_name="User",
+        ))
+
+        data = service.export_user_data(created.id)
+
+        assert "user" in data
+        assert "settings" in data
+        assert "accounts" in data
+        assert data["user"]["email"] == "export@test.com"
+        assert data["user"]["username"] == "exportuser"
+        assert data["user"]["first_name"] == "Export"
+        assert data["user"]["last_name"] == "User"
+
+    def test_export_user_data_includes_settings(self, patch_db_session):
+        """export_user_data inclut les settings par defaut."""
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+        created = service.create_user(UserCreate(
+            email="export2@test.com",
+            username="exportuser2",
+            password="SecurePass123!",  # noqa: S106
+        ))
+
+        data = service.export_user_data(created.id)
+
+        assert data["settings"] is not None
+        assert data["settings"]["theme"] == "light"
+        assert data["settings"]["risk_profile"] == "moderate"
+        assert data["settings"]["has_binance_credentials"] is False
+
+    def test_export_nonexistent_user_raises(self, patch_db_session):
+        """export_user_data leve 404 pour un user inexistant."""
+        from fastapi import HTTPException
+
+        from auth.user_service import UserService
+
+        service = UserService()
+        with pytest.raises(HTTPException) as exc_info:
+            service.export_user_data("nonexistent-id")
+
+        assert exc_info.value.status_code == 404
+
+
+class TestDeleteInactiveUsers:
+    """Tests pour la suppression des utilisateurs inactifs."""
+
+    def test_delete_inactive_users_removes_old_users(self, patch_db_session):
+        """Les utilisateurs inactifs depuis plus de N jours sont supprimes."""
+        from datetime import UTC, datetime, timedelta
+
+        from auth.models import User
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+
+        # Creer un user actif recemment
+        active = service.create_user(UserCreate(
+            email="active@test.com",
+            username="activeuser",
+            password="SecurePass123!",  # noqa: S106
+        ))
+
+        # Creer un user inactif depuis 3 ans
+        old = service.create_user(UserCreate(
+            email="old@test.com",
+            username="olduser",
+            password="SecurePass123!",  # noqa: S106
+        ))
+        db_old = patch_db_session.query(User).filter(User.id == old.id).first()
+        db_old.last_active_at = datetime.now(UTC) - timedelta(days=1100)
+        patch_db_session.flush()
+
+        deleted = service.delete_inactive_users_older_than(days=730)
+
+        assert deleted == 1
+        assert patch_db_session.query(User).filter(User.id == old.id).first() is None
+        assert patch_db_session.query(User).filter(User.id == active.id).first() is not None
+
+    def test_delete_inactive_users_skips_null_last_active(self, patch_db_session):
+        """Les utilisateurs sans last_active_at ne sont pas supprimes."""
+        from auth.models import User
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+        created = service.create_user(UserCreate(
+            email="null@test.com",
+            username="nulluser",
+            password="SecurePass123!",  # noqa: S106
+        ))
+
+        # Mettre last_active_at a None
+        db_user = patch_db_session.query(User).filter(User.id == created.id).first()
+        db_user.last_active_at = None
+        patch_db_session.flush()
+
+        deleted = service.delete_inactive_users_older_than(days=1)
+
+        assert deleted == 0
+        assert patch_db_session.query(User).filter(User.id == created.id).first() is not None
+
+
+class TestCascadeDelete:
+    """Tests pour le comportement CASCADE a la suppression d'un utilisateur."""
+
+    def test_delete_user_removes_settings(self, patch_db_session):
+        """Supprimer un user supprime aussi ses settings en cascade."""
+        from auth.models import User, UserSettings
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+        created = service.create_user(UserCreate(
+            email="cascade@test.com",
+            username="cascadeuser",
+            password="SecurePass123!",  # noqa: S106
+        ))
+
+        # Verifier que les settings existent
+        settings = patch_db_session.query(UserSettings).filter(
+            UserSettings.user_id == created.id
+        ).first()
+        assert settings is not None
+
+        # Supprimer le user
+        service.delete_user(created.id)
+
+        # Verifier que les settings sont supprimees
+        settings = patch_db_session.query(UserSettings).filter(
+            UserSettings.user_id == created.id
+        ).first()
+        assert settings is None
+
+    def test_delete_user_removes_sessions(self, patch_db_session):
+        """Supprimer un user supprime aussi ses sessions en cascade."""
+        import uuid
+        from datetime import UTC, datetime, timedelta
+
+        from auth.models import User, UserSession
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+        created = service.create_user(UserCreate(
+            email="cascade2@test.com",
+            username="cascadeuser2",
+            password="SecurePass123!",  # noqa: S106
+        ))
+
+        # Creer une session manuellement
+        session_obj = UserSession(
+            id=str(uuid.uuid4()),
+            user_id=created.id,
+            token="test-session-token",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        patch_db_session.add(session_obj)
+        patch_db_session.flush()
+
+        # Supprimer le user
+        service.delete_user(created.id)
+
+        # Verifier que la session est supprimee
+        sessions = patch_db_session.query(UserSession).filter(
+            UserSession.user_id == created.id
+        ).all()
+        assert len(sessions) == 0
