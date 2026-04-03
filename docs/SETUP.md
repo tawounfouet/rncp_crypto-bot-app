@@ -5,23 +5,33 @@
 ```
 Crypto-bot-app/                 # Monorepo applicatif
 ├── backend/                    # Code FastAPI
+│   ├── src/                    # Code source + tests
+│   ├── ci/                     # parse_test_report.py (inclus dans l'image test Docker)
+│   ├── Dockerfile              # Multi-stage : builder, test, runtime
+│   ├── requirements.txt        # Dependances de production
+│   └── requirements-dev.txt    # Dependances de dev/test (inclut requirements.txt)
 ├── frontend/                   # Code Streamlit
-├── scripts/                    # Scripts utilitaires
-│   ├── push.sh                 # Push sur le remote
-│   ├── dev-deploy.sh           # Build/push/deploy sur K8s namespace dev
-│   ├── run_tests.sh            # Lancer les tests
-│   ├── run_lint.sh             # Linting local (ruff)
-│   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles
+│   ├── src/
+│   ├── Dockerfile
+│   └── requirements.txt
+├── ci/                         # Tests d'integration CI
+│   ├── docker-compose.test.yml # Compose pour tests (Postgres + Mongo reels)
+│   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
+├── scripts/
+│   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles (8 checks)
+│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests si code Python modifie
+│   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev
 │   └── docker_status.sh        # Statut des containers Docker
-├── docs/                       # Documentation
+├── .semgrep/                   # Regles de securite Semgrep
 ├── init-scripts/               # Scripts d'init PostgreSQL
-├── docker-compose.yml          # Dev local / fallback VM AWS
-├── docker-compose.staging.yml  # Fallback VM AWS (staging)
-├── docker-compose.prod.yml     # Fallback VM AWS (production)
+├── docker-compose.yml          # Dev local
+├── docker-compose.staging.yml  # Staging (VM AWS)
+├── docker-compose.prod.yml     # Production (VM AWS)
 ├── versions.env                # Versions des images Docker (source unique, tracke dans git)
-├── Makefile                    # Point d'entree (charge versions.env + .env), taper `make` pour l'aide
+├── .env.example                # Template des variables d'environnement (secrets)
+├── Makefile                    # Raccourcis dev locaux (charge versions.env), taper `make`
 ├── pyproject.toml              # Configuration Ruff (linting + formatting)
-├── .pre-commit-config.yaml     # Hooks pre-commit (ruff, semgrep, check-infra)
+├── .pre-commit-config.yaml     # Hooks pre-commit (ruff, semgrep, check-infra, tests)
 └── .gitlab-ci.yml              # CI/CD
 ```
 
@@ -34,7 +44,8 @@ fallback sur la VM AWS DataScientest.
 - Git >= 2.13
 - Docker >= 20.10
 - Docker Compose >= 2.0
-- Python 3.11+ (pour le developpement local)
+- Python 3.11 (pour le venv local)
+- pre-commit (pour les hooks)
 - kubectl (pour le deploiement K8s dev)
 - kubeseal (pour la gestion des secrets K8s)
 
@@ -62,25 +73,57 @@ Variables importantes dans `.env` :
 # Base de donnees
 POSTGRES_USER=postgres
 POSTGRES_PWD=your_password
-POSTGRES_DB=crypto_bot_db
 
-# API Binance (optionnel pour dev)
-BINANCE_TESTNET_API_KEY=your_key
-BINANCE_TESTNET_API_SECRET=your_secret
+# MongoDB
+MONGODB_USER=admin
+MONGODB_PWD=your_mongo_password
+MONGODB_USER_ADMIN=admin
+MONGODB_PWD_ADMIN=your_mongo_admin_password
+
+# MinIO
+MINIO_USER_ADMIN=minioadmin
+MINIO_PWD_ADMIN=your_minio_password
+
+# Chiffrement des cles API Binance en BDD
+# Generer avec : python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
 BINANCE_ENC_KEY=your_base64_encoded_32_byte_key
 
-# JWT
-SECRET_KEY=your_secret_key
+# API Binance (optionnel pour dev)
+BINANCE_API_KEY=
+BINANCE_API_SECRET=
 ```
 
-### 3. Lancer l'application (dev local avec Docker Compose)
+### 3. Creer le venv local (tests + lint)
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/pip install -r backend/requirements-dev.txt
+```
+
+Le `.venv` est utilise par `make lint`, `make test` et le hook pre-commit
+`run-tests-if-needed.sh`.
+
+### 4. Installer les hooks pre-commit
+
+```bash
+pre-commit install
+```
+
+Les hooks verifient automatiquement avant chaque commit :
+- Qualite basique (trailing whitespace, YAML/JSON valide, merge conflicts)
+- Ruff lint + format (si fichiers Python modifies)
+- Semgrep securite (si fichiers Python modifies)
+- Validation infra (si Dockerfile/docker-compose/versions.env modifies)
+- Tests unitaires (si code applicatif modifie)
+
+### 5. Lancer l'application (dev local avec Docker Compose)
 
 ```bash
 # Demarrer tous les services (charge automatiquement versions.env + .env)
 make dev-up
 
-# Verifier le statut
-./scripts/docker_status.sh
+# Verifier la sante du backend
+make health
 
 # Initialiser les buckets MinIO (premiere fois)
 make dev-init
@@ -101,33 +144,14 @@ Services disponibles (dev local) :
 
 ## Developpement
 
-### Installer les dependances (developpement local)
-
-```bash
-# Backend
-cd backend
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-pip install -r requirements-dev.txt
-
-# Frontend (dans un autre terminal)
-cd frontend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements-dev.txt
-```
-
 ### Lancer les tests
 
 ```bash
-# Tests backend uniquement
-./scripts/run_tests.sh backend
+# Tests unitaires en local (utilise le venv .venv)
+make test
 
-# Tests avec coverage
-./scripts/run_tests.sh backend --coverage
-
-# Tous les tests
-./scripts/run_tests.sh all
+# Equivalent manuel :
+PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
 ```
 
 ### Lancer le linting
@@ -142,8 +166,6 @@ make lint-fix
 # Valider la coherence infra (versions.env, Dockerfiles, docker-compose)
 make check-infra
 ```
-
-Les commandes `./scripts/run_lint.sh all` et `./scripts/run_lint.sh all --fix` sont aussi disponibles.
 
 ## Deploiement K8s dev
 
@@ -194,7 +216,7 @@ feature/* ou dev_*  --(MR, 0 approbation)-->  staging  --(MR, 1+ approbation)-->
 
 - **feature/\* ou dev_\*** : branches de travail. Lint seul a chaque push (feedback rapide).
 - **staging** : branche d'integration. Merge Request sans approbation requise.
-  Declenche build et deploy.
+  Declenche build, test et deploy.
 - **main** : branche de production. Merge Request avec au moins 1 approbation.
 - **tag vX.X** : cree sur `main` pour declencher le build et le deploy production.
 
@@ -202,10 +224,10 @@ feature/* ou dev_*  --(MR, 0 approbation)-->  staging  --(MR, 1+ approbation)-->
 
 | Stage | Jobs | Declencheur |
 |-------|------|-------------|
-| lint | `lint:dockerfile:*`, `semgrep_sast` | MR, dev_\*, feature/\* |
-| test | `check:backend`, `lint:frontend` | MR, staging, tag |
-| build | `build:docker`, `scan:images` | staging, tag vX.X |
-| deploy | `deploy:staging`, `deploy:production`, `update:manifests` | staging / tag vX.X |
+| lint | `lint:versions`, `lint:python`, `lint:dockerfile:*`, `semgrep_sast` | MR, dev_\*, feature/\* |
+| build | `build:docker`, `scan:images`, `validate_tag` | MR, staging, tag vX.X |
+| test | `test:integration` | MR, staging, tag vX.X |
+| deploy | `deploy:staging`, `deploy:production`, `create_release`, `update:manifests` | staging / tag vX.X |
 
 ### Tags Docker
 
@@ -213,8 +235,9 @@ La CI ne genere que des tags nommes, pas de tags SHA :
 
 | Declencheur | Tags generes |
 |-------------|--------------|
-| Push sur staging | `:staging`, `:latest` |
-| Tag vX.X | `:vX.X`, `:production`, `:latest` |
+| MR | `:test-<pipeline_id>` + `:latest` |
+| Push sur staging | `:staging` + `:latest` |
+| Tag vX.X | `:vX.X` + `:production` + `:latest` |
 
 ### Deploiement
 
@@ -268,29 +291,35 @@ Pour mettre a jour une version :
 
 ### Commandes Makefile
 
+Taper `make` pour afficher toutes les commandes disponibles.
+
 | Commande | Description |
 |----------|-------------|
 | `make dev-up` | Demarrer l'env dev |
 | `make dev-down` | Arreter l'env dev |
 | `make dev-logs` | Suivre les logs dev |
 | `make dev-config` | Valider la config dev |
+| `make dev-build` | Rebuild les images dev (sans cache) |
 | `make dev-init` | Creer les buckets MinIO (dev) |
 | `make staging-up` | Demarrer staging |
 | `make staging-down` | Arreter staging |
 | `make staging-config` | Valider la config staging |
+| `make staging-logs` | Suivre les logs staging |
 | `make staging-init` | Creer les buckets MinIO (staging) |
 | `make prod-up` | Demarrer la prod |
 | `make prod-down` | Arreter la prod |
 | `make prod-config` | Valider la config prod |
+| `make prod-logs` | Suivre les logs prod |
 | `make prod-init` | Creer les buckets MinIO (prod) |
 | `make prod-debug-up` | Activer Adminer + Mongo Express en prod |
 | `make prod-debug-down` | Desactiver Adminer + Mongo Express en prod |
-| `make dev-build` | Rebuild les images dev (sans cache) |
-| `make lint` | Lancer ruff check + format |
-| `make lint-fix` | Corriger automatiquement les erreurs ruff |
-| `make check-infra` | Valider coherence versions.env / Dockerfiles / docker-compose |
+| `make test` | Tests unitaires (venv local) |
+| `make lint` | Ruff check + format |
+| `make lint-fix` | Corriger automatiquement |
+| `make check-infra` | Valider coherence infra |
+| `make health` | Verifier la sante du backend |
 
-### Services par environnement
+### Services par environnement (VM AWS)
 
 | Service | Dev | Staging | Prod |
 |---------|-----|---------|------|
@@ -311,8 +340,9 @@ Le service `createbuckets` est sous le profile `tools` dans tous les environneme
 ### Erreur "No module named 'src'"
 
 ```bash
-# Definir le PYTHONPATH
-export PYTHONPATH=$(pwd)/backend  # ou frontend
+# Le PYTHONPATH est gere automatiquement par make test
+# Pour lancer pytest manuellement :
+PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
 ```
 
 ### Les containers ne demarrent pas (Docker Compose local)

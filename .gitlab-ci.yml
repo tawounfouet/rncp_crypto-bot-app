@@ -212,14 +212,11 @@ test:integration:
   script:
     - |
       export $(grep -v '^\s*#' versions.env | grep '=' | xargs)
-
-      # Toujours utiliser l'image test (contient pytest + deps de test)
       export IMAGE_TAG="$CI_REGISTRY_IMAGE/backend:test-${CI_PIPELINE_IID}"
-
       echo "=== Testing image: $IMAGE_TAG ==="
 
       # Lancer les tests avec les vrais services
-      IMAGE_TAG="$IMAGE_TAG" docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
+      docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
         --abort-on-container-exit --exit-code-from test-runner
 
       # Recuperer les resultats depuis le container
@@ -450,7 +447,7 @@ deploy:staging:
 
         echo "=== Pulling images from registry ==="
         export IMAGE_TAG=staging
-        docker compose -f docker-compose.staging.yml pull
+        docker compose -f docker-compose.staging.yml pull --ignore-pull-failures
 
         echo "=== Deploying ==="
         docker compose -f docker-compose.staging.yml down
@@ -516,7 +513,7 @@ deploy:production:
 
         echo "=== Pulling images from registry ==="
         export IMAGE_TAG=$CI_COMMIT_TAG
-        docker compose -f docker-compose.prod.yml pull
+        docker compose -f docker-compose.prod.yml pull --ignore-pull-failures
 
         echo "=== Deploying ==="
         docker compose -f docker-compose.prod.yml down

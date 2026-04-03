@@ -6,11 +6,11 @@ Script Purpose:
     This script creates the complete database schema for the Crypto Trading Bot application.
     It includes all tables, indexes, triggers, views and relationships needed for:
     - User management and authentication
-    - Trading strategies and deployments  
+    - Trading strategies and deployments
     - Order management with Binance API compatibility
     - Market data storage
     - Performance tracking and analytics
-    
+
 Database Structure:
     - 13 main tables with proper relationships
     - Optimized indexes for performance
@@ -20,7 +20,7 @@ Database Structure:
 
 WARNING:
     This script will drop the entire 'crypto_trading_bot' database if it exists.
-    All data in the database will be permanently deleted. Ensure you have proper 
+    All data in the database will be permanently deleted. Ensure you have proper
     backups before running this script in production.
 
 Author: Crypto Trading Bot Team
@@ -55,7 +55,7 @@ CREATE TABLE users (
     is_admin BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     INDEX idx_users_email (email),
     INDEX idx_users_username (username),
     INDEX idx_users_active (is_active),
@@ -72,7 +72,7 @@ CREATE TABLE user_sessions (
     user_agent TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_sessions_user (user_id),
     INDEX idx_sessions_token (token),
@@ -94,7 +94,7 @@ CREATE TABLE user_accounts (
     password VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE KEY uq_user_provider_provider_id (user_id, provider, provider_id),
     INDEX idx_accounts_user (user_id),
@@ -111,7 +111,7 @@ CREATE TABLE user_settings (
     api_keys JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_settings_user (user_id)
 );
@@ -137,7 +137,7 @@ CREATE TABLE strategies (
     parameter_hash VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_strategies_user (user_id),
     INDEX idx_strategies_type (strategy_type),
@@ -161,7 +161,7 @@ CREATE TABLE strategy_deployments (
     end_time TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_deployments_strategy (strategy_id),
@@ -194,7 +194,7 @@ CREATE TABLE strategy_states (
     last_update TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (deployment_id) REFERENCES strategy_deployments(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_states_deployment (deployment_id),
@@ -222,7 +222,7 @@ CREATE TABLE trading_sessions (
     stop_reason VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (deployment_id) REFERENCES strategy_deployments(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_sessions_deployment (deployment_id),
@@ -246,7 +246,7 @@ CREATE TABLE backtest_results (
     transactions JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (strategy_id) REFERENCES strategies(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_backtests_strategy (strategy_id),
@@ -287,7 +287,7 @@ CREATE TABLE orders (
     working_time TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (deployment_id) REFERENCES strategy_deployments(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_orders_deployment (deployment_id),
@@ -313,7 +313,7 @@ CREATE TABLE order_fills (
     is_buyer BOOLEAN,
     is_maker BOOLEAN,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     INDEX idx_fills_order (order_id),
     INDEX idx_fills_trade_id (trade_id),
@@ -340,7 +340,7 @@ CREATE TABLE transactions (
     description TEXT,
     timestamp TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
     INDEX idx_transactions_user (user_id),
@@ -375,7 +375,7 @@ CREATE TABLE market_data (
     taker_buy_base_volume DECIMAL(20,8),
     taker_buy_quote_volume DECIMAL(20,8),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     UNIQUE KEY uq_market_data_symbol_time (symbol, exchange, interval_timeframe, open_time),
     INDEX idx_market_data_symbol (symbol),
     INDEX idx_market_data_exchange (exchange),
@@ -410,10 +410,10 @@ SCRIPT COMPLETION
 
 
 -- Verify table creation
-SELECT 
+SELECT
     TABLE_NAME,
     TABLE_ROWS,
     CREATE_TIME
-FROM information_schema.TABLES 
+FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = 'crypto_trading_bot'
 ORDER BY TABLE_NAME;

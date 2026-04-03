@@ -1,9 +1,10 @@
 # Makefile - Crypto-bot-app
 # =========================
-# Point d'entree unique pour les commandes Docker Compose.
-# Les versions d'images sont centralisees dans versions.env.
+# Raccourcis pour les commandes dev locales.
+# Charge automatiquement versions.env pour que les variables
+# soient disponibles dans les commandes docker compose.
 #
-# /!\ Ne pas utiliser "docker compose" directement.
+# /!\ Ne pas utiliser "docker compose" directement en local.
 #     Les variables de versions.env ne seraient pas chargees.
 
 include versions.env
@@ -16,14 +17,14 @@ help: ## Afficher cette aide
 	@echo "  Crypto-bot-app — commandes disponibles"
 	@echo "  ======================================="
 	@echo ""
-	@echo "  IMPORTANT : ne pas utiliser 'docker compose' directement."
-	@echo "  Utiliser 'make <cible>' pour charger automatiquement versions.env."
-	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## ' Makefile | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
-# --- Dev ---
+# ===========================================================================
+# Dev
+# ===========================================================================
+
 dev-up: ## Demarrer l'environnement dev
 	docker compose up -d
 
@@ -39,7 +40,10 @@ dev-logs: ## Suivre les logs dev
 dev-build: ## Rebuild les images dev (sans cache)
 	docker compose build --no-cache
 
-# --- Staging ---
+# ===========================================================================
+# Staging (usage local ou VM)
+# ===========================================================================
+
 staging-up: ## Demarrer staging
 	docker compose -f docker-compose.staging.yml up -d
 
@@ -52,7 +56,10 @@ staging-config: ## Valider la configuration staging
 staging-logs: ## Suivre les logs staging
 	docker compose -f docker-compose.staging.yml logs -f
 
-# --- Production ---
+# ===========================================================================
+# Production (usage local ou VM)
+# ===========================================================================
+
 prod-up: ## Demarrer la production
 	docker compose -f docker-compose.prod.yml up -d
 
@@ -65,7 +72,25 @@ prod-config: ## Valider la configuration prod
 prod-logs: ## Suivre les logs prod
 	docker compose -f docker-compose.prod.yml logs -f
 
-# --- Outils (one-time) ---
+# ===========================================================================
+# Tests & Lint (venv local)
+# ===========================================================================
+
+test: ## Lancer les tests unitaires en local
+	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+
+lint: ## Lancer ruff check + format
+	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise
+	.venv/bin/ruff format --check backend/src/ frontend/src/
+
+lint-fix: ## Corriger automatiquement les erreurs ruff
+	.venv/bin/ruff check backend/src/ frontend/src/ --fix
+	.venv/bin/ruff format backend/src/ frontend/src/
+
+# ===========================================================================
+# Outils
+# ===========================================================================
+
 dev-init: ## Creer les buckets MinIO (dev)
 	docker compose --profile tools up createbuckets
 
@@ -75,22 +100,14 @@ staging-init: ## Creer les buckets MinIO (staging)
 prod-init: ## Creer les buckets MinIO (prod)
 	docker compose -f docker-compose.prod.yml --profile tools up createbuckets
 
-# --- Debug (admin UIs en prod) ---
 prod-debug-up: ## Activer Adminer + Mongo Express en prod
 	docker compose -f docker-compose.prod.yml --profile debug up -d adminer mongo-express
 
 prod-debug-down: ## Desactiver Adminer + Mongo Express en prod
 	docker compose -f docker-compose.prod.yml --profile debug stop adminer mongo-express
 
-# --- Lint ---
-lint: ## Lancer ruff check + format
-	ruff check backend/src/ frontend/src/ --output-format=concise
-	ruff format --check backend/src/ frontend/src/
-
-lint-fix: ## Corriger automatiquement les erreurs ruff
-	ruff check backend/src/ frontend/src/ --fix
-	ruff format backend/src/ frontend/src/
-
-# --- Infra check ---
 check-infra: ## Valider la coherence versions.env / Dockerfiles / docker-compose
 	bash scripts/check-infra.sh
+
+health: ## Verifier la sante du backend (PORT=8009 par defaut)
+	@curl -sf http://localhost:$${PORT:-8009}/health && echo " OK" || (echo " FAIL" && exit 1)
