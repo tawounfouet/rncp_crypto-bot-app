@@ -212,14 +212,11 @@ test:integration:
   script:
     - |
       export $(grep -v '^\s*#' versions.env | grep '=' | xargs)
-
-      # Toujours utiliser l'image test (contient pytest + deps de test)
       export IMAGE_TAG="$CI_REGISTRY_IMAGE/backend:test-${CI_PIPELINE_IID}"
-
       echo "=== Testing image: $IMAGE_TAG ==="
 
       # Lancer les tests avec les vrais services
-      IMAGE_TAG="$IMAGE_TAG" docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
+      docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
         --abort-on-container-exit --exit-code-from test-runner
 
       # Recuperer les resultats depuis le container
@@ -412,22 +409,20 @@ deploy:staging:
     on_stop: stop:staging
   script:
     - |
-      # Config git pour les tags
-      git config --global user.email "ci@crypto-bot.gitlab.com"
-      git config --global user.name "GitLab CI"
-
-      # Calculer le prochain numero RC
-      git fetch --tags
-      LAST_RC=$(git tag -l "v1.0-rc*" | sort -V | tail -1 | grep -oE '[0-9]+$' || echo "0")
-      NEXT_RC=$((LAST_RC + 1))
-      VERSION="v1.0-rc${NEXT_RC}"
+      VERSION="staging-${CI_COMMIT_SHORT_SHA}"
       echo "=== Deploying version: $VERSION ==="
 
-      # Creer le tag RC
-      git tag -a "$VERSION" -m "Release candidate $VERSION (staging)"
-      git push origin "$VERSION" || echo "Tag already exists or push failed"
+      # Creer le tag via l'API GitLab (CI_JOB_TOKEN a les droits)
+      apk add --no-cache curl
+      curl --fail --silent --show-error --request POST \
+        --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/tags" \
+        --form "tag_name=$VERSION" \
+        --form "ref=$CI_COMMIT_SHA" \
+        --form "message=Staging deploy $VERSION" \
+        || echo "Tag $VERSION already exists"
     - |
-      VERSION=$(git tag -l "v1.0-rc*" | sort -V | tail -1)
+      VERSION="staging-${CI_COMMIT_SHORT_SHA}"
       ssh $SSH_USER@$VM_HOST << ENDSSH
         cd /opt/crypto-bot-staging
 
@@ -450,7 +445,7 @@ deploy:staging:
 
         echo "=== Pulling images from registry ==="
         export IMAGE_TAG=staging
-        docker compose -f docker-compose.staging.yml pull
+        docker compose -f docker-compose.staging.yml pull --ignore-pull-failures
 
         echo "=== Deploying ==="
         docker compose -f docker-compose.staging.yml down
@@ -516,7 +511,7 @@ deploy:production:
 
         echo "=== Pulling images from registry ==="
         export IMAGE_TAG=$CI_COMMIT_TAG
-        docker compose -f docker-compose.prod.yml pull
+        docker compose -f docker-compose.prod.yml pull --ignore-pull-failures
 
         echo "=== Deploying ==="
         docker compose -f docker-compose.prod.yml down

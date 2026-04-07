@@ -9,8 +9,9 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ".*\\.md$"
+        exclude: ".*\\.md$|^ci/test-results/"
       - id: end-of-file-fixer
+        exclude: "^ci/test-results/"
       - id: check-yaml
       - id: check-json
       - id: check-toml
@@ -50,9 +51,10 @@ repos:
         pass_filenames: false
 
       - id: run-tests
-        name: Run backend tests
-        entry: bash -c 'cd backend && python -m pytest src/tests/ -v'
-        language: system
+        name: "Run lint + tests for changed code"
+        entry: scripts/run-tests-if-needed.sh
+        language: script
+        files: '^(backend|frontend)/src/.*\.py$'
         pass_filenames: false
 
 ci:
