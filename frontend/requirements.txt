@@ -1,20 +1,8 @@
-# Streamlit Frontend Dependencies
-# ================================
-
-# Core Framework
-streamlit==1.55.0
-
-# Data Processing
-pandas==2.3.3
-numpy==2.4.3
-pyarrow==23.0.1
-
-# HTTP Client
-requests==2.32.5
-
-# Utilities
-python-dateutil==2.9.0.post0
-
-# Visualization
-altair==6.0.0
-pillow==12.1.1
+﻿streamlit>=1.45,<2.0
+plotly>=5.24,<6.0
+pandas>=2.3,<3.0
+pydantic>=2.8,<3.0
+pytest>=8.3,<9.0
+ruff>=0.6,<1.0
+black>=24.8,<26.0
+mypy>=1.11,<2.0
