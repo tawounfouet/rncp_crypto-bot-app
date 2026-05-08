@@ -3,7 +3,6 @@
 
 -r requirements.txt
 
-pre-commit==4.6.0
 # Testing
 pytest==9.0.2
 pytest-cov==7.1.0
