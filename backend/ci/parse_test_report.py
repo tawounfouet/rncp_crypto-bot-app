@@ -9,8 +9,10 @@ Usage:
 
 import os
 import sys
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+import tempfile
+from datetime import UTC, datetime
+
+import defusedxml.ElementTree as ET
 
 
 def parse_and_report(xml_file, txt_file):
@@ -100,7 +102,7 @@ def parse_and_report(xml_file, txt_file):
     )
 
     # Generer le TXT
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     s = summary
 
     lines = [
@@ -166,8 +168,9 @@ if __name__ == "__main__":
     if len(sys.argv) == 3:
         xml_path, txt_path = sys.argv[1], sys.argv[2]
     else:
-        xml_path = "/tmp/test-results/report.xml"
-        txt_path = "/tmp/test-results/test_report.txt"
+        default_dir = os.path.join(tempfile.gettempdir(), "test-results")
+        xml_path = os.path.join(default_dir, "report.xml")
+        txt_path = os.path.join(default_dir, "test_report.txt")
 
     success = parse_and_report(xml_path, txt_path)
     sys.exit(0 if success else 1)

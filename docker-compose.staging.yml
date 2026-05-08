@@ -15,7 +15,7 @@ services:
     ports:
       - "27017:27017"
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongo --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin"]
       interval: 10s
       timeout: 5s
       retries: 5
