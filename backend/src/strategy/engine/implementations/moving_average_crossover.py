@@ -2,9 +2,10 @@
 Moving Average Crossover Strategy implementation.
 """
 
-import pandas as pd
+from typing import Any
+
 import numpy as np
-from typing import Dict, Any, List, Tuple, Optional
+import pandas as pd
 
 from ..base_strategy import BaseStrategy
 from ..indicators import TechnicalIndicators
@@ -40,7 +41,7 @@ class MovingAverageCrossoverStrategy(BaseStrategy):
     def __init__(
         self,
         name: str = "moving_average_crossover",
-        params: Optional[Dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ):
         super().__init__(name, params)
 
@@ -106,11 +107,11 @@ class MovingAverageCrossoverStrategy(BaseStrategy):
 
         return df
 
-    def get_required_indicators(self) -> List[str]:
+    def get_required_indicators(self) -> list[str]:
         """Get list of required indicators."""
         return ["fast_ma", "slow_ma", "ma_spread"]
 
-    def validate_parameters(self) -> Tuple[bool, Optional[str]]:
+    def validate_parameters(self) -> tuple[bool, str | None]:
         """Validate strategy parameters."""
         try:
             if self.fast_period <= 0:
@@ -131,9 +132,9 @@ class MovingAverageCrossoverStrategy(BaseStrategy):
             return True, None
 
         except Exception as e:
-            return False, f"Parameter validation error: {str(e)}"
+            return False, f"Parameter validation error: {e!s}"
 
-    def get_strategy_info(self) -> Dict[str, Any]:
+    def get_strategy_info(self) -> dict[str, Any]:
         """Get strategy information."""
         info = super().get_strategy_info()
         info.update(

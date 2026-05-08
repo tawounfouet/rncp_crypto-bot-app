@@ -7,7 +7,7 @@ VIEWS FOR ANALYTICS AND REPORTING
 
 -- User statistics view
 CREATE VIEW v_user_statistics AS
-SELECT 
+SELECT
     u.id,
     u.username,
     u.email,
@@ -27,7 +27,7 @@ GROUP BY u.id, u.username, u.email, u.created_at;
 
 -- Strategy performance view
 CREATE VIEW v_strategy_performance AS
-SELECT 
+SELECT
     s.id,
     s.name,
     s.strategy_type,
@@ -48,7 +48,7 @@ GROUP BY s.id, s.name, s.strategy_type, s.user_id, u.username, s.created_at;
 
 -- Active deployments view
 CREATE VIEW v_active_deployments AS
-SELECT 
+SELECT
     sd.id,
     sd.exchange,
     sd.symbol,
@@ -72,7 +72,7 @@ WHERE sd.status = 'active' AND sd.end_time IS NULL;
 
 -- Trading activity summary view
 CREATE VIEW v_trading_activity AS
-SELECT 
+SELECT
     DATE(o.created_at) as trading_date,
     o.exchange,
     o.symbol,

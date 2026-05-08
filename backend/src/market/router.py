@@ -4,32 +4,32 @@ Includes endpoints for fetching historical data, current prices, symbols, and te
 """
 
 import logging
-from typing import List
-from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime, timedelta
 
 from auth.dependencies import get_current_user
-from shared.database import get_db
 from auth.models import User
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from shared.core.exceptions import NotFoundError, ValidationError
+from shared.database import get_db
+from shared.schemas.common import BaseResponse
+from sqlalchemy.orm import Session
+
+from market.insert_service import MarketDataInsertService
 from market.schemas import (
+    MarketDataListResponse,
     MarketDataRequest,
     MarketDataResponse,
-    MarketDataListResponse,
+    MarketSummary,
+    MarketSummaryResponse,
     PriceInfo,
     PriceResponse,
     SymbolInfo,
     SymbolListResponse,
-    TradingPair,
     TechnicalIndicators,
     TechnicalIndicatorsResponse,
-    MarketSummary,
-    MarketSummaryResponse,
+    TradingPair,
 )
-from shared.schemas.common import BaseResponse
 from market.service import MarketDataService
-from market.insert_service import MarketDataInsertService
-from shared.core.exceptions import ValidationError, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ async def insert_historical_data(
             raise ValidationError(f"Invalid trading symbol: {request.symbol}")
 
         # Set default end_time if not provided
-        end_time = request.end_time or datetime.now(timezone.utc)
+        end_time = request.end_time or datetime.now(UTC)
 
         # Validate date range
         if request.start_time >= end_time:
@@ -135,14 +135,14 @@ async def insert_historical_data(
         )
 
     except ValidationError as e:
-        logger.warning(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error: {e!s}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
-        logger.error(f"Error inserting historical data: {str(e)}")
+        logger.error(f"Error inserting historical data: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to insert historical data: {str(e)}",
-        )
+            detail=f"Failed to insert historical data: {e!s}",
+        ) from None
 
 
 # ============================================================================
@@ -174,7 +174,7 @@ async def fetch_market_data(
             raise ValidationError(f"Invalid symbol: {request.symbol}")
 
         # Calculate date range if not provided
-        end_time = request.end_time or datetime.now(timezone.utc)
+        end_time = request.end_time or datetime.now(UTC)
         start_time = request.start_time or (end_time - timedelta(days=30))
 
         # Fetch historical data
@@ -202,7 +202,7 @@ async def fetch_market_data(
                     close_price=row["close"],
                     volume=row["volume"],
                     close_time=row["timestamp"],
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             )
 
@@ -216,17 +216,17 @@ async def fetch_market_data(
         )
 
     except ValidationError as e:
-        logger.warning(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error: {e!s}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except NotFoundError as e:
-        logger.warning(f"Not found: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        logger.warning(f"Not found: {e!s}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
     except Exception as e:
-        logger.error(f"Error fetching market data: {str(e)}")
+        logger.error(f"Error fetching market data: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch market data",
-        )
+        ) from None
 
 
 @router.get("/data/latest/{symbol}", response_model=MarketDataListResponse)
@@ -289,7 +289,7 @@ async def get_latest_market_data(
                     number_of_trades=record["number_of_trades"],
                     taker_buy_base_volume=record["taker_buy_base_volume"],
                     taker_buy_quote_volume=record["taker_buy_quote_volume"],
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
             )
 
@@ -303,14 +303,14 @@ async def get_latest_market_data(
         )
 
     except ValidationError as e:
-        logger.warning(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error: {e!s}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
-        logger.error(f"Error fetching latest data: {str(e)}")
+        logger.error(f"Error fetching latest data: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch latest market data: {str(e)}",
-        )
+            detail=f"Failed to fetch latest market data: {e!s}",
+        ) from None
 
 
 # ============================================================================
@@ -365,25 +365,25 @@ async def get_current_price(
         return PriceResponse(success=True, message=f"Current price for {symbol}", data=price_info)
 
     except ValidationError as e:
-        logger.warning(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error: {e!s}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except NotFoundError as e:
-        logger.warning(f"Not found: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        logger.warning(f"Not found: {e!s}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
     except Exception as e:
-        logger.error(f"Error fetching price: {str(e)}")
+        logger.error(f"Error fetching price: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch price",
-        )
+        ) from None
 
 
-@router.get("/prices", response_model=List[PriceInfo])
+@router.get("/prices", response_model=list[PriceInfo])
 async def get_multiple_prices(
     symbols: str = Query(..., description="Comma-separated list of symbols"),
     current_user: User = Depends(get_current_user),
     market_service: MarketDataService = Depends(get_market_data_service),
-) -> List[PriceInfo]:
+) -> list[PriceInfo]:
     """
     Get current prices for multiple symbols.
 
@@ -419,17 +419,17 @@ async def get_multiple_prices(
                         )
                     )
             except Exception as e:
-                logger.warning(f"Error fetching price for {symbol}: {str(e)}")
+                logger.warning(f"Error fetching price for {symbol}: {e!s}")
                 continue
 
         return prices
 
     except Exception as e:
-        logger.error(f"Error fetching multiple prices: {str(e)}")
+        logger.error(f"Error fetching multiple prices: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch prices",
-        )
+        ) from None
 
 
 # ============================================================================
@@ -459,11 +459,11 @@ async def get_available_symbols(
         )
 
     except Exception as e:
-        logger.error(f"Error fetching symbols: {str(e)}")
+        logger.error(f"Error fetching symbols: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch symbols",
-        )
+        ) from None
 
 
 @router.get("/symbols/{symbol}", response_model=SymbolInfo)
@@ -492,14 +492,14 @@ async def get_symbol_info(
         return SymbolInfo(**info)
 
     except ValidationError as e:
-        logger.warning(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error: {e!s}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
-        logger.error(f"Error fetching symbol info: {str(e)}")
+        logger.error(f"Error fetching symbol info: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch symbol information",
-        )
+        ) from None
 
 
 # ============================================================================
@@ -563,14 +563,14 @@ async def get_technical_indicators(
         )
 
     except ValidationError as e:
-        logger.warning(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning(f"Validation error: {e!s}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
-        logger.error(f"Error calculating indicators: {str(e)}")
+        logger.error(f"Error calculating indicators: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to calculate technical indicators",
-        )
+        ) from None
 
 
 # ============================================================================
@@ -616,13 +616,13 @@ async def get_market_summary(
                             is_active=True,
                         )
                     )
-            except Exception:  # nosec B112 - intentional skip on error
+            except Exception:  # noqa: S112
                 continue
 
         # Sort for gainers and losers
         pairs_sorted = sorted(pairs, key=lambda x: x.change_percent_24h, reverse=True)
         summary = MarketSummary(
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             total_pairs=len(symbols),
             total_volume_24h=sum(p.volume_24h for p in pairs),
             top_gainers=pairs_sorted[:5],
@@ -633,8 +633,8 @@ async def get_market_summary(
         return MarketSummaryResponse(success=True, message="Market summary", data=summary)
 
     except Exception as e:
-        logger.error(f"Error fetching market summary: {str(e)}")
+        logger.error(f"Error fetching market summary: {e!s}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch market summary",
-        )
+        ) from None

@@ -4,9 +4,9 @@ Handles all configuration including database fallback to SQLite.
 """
 
 import logging
-from typing import Optional, List, Dict, Any
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
+from typing import Any
 
 from pydantic import validator
 from pydantic.types import SecretStr
@@ -37,18 +37,18 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Server settings
-    HOST: str = "0.0.0.0"  # nosec B104 - required for Docker
+    HOST: str = "0.0.0.0"  # noqa: S104
     PORT: int = 8000
     RELOAD: bool = True
 
     # CORS settings
-    CORS_ORIGINS: List[str] = ["*"]
+    CORS_ORIGINS: list[str] = ["*"]
     CORS_ALLOW_CREDENTIALS: bool = True
-    CORS_ALLOW_METHODS: List[str] = ["*"]
-    CORS_ALLOW_HEADERS: List[str] = ["*"]
+    CORS_ALLOW_METHODS: list[str] = ["*"]
+    CORS_ALLOW_HEADERS: list[str] = ["*"]
 
     # Trusted hosts
-    ALLOWED_HOSTS: List[str] = ["*"]
+    ALLOWED_HOSTS: list[str] = ["*"]
 
     # Rate limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -56,12 +56,12 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW: int = 60  # seconds
 
     # Database settings - PostgreSQL (primary)
-    POSTGRES_HOST: Optional[str] = None
-    POSTGRES_PORT: Optional[int] = None
-    POSTGRES_USER: Optional[str] = None
-    POSTGRES_PWD: Optional[str] = None
-    POSTGRES_DB: Optional[str] = None
-    POSTGRES_URL: Optional[str] = None
+    POSTGRES_HOST: str | None = None
+    POSTGRES_PORT: int | None = None
+    POSTGRES_USER: str | None = None
+    POSTGRES_PWD: str | None = None
+    POSTGRES_DB: str | None = None
+    POSTGRES_URL: str | None = None
 
     # Database settings - SQLite (fallback)
     SQLITE_DB_PATH: str = "db.sqlite3"  # SQLite file at backend root, Django style
@@ -69,15 +69,15 @@ class Settings(BaseSettings):
     DATABASE_ECHO: bool = False  # SQLAlchemy echo mode for debugging
 
     # Computed database URL
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str | None = None
 
     # MongoDB settings (optional)
     MONGODB_HOST: str = "localhost"
     MONGODB_PORT: int = 27017
-    MONGODB_USER: Optional[str] = None
-    MONGODB_PWD: Optional[str] = None
+    MONGODB_USER: str | None = None
+    MONGODB_PWD: str | None = None
     MONGODB_DB: str = "crypto_market_data"
-    MONGODB_URL: Optional[str] = None
+    MONGODB_URL: str | None = None
     USE_MONGODB: bool = False
 
     # MinIO settings (optional)
@@ -91,22 +91,22 @@ class Settings(BaseSettings):
     # Redis settings (optional)
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
-    REDIS_PASSWORD: Optional[SecretStr] = None
+    REDIS_PASSWORD: SecretStr | None = None
     REDIS_DB: int = 0
-    REDIS_URL: Optional[str] = None
+    REDIS_URL: str | None = None
     USE_REDIS: bool = False
 
     # Binance API settings
-    BINANCE_API_KEY: Optional[SecretStr] = None
-    BINANCE_API_SECRET: Optional[SecretStr] = None
+    BINANCE_API_KEY: SecretStr | None = None
+    BINANCE_API_SECRET: SecretStr | None = None
     BINANCE_TESTNET: bool = True
-    BINANCE_TESTNET_API_KEY: Optional[SecretStr] = None
-    BINANCE_TESTNET_API_SECRET: Optional[SecretStr] = None
+    BINANCE_TESTNET_API_KEY: SecretStr | None = None
+    BINANCE_TESTNET_API_SECRET: SecretStr | None = None
 
     # Logging settings
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    LOG_FILE: Optional[str] = "logs/crypto_bot.log"
+    LOG_FILE: str | None = "logs/crypto_bot.log"
 
     # Feature flags
     ENABLE_BACKGROUND_TASKS: bool = True
@@ -143,7 +143,7 @@ class Settings(BaseSettings):
                 return True
 
             # Check cgroup information
-            with open("/proc/1/cgroup", "r") as f:
+            with open("/proc/1/cgroup") as f:
                 return "docker" in f.read()
         except Exception:
             return False
@@ -261,7 +261,7 @@ class Settings(BaseSettings):
         """Check if using PostgreSQL database."""
         return self.DATABASE_URL and self.DATABASE_URL.startswith("postgresql://")
 
-    def get_database_config(self) -> Dict[str, Any]:
+    def get_database_config(self) -> dict[str, Any]:
         """Get database configuration for SQLAlchemy."""
         config = {
             "url": self.DATABASE_URL,
@@ -294,7 +294,7 @@ class Settings(BaseSettings):
 
         return config
 
-    def get_cors_config(self) -> Dict[str, Any]:
+    def get_cors_config(self) -> dict[str, Any]:
         """Get CORS configuration."""
         return {
             "allow_origins": self.CORS_ORIGINS,
@@ -363,7 +363,7 @@ class Settings(BaseSettings):
         logger.info("=" * 50)
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """Get application settings with caching."""
     return Settings()

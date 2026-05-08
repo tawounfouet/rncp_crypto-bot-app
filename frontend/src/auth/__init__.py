@@ -9,23 +9,23 @@ Usage:
     success, message = auth_manager.login("username", "password")
 """
 
-from .api_client import AuthAPIClient, APIResponse
+from .api_client import APIResponse, AuthAPIClient
 from .auth_manager import AuthManager
 from .utils import (
+    format_user_display,
+    generate_test_user_data,
+    mask_token,
     validate_email,
     validate_password_strength,
-    format_user_display,
-    mask_token,
-    generate_test_user_data,
 )
 
 __all__ = [
-    "AuthAPIClient",
     "APIResponse",
+    "AuthAPIClient",
     "AuthManager",
+    "format_user_display",
+    "generate_test_user_data",
+    "mask_token",
     "validate_email",
     "validate_password_strength",
-    "format_user_display",
-    "mask_token",
-    "generate_test_user_data",
 ]

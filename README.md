@@ -8,22 +8,35 @@ Projet de trading automatise de cryptomonnaies — monorepo applicatif (backend 
 Crypto-bot-app/                 # Monorepo applicatif
 ├── backend/                    # Code FastAPI
 │   ├── src/
+│   ├── ci/                     # Script parse_test_report.py (inclus dans l'image test)
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/                   # Code Streamlit
 │   ├── src/
 │   ├── Dockerfile
 │   └── requirements.txt
+├── ci/                         # Docker Compose tests d'integration + resultats
+│   ├── docker-compose.test.yml
+│   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
 ├── scripts/
-│   ├── push.sh                 # Push sur le remote
+│   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles
+│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests si code modifie
 │   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev
-│   ├── run_lint.sh             # Linting local
-│   └── run_tests.sh            # Tests locaux
+│   ├── push.sh                 # Push sur le remote
+│   ├── run_lint.sh             # Linting local (legacy, preferer make lint)
+│   ├── run_tests.sh            # Tests locaux (legacy, preferer make test)
+│   └── docker_status.sh        # Statut des containers Docker
+├── .semgrep/                   # Regles de securite Semgrep
+├── init-scripts/               # Scripts d'init PostgreSQL
 ├── docker-compose.yml          # Developpement local
 ├── docker-compose.staging.yml  # Environnement staging (VM AWS)
 ├── docker-compose.prod.yml     # Environnement production (VM AWS)
-├── .gitlab-ci.yml              # CI/CD
-└── README.md
+├── versions.env                # Versions des images Docker (source unique, tracke dans git)
+├── .env.example                # Template des variables d'environnement (secrets)
+├── Makefile                    # Raccourcis dev locaux (charge versions.env), taper `make` pour l'aide
+├── pyproject.toml              # Configuration Ruff (linting + formatting)
+├── .pre-commit-config.yaml     # Hooks pre-commit (ruff, semgrep, check-infra, tests)
+└── .gitlab-ci.yml              # CI/CD
 ```
 
 Le repo d'infrastructure Kubernetes est separe : `dst_crypto/Crypto-bot-infra` (Kustomize, overlays, ArgoCD).
@@ -40,30 +53,77 @@ cp .env.example .env
 # Editer .env avec vos valeurs
 ```
 
-## Lancement local
+## Environnement de developpement local
+
+### Venv Python (lint + tests)
 
 ```bash
-# Demarrer tous les services
-docker compose up -d
+# Creer le venv a la racine du projet (Python 3.11 requis)
+python3.11 -m venv .venv
+.venv/bin/pip install -r backend/requirements-dev.txt
+
+# Installer les hooks pre-commit
+pre-commit install
+```
+
+Le `.venv` est utilise par `make lint`, `make test` et le hook pre-commit.
+
+### Lancer l'application
+
+```bash
+# Demarrer tous les services (charge automatiquement versions.env + .env)
+make dev-up
+
+# Verifier la sante du backend
+make health
+
+# Initialiser les buckets MinIO (premiere fois)
+make dev-init
 
 # Voir les logs
-docker compose logs -f
+make dev-logs
 
 # Arreter
-docker compose down
+make dev-down
 ```
+
+> **Important** : le `Makefile` charge `versions.env` (versions d'images, tracke dans git)
+> et `.env` (secrets, gitignore) via `include` + `export`. Utiliser `make` plutot que
+> `docker compose` directement pour garantir la resolution de toutes les variables.
 
 ## Services (developpement local)
 
 | Service | Port | URL |
 |---------|------|-----|
-| Backend API | 8009 | http://localhost:8009/docs |
+| Backend API | 8009 | http://localhost:8009/api/v1/docs |
 | Frontend | 8501 | http://localhost:8501 |
 | PostgreSQL | 5434 | - |
 | MongoDB | 27017 | - |
 | MinIO Console | 9001 | http://localhost:9001 |
 | Adminer | 8085 | http://localhost:8085 |
 | Mongo Express | 8081 | http://localhost:8081 |
+
+## Tests et qualite
+
+```bash
+make test              # Tests unitaires (venv local)
+make lint              # Verifier le code (ruff check + format)
+make lint-fix          # Corriger automatiquement les erreurs ruff
+make check-infra       # Valider coherence versions.env / Dockerfiles / docker-compose
+make health            # Verifier la sante du backend (PORT=9009 make health pour prod)
+```
+
+### Pre-commit hooks
+
+Les hooks sont configures dans `.pre-commit-config.yaml` :
+
+| Hook | Declencheur | Action |
+|------|------------|--------|
+| trailing-whitespace, end-of-file, check-yaml/toml/json | Tous fichiers | Qualite basique |
+| ruff check + format | `backend/src/` ou `frontend/src/` | Lint Python |
+| semgrep | Fichiers Python | Scan securite |
+| check-infra | Dockerfile, docker-compose, Makefile, versions.env, requirements, pyproject.toml | Validation infra (8 checks) |
+| run-tests | `backend/src/**/*.py` ou `frontend/src/**/*.py` | `make lint` + `make test` |
 
 ## Workflow CI/CD
 
@@ -72,29 +132,38 @@ docker compose down
 ```
 feature/* ou dev_*                                   Branches de travail
     |
-    |  push --> CI : lint + tests
+    |  push --> CI : lint seul (feedback rapide)
     |
     |  MR (0 approbation requise)
     v
 staging                                              Integration
     |
-    |  push --> CI : lint + tests + build + deploy VM AWS
+    |  MR --> CI : lint + build + test
+    |  push --> CI : build + test + deploy VM AWS
     |
     |  MR (1+ approbation requise)
     v
-main                                                 Branche stable
+main                                                 Branche stable (pas de pipeline)
     |
     |  tag vX.X --> CI : build + deploy production (manuel)
     v
 tag vX.X                                             Release
 ```
 
-### Tags des images Docker
+### Stages du pipeline
 
-Les images sont taguees selon la branche ou le tag Git :
+| Stage | Jobs | Declencheur |
+|-------|------|-------------|
+| lint | `lint:versions`, `lint:python`, `lint:dockerfile:*`, `semgrep_sast` | MR, dev_\*, feature/\* |
+| build | `build:docker`, `scan:images`, `validate_tag` | MR, staging, tag vX.X |
+| test | `test:integration` | MR, staging, tag vX.X |
+| deploy | `deploy:staging`, `deploy:production`, `create_release`, `update:manifests` | staging / tag vX.X |
+
+### Tags des images Docker
 
 | Declencheur | Tags pushes |
 |-------------|-------------|
+| MR | `:test-<pipeline_id>` + `:latest` |
 | Branche `staging` | `:staging` + `:latest` |
 | Tag `vX.X` | `:vX.X` + `:production` + `:latest` |
 
@@ -145,33 +214,82 @@ sur la VM et sur le cluster K8s.
 
 | Environnement | Repertoire | Compose file | Ports |
 |---------------|------------|--------------|-------|
-| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` | Backend 8009, Frontend 8501, PostgreSQL 5434, MongoDB 27017, MinIO 9000/9001 |
-| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` | Backend 9009, PostgreSQL 5435, MongoDB 27018, MinIO 9002/9003 |
+| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` | Backend 8009, Frontend 8501, PostgreSQL 5434, MongoDB 27017, MinIO 9000/9001, Adminer 8085, Mongo Express 8081 |
+| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` | Backend 9009, Frontend 8502, PostgreSQL 5435, MongoDB 27018, MinIO 9002/9003, Adminer 8086*, Mongo Express 8082* |
+
+\* En production, Adminer et Mongo Express sont sous le profile `debug` et ne demarrent pas par defaut.
+Pour les activer ponctuellement : `make prod-debug-up` / `make prod-debug-down`.
 
 ## Scripts utilitaires
 
-### `scripts/push.sh` -- Push sur le remote
+| Script | Description |
+|--------|-------------|
+| `scripts/check-infra.sh` | Validation coherence infra (8 checks) |
+| `scripts/run-tests-if-needed.sh` | Pre-commit : lint + tests si code Python modifie |
+| `scripts/dev-deploy.sh` | Build + push + restart K8s namespace dev |
+| `scripts/docker_status.sh` | Statut des containers Docker |
 
-```bash
-./scripts/push.sh                # Push la branche courante
-./scripts/push.sh feature/auth   # Push une branche specifique
-```
+## Commandes Makefile
 
-### `scripts/dev-deploy.sh` -- Build + deploy K8s dev
+Taper `make` pour afficher toutes les commandes disponibles.
 
-Build les images Docker, les pousse sur le registry GitLab avec le tag `:dev`, et
-redemarre les pods dans le namespace `dev` du cluster K8s.
-
-```bash
-./scripts/dev-deploy.sh           # Build et deploy backend + frontend
-./scripts/dev-deploy.sh backend   # Backend uniquement
-./scripts/dev-deploy.sh frontend  # Frontend uniquement
-```
-
-Prerequis : `docker login registry.gitlab.com` et acces au cluster (Tailscale ou tunnel SSH).
+| Commande | Description |
+|----------|-------------|
+| `make dev-up` | Demarrer l'env dev |
+| `make dev-down` | Arreter l'env dev |
+| `make dev-logs` | Suivre les logs dev |
+| `make dev-config` | Valider la config dev |
+| `make dev-build` | Rebuild les images dev (sans cache) |
+| `make dev-init` | Creer les buckets MinIO (dev) |
+| `make staging-up` | Demarrer staging |
+| `make staging-down` | Arreter staging |
+| `make staging-config` | Valider la config staging |
+| `make staging-logs` | Suivre les logs staging |
+| `make staging-init` | Creer les buckets MinIO (staging) |
+| `make prod-up` | Demarrer la prod |
+| `make prod-down` | Arreter la prod |
+| `make prod-config` | Valider la config prod |
+| `make prod-logs` | Suivre les logs prod |
+| `make prod-init` | Creer les buckets MinIO (prod) |
+| `make prod-debug-up` | Activer Adminer + Mongo Express en prod |
+| `make prod-debug-down` | Desactiver Adminer + Mongo Express en prod |
+| `make test` | Tests unitaires (venv local) |
+| `make lint` | Ruff check + format |
+| `make lint-fix` | Corriger automatiquement |
+| `make check-infra` | Valider coherence infra |
+| `make health` | Verifier la sante du backend |
 
 ## Monitoring
 
 Loki, Promtail et Grafana sont deployes dans le namespace `monitoring` du cluster K8s.
 Promtail collecte les logs de tous les pods, Loki les stocke, et Grafana fournit une
 interface de visualisation et d'alerte.
+
+## Depannage
+
+### Erreur "No module named 'src'"
+
+```bash
+# Le PYTHONPATH est gere automatiquement par make test
+# Pour lancer pytest manuellement :
+PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+```
+
+### Les containers ne demarrent pas
+
+```bash
+make dev-logs          # Voir les logs
+make dev-build         # Reconstruire les images
+make dev-up            # Relancer
+```
+
+### Le cluster K8s ne repond pas
+
+```bash
+# Verifier que Tailscale est connecte avec les routes acceptees
+tailscale status
+tailscale up --accept-routes
+
+# Tester la connexion au cluster
+kubectl --context admin@crypto-bot get nodes
+```

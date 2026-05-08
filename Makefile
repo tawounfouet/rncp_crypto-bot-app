@@ -1,0 +1,113 @@
+# Makefile - Crypto-bot-app
+# =========================
+# Raccourcis pour les commandes dev locales.
+# Charge automatiquement versions.env pour que les variables
+# soient disponibles dans les commandes docker compose.
+#
+# /!\ Ne pas utiliser "docker compose" directement en local.
+#     Les variables de versions.env ne seraient pas chargees.
+
+include versions.env
+export
+
+.DEFAULT_GOAL := help
+
+help: ## Afficher cette aide
+	@echo ""
+	@echo "  Crypto-bot-app — commandes disponibles"
+	@echo "  ======================================="
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## ' Makefile | sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+
+# ===========================================================================
+# Dev
+# ===========================================================================
+
+dev-up: ## Demarrer l'environnement dev
+	docker compose up -d
+
+dev-down: ## Arreter l'environnement dev
+	docker compose down
+
+dev-config: ## Valider la configuration dev
+	docker compose config
+
+dev-logs: ## Suivre les logs dev
+	docker compose logs -f
+
+dev-build: ## Rebuild les images dev (sans cache)
+	docker compose build --no-cache
+
+# ===========================================================================
+# Staging (usage local ou VM)
+# ===========================================================================
+
+staging-up: ## Demarrer staging
+	docker compose -f docker-compose.staging.yml up -d
+
+staging-down: ## Arreter staging
+	docker compose -f docker-compose.staging.yml down
+
+staging-config: ## Valider la configuration staging
+	docker compose -f docker-compose.staging.yml config
+
+staging-logs: ## Suivre les logs staging
+	docker compose -f docker-compose.staging.yml logs -f
+
+# ===========================================================================
+# Production (usage local ou VM)
+# ===========================================================================
+
+prod-up: ## Demarrer la production
+	docker compose -f docker-compose.prod.yml up -d
+
+prod-down: ## Arreter la production
+	docker compose -f docker-compose.prod.yml down
+
+prod-config: ## Valider la configuration prod
+	docker compose -f docker-compose.prod.yml config
+
+prod-logs: ## Suivre les logs prod
+	docker compose -f docker-compose.prod.yml logs -f
+
+# ===========================================================================
+# Tests & Lint (venv local)
+# ===========================================================================
+
+test: ## Lancer les tests unitaires en local
+	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+
+lint: ## Lancer ruff check + format
+	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise
+	.venv/bin/ruff format --check backend/src/ frontend/src/
+
+lint-fix: ## Corriger automatiquement les erreurs ruff
+	.venv/bin/ruff check backend/src/ frontend/src/ --fix
+	.venv/bin/ruff format backend/src/ frontend/src/
+
+# ===========================================================================
+# Outils
+# ===========================================================================
+
+dev-init: ## Creer les buckets MinIO (dev)
+	docker compose --profile tools up createbuckets
+
+staging-init: ## Creer les buckets MinIO (staging)
+	docker compose -f docker-compose.staging.yml --profile tools up createbuckets
+
+prod-init: ## Creer les buckets MinIO (prod)
+	docker compose -f docker-compose.prod.yml --profile tools up createbuckets
+
+prod-debug-up: ## Activer Adminer + Mongo Express en prod
+	docker compose -f docker-compose.prod.yml --profile debug up -d adminer mongo-express
+
+prod-debug-down: ## Desactiver Adminer + Mongo Express en prod
+	docker compose -f docker-compose.prod.yml --profile debug stop adminer mongo-express
+
+check-infra: ## Valider la coherence versions.env / Dockerfiles / docker-compose
+	bash scripts/check-infra.sh
+
+health: ## Verifier la sante du backend (PORT=8009 par defaut)
+	@curl -sf http://localhost:$${PORT:-8009}/health && echo " OK" || (echo " FAIL" && exit 1)

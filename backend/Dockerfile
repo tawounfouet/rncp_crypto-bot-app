@@ -2,7 +2,8 @@
 # ===============================================
 
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+ARG PYTHON_VERSION
+FROM python:${PYTHON_VERSION}-slim as builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -25,8 +26,36 @@ RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 
-# Stage 2: Runtime
-FROM python:3.11-slim as runtime
+# Stage 2: Test (utilise par la CI pour les tests d'integration)
+# Build: docker build --target test -t backend:test ./backend
+ARG PYTHON_VERSION
+FROM python:${PYTHON_VERSION}-slim as test
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app/src
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libpq5 curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+
+# Installer les deps de test par-dessus les deps de prod
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install -r requirements-dev.txt
+
+WORKDIR /app
+COPY . .
+COPY ci/parse_test_report.py /usr/local/bin/parse_test_report.py
+
+CMD ["pytest", "src/tests", "-v"]
+
+
+# Stage 3: Runtime (image de production, legere, user non-root)
+ARG PYTHON_VERSION
+FROM python:${PYTHON_VERSION}-slim as runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

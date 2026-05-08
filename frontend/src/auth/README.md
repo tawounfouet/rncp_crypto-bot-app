@@ -312,5 +312,5 @@ if not response.success:
 ## 📚 Références
 
 - Notebook source : `src/client/notebooks/01_auth_endpoints_testing.ipynb`
-- API Backend : `http://localhost:8009/docs` (Swagger UI)
+- API Backend : `http://localhost:8009/api/v1/docs` (Swagger UI)
 - Documentation FastAPI : `docs/api/`

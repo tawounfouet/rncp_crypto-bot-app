@@ -3,12 +3,11 @@ Trading-related Pydantic schemas for the Crypto Trading Bot application.
 Contains schemas for orders, transactions, and trading operations.
 """
 
-from typing import Optional, List
-from pydantic import BaseModel, Field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
+from pydantic import BaseModel, Field
 from shared.schemas.common import BaseResponse
 
 
@@ -84,10 +83,10 @@ class OrderCreate(BaseModel):
     order_type: OrderTypeEnum
     side: OrderSideEnum
     quantity: Decimal = Field(..., gt=0, description="Order quantity")
-    price: Optional[Decimal] = Field(None, gt=0, description="Price for limit orders")
-    stop_price: Optional[Decimal] = Field(None, gt=0, description="Stop price for stop orders")
-    time_in_force: Optional[TimeInForceEnum] = Field(None, description="Time in force")
-    quote_order_quantity: Optional[Decimal] = Field(None, gt=0, description="Quote asset quantity")
+    price: Decimal | None = Field(None, gt=0, description="Price for limit orders")
+    stop_price: Decimal | None = Field(None, gt=0, description="Stop price for stop orders")
+    time_in_force: TimeInForceEnum | None = Field(None, description="Time in force")
+    quote_order_quantity: Decimal | None = Field(None, gt=0, description="Quote asset quantity")
 
     class Config:
         json_schema_extra = {
@@ -106,9 +105,9 @@ class OrderCreate(BaseModel):
 class OrderUpdate(BaseModel):
     """Schema for updating an order."""
 
-    status: Optional[OrderStatusEnum] = None
-    executed_quantity: Optional[Decimal] = None
-    cumulative_quote_quantity: Optional[Decimal] = None
+    status: OrderStatusEnum | None = None
+    executed_quantity: Decimal | None = None
+    cumulative_quote_quantity: Decimal | None = None
 
 
 # Order Responses
@@ -136,24 +135,24 @@ class OrderResponse(BaseModel):
     deployment_id: str
     user_id: str
     exchange: str
-    exchange_order_id: Optional[str]
-    client_order_id: Optional[str]
+    exchange_order_id: str | None
+    client_order_id: str | None
     symbol: str
     order_type: OrderTypeEnum
     side: OrderSideEnum
-    time_in_force: Optional[TimeInForceEnum]
+    time_in_force: TimeInForceEnum | None
     quantity: Decimal
     executed_quantity: Decimal
-    quote_order_quantity: Optional[Decimal]
-    cumulative_quote_quantity: Optional[Decimal]
-    price: Optional[Decimal]
-    stop_price: Optional[Decimal]
+    quote_order_quantity: Decimal | None
+    cumulative_quote_quantity: Decimal | None
+    price: Decimal | None
+    stop_price: Decimal | None
     status: OrderStatusEnum
-    transact_time: Optional[datetime]
-    working_time: Optional[datetime]
+    transact_time: datetime | None
+    working_time: datetime | None
     created_at: datetime
     updated_at: datetime
-    fills: List[OrderFill] = []
+    fills: list[OrderFill] = []
 
     class Config:
         from_attributes = True
@@ -168,7 +167,7 @@ class OrderSummary(BaseModel):
     side: OrderSideEnum
     quantity: Decimal
     executed_quantity: Decimal
-    price: Optional[Decimal]
+    price: Decimal | None
     status: OrderStatusEnum
     created_at: datetime
 
@@ -182,17 +181,17 @@ class TransactionCreate(BaseModel):
 
     exchange: str
     transaction_type: TransactionTypeEnum
-    order_id: Optional[str] = None
+    order_id: str | None = None
     asset: str
     amount: Decimal = Field(..., gt=0)
     direction: TransactionDirectionEnum
-    quote_asset: Optional[str] = None
-    quote_amount: Optional[Decimal] = None
-    price: Optional[Decimal] = None
-    fee_amount: Optional[Decimal] = None
-    fee_asset: Optional[str] = None
-    external_id: Optional[str] = None
-    description: Optional[str] = None
+    quote_asset: str | None = None
+    quote_amount: Decimal | None = None
+    price: Decimal | None = None
+    fee_amount: Decimal | None = None
+    fee_asset: str | None = None
+    external_id: str | None = None
+    description: str | None = None
 
     class Config:
         json_schema_extra = {
@@ -216,18 +215,18 @@ class TransactionResponse(BaseModel):
     user_id: str
     exchange: str
     transaction_type: TransactionTypeEnum
-    order_id: Optional[str]
+    order_id: str | None
     asset: str
     amount: Decimal
     direction: TransactionDirectionEnum
-    quote_asset: Optional[str]
-    quote_amount: Optional[Decimal]
-    price: Optional[Decimal]
-    fee_amount: Optional[Decimal]
-    fee_asset: Optional[str]
-    external_id: Optional[str]
+    quote_asset: str | None
+    quote_amount: Decimal | None
+    price: Decimal | None
+    fee_amount: Decimal | None
+    fee_asset: str | None
+    external_id: str | None
     status: str
-    description: Optional[str]
+    description: str | None
     timestamp: datetime
     created_at: datetime
 
@@ -243,7 +242,7 @@ class TransactionSummary(BaseModel):
     asset: str
     amount: Decimal
     direction: TransactionDirectionEnum
-    price: Optional[Decimal]
+    price: Decimal | None
     timestamp: datetime
 
     class Config:
@@ -258,7 +257,7 @@ class AssetBalance(BaseModel):
     total: Decimal
     available: Decimal
     locked: Decimal
-    usd_value: Optional[Decimal] = None
+    usd_value: Decimal | None = None
 
 
 class Portfolio(BaseModel):
@@ -266,7 +265,7 @@ class Portfolio(BaseModel):
 
     user_id: str
     exchange: str
-    balances: List[AssetBalance]
+    balances: list[AssetBalance]
     total_usd_value: Decimal
     last_updated: datetime
 
@@ -278,9 +277,9 @@ class PositionInfo(BaseModel):
     symbol: str
     position: PositionEnum
     position_size: Decimal
-    entry_price: Optional[Decimal]
-    current_price: Optional[Decimal]
-    unrealized_pnl: Optional[Decimal]
+    entry_price: Decimal | None
+    current_price: Decimal | None
+    unrealized_pnl: Decimal | None
     realized_pnl: Decimal
 
     class Config:
@@ -299,7 +298,7 @@ class TradingStats(BaseModel):
     average_profit: Decimal
     average_loss: Decimal
     max_drawdown: Decimal
-    sharpe_ratio: Optional[float] = None
+    sharpe_ratio: float | None = None
 
     class Config:
         from_attributes = True
@@ -315,7 +314,7 @@ class OrderCreateResponse(BaseResponse):
 class OrderListResponse(BaseResponse):
     """Response for order list."""
 
-    orders: List[OrderSummary]
+    orders: list[OrderSummary]
 
 
 class TransactionCreateResponse(BaseResponse):
@@ -327,7 +326,7 @@ class TransactionCreateResponse(BaseResponse):
 class TransactionListResponse(BaseResponse):
     """Response for transaction list."""
 
-    transactions: List[TransactionResponse]
+    transactions: list[TransactionResponse]
 
 
 class PortfolioResponse(BaseResponse):

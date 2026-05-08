@@ -3,36 +3,37 @@ Trading service for managing orders, transactions, and trading operations.
 Handles interaction with exchanges and order lifecycle management.
 """
 
-from typing import List, Optional, Dict, Any
-from decimal import Decimal
-from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
 import logging
 import math
+from datetime import datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
+from shared.core.exceptions import (
+    BusinessLogicError,
+    InsufficientFundsError,
+    NotFoundError,
+    ValidationError,
+)
+from shared.schemas.common import PaginatedResponse, PaginationInfo
+from sqlalchemy import desc
+from sqlalchemy.orm import Session
+from strategy.models import StrategyDeployment
 
 from trading.models import Order, Transaction
-from strategy.models import StrategyDeployment
 from trading.schemas import (
+    AssetBalance,
     OrderCreate,
     OrderResponse,
+    OrderStatusEnum,
     OrderSummary,
+    Portfolio,
+    PortfolioResponse,
+    TradingStats,
+    TradingStatsResponse,
     TransactionCreate,
     TransactionResponse,
     TransactionSummary,
-    PortfolioResponse,
-    TradingStatsResponse,
-    AssetBalance,
-    Portfolio,
-    TradingStats,
-    OrderStatusEnum,
-)
-from shared.schemas.common import PaginatedResponse, PaginationInfo
-from shared.core.exceptions import (
-    ValidationError,
-    NotFoundError,
-    BusinessLogicError,
-    InsufficientFundsError,
 )
 
 logger = logging.getLogger(__name__)
@@ -126,16 +127,16 @@ class TradingService:
             raise
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Error creating order: {str(e)}", exc_info=True)
+            logger.error(f"Error creating order: {e!s}", exc_info=True)
             raise BusinessLogicError(
-                message=f"Failed to create order: {str(e)}",
+                message=f"Failed to create order: {e!s}",
                 details={"user_id": user_id, "order_data": order_data.model_dump()},
-            )
+            ) from None
 
     async def get_user_orders(
         self,
         user_id: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         page: int = 1,
         size: int = 20,
     ) -> PaginatedResponse[OrderSummary]:
@@ -193,10 +194,10 @@ class TradingService:
             )
 
         except Exception as e:
-            logger.error(f"Error getting user orders: {str(e)}", exc_info=True)
+            logger.error(f"Error getting user orders: {e!s}", exc_info=True)
             raise
 
-    async def get_order_by_id(self, order_id: str, user_id: str) -> Optional[OrderResponse]:
+    async def get_order_by_id(self, order_id: str, user_id: str) -> OrderResponse | None:
         """
         Get order by ID.
 
@@ -255,10 +256,10 @@ class TradingService:
             raise
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Error cancelling order: {str(e)}", exc_info=True)
-            raise BusinessLogicError(message=f"Failed to cancel order: {str(e)}")
+            logger.error(f"Error cancelling order: {e!s}", exc_info=True)
+            raise BusinessLogicError(message=f"Failed to cancel order: {e!s}") from None
 
-    async def get_order_status_from_exchange(self, order_id: str, user_id: str) -> Dict[str, Any]:
+    async def get_order_status_from_exchange(self, order_id: str, user_id: str) -> dict[str, Any]:
         """
         Get real-time order status from exchange.
 
@@ -289,7 +290,7 @@ class TradingService:
             "remaining_quantity": str(order.remaining_quantity),
         }
 
-    async def get_deployment_orders(self, deployment_id: str, user_id: str) -> List[OrderSummary]:
+    async def get_deployment_orders(self, deployment_id: str, user_id: str) -> list[OrderSummary]:
         """
         Get all orders for a deployment.
 
@@ -357,13 +358,13 @@ class TradingService:
 
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Error creating transaction: {str(e)}", exc_info=True)
+            logger.error(f"Error creating transaction: {e!s}", exc_info=True)
             raise
 
     async def get_user_transactions(
         self,
         user_id: str,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         page: int = 1,
         size: int = 20,
     ) -> PaginatedResponse[TransactionSummary]:
@@ -417,10 +418,10 @@ class TradingService:
             )
 
         except Exception as e:
-            logger.error(f"Error getting user transactions: {str(e)}", exc_info=True)
+            logger.error(f"Error getting user transactions: {e!s}", exc_info=True)
             raise
 
-    async def get_transaction_by_id(self, transaction_id: str, user_id: str) -> Optional[TransactionResponse]:
+    async def get_transaction_by_id(self, transaction_id: str, user_id: str) -> TransactionResponse | None:
         """Get transaction by ID."""
         transaction = (
             self.db.query(Transaction).filter(Transaction.id == transaction_id, Transaction.user_id == user_id).first()
@@ -435,7 +436,7 @@ class TradingService:
     # PORTFOLIO AND STATISTICS
     # ========================================================================
 
-    async def get_user_portfolio(self, user_id: str, exchange: Optional[str] = None) -> PortfolioResponse:
+    async def get_user_portfolio(self, user_id: str, exchange: str | None = None) -> PortfolioResponse:
         """
         Get user portfolio with balances.
 
@@ -471,7 +472,7 @@ class TradingService:
         self,
         user_id: str,
         period: str = "30d",
-        deployment_id: Optional[str] = None,
+        deployment_id: str | None = None,
     ) -> TradingStatsResponse:
         """
         Get trading statistics for a period.
@@ -495,7 +496,7 @@ class TradingService:
             }
 
             start_date = None
-            if period in period_days and period_days[period]:
+            if period_days.get(period):
                 start_date = datetime.utcnow() - timedelta(days=period_days[period])
 
             # Query orders
@@ -537,10 +538,10 @@ class TradingService:
             )
 
         except Exception as e:
-            logger.error(f"Error getting trading statistics: {str(e)}", exc_info=True)
+            logger.error(f"Error getting trading statistics: {e!s}", exc_info=True)
             raise
 
-    async def get_open_positions(self, user_id: str, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_open_positions(self, user_id: str, symbol: str | None = None) -> list[dict[str, Any]]:
         """
         Get open positions.
 
@@ -563,7 +564,7 @@ class TradingService:
         user_id: str,
         symbol: str,
         quote_amount: float,
-        deployment_id: Optional[str] = None,
+        deployment_id: str | None = None,
     ) -> OrderResponse:
         """Quick market buy."""
         # Find or create default deployment if not provided
@@ -586,7 +587,7 @@ class TradingService:
         user_id: str,
         symbol: str,
         quantity: float,
-        deployment_id: Optional[str] = None,
+        deployment_id: str | None = None,
     ) -> OrderResponse:
         """Quick market sell."""
         if not deployment_id:
@@ -606,7 +607,7 @@ class TradingService:
     # UTILITY METHODS
     # ========================================================================
 
-    async def check_health(self) -> Dict[str, Any]:
+    async def check_health(self) -> dict[str, Any]:
         """Check health of trading services."""
         return {
             "status": "healthy",

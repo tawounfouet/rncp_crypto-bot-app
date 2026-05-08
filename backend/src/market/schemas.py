@@ -3,11 +3,10 @@ Market data Pydantic schemas for the Crypto Trading Bot application.
 Contains schemas for market data, symbols, and price information.
 """
 
-from typing import Optional, List
-from pydantic import BaseModel, Field
 from datetime import datetime
 from decimal import Decimal
 
+from pydantic import BaseModel, Field
 from shared.schemas.common import BaseResponse
 
 
@@ -26,10 +25,10 @@ class MarketDataResponse(BaseModel):
     close_price: Decimal
     volume: Decimal
     close_time: datetime
-    quote_asset_volume: Optional[Decimal]
-    number_of_trades: Optional[int]
-    taker_buy_base_volume: Optional[Decimal]
-    taker_buy_quote_volume: Optional[Decimal]
+    quote_asset_volume: Decimal | None
+    number_of_trades: int | None
+    taker_buy_base_volume: Decimal | None
+    taker_buy_quote_volume: Decimal | None
     created_at: datetime
 
     class Config:
@@ -57,8 +56,8 @@ class MarketDataRequest(BaseModel):
 
     symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
     interval: str = Field(..., description="Timeframe (e.g., 1h, 4h, 1d)")
-    start_time: Optional[datetime] = Field(None, description="Start time")
-    end_time: Optional[datetime] = Field(None, description="End time")
+    start_time: datetime | None = Field(None, description="Start time")
+    end_time: datetime | None = Field(None, description="End time")
     limit: int = Field(100, ge=1, le=1000, description="Number of records")
 
     class Config:
@@ -145,9 +144,9 @@ class TechnicalIndicators(BaseModel):
     symbol: str
     timeframe: str
     timestamp: datetime
-    moving_averages: Optional[MovingAverageData] = None
-    rsi: Optional[RSIData] = None
-    bollinger_bands: Optional[BollingerBandsData] = None
+    moving_averages: MovingAverageData | None = None
+    rsi: RSIData | None = None
+    bollinger_bands: BollingerBandsData | None = None
 
 
 # Market Summary
@@ -157,9 +156,9 @@ class MarketSummary(BaseModel):
     total_symbols: int
     active_symbols: int
     total_volume_24h: Decimal
-    top_gainers: List[TradingPair]
-    top_losers: List[TradingPair]
-    most_active: List[TradingPair]
+    top_gainers: list[TradingPair]
+    top_losers: list[TradingPair]
+    most_active: list[TradingPair]
     last_updated: datetime
 
 
@@ -167,7 +166,7 @@ class MarketSummary(BaseModel):
 class MarketDataListResponse(BaseResponse):
     """Response for market data list."""
 
-    data: List[MarketDataResponse]
+    data: list[MarketDataResponse]
     symbol: str
     interval: str
     count: int
@@ -182,13 +181,13 @@ class PriceResponse(BaseResponse):
 class SymbolListResponse(BaseResponse):
     """Response for symbol list."""
 
-    symbols: List[SymbolInfo]
+    symbols: list[SymbolInfo]
 
 
 class TradingPairListResponse(BaseResponse):
     """Response for trading pair list."""
 
-    pairs: List[TradingPair]
+    pairs: list[TradingPair]
 
 
 class TechnicalIndicatorsResponse(BaseResponse):
@@ -232,6 +231,6 @@ class DepthUpdateMessage(BaseModel):
 
     type: str = "depth_update"
     symbol: str
-    bids: List[List[Decimal]]  # [price, quantity]
-    asks: List[List[Decimal]]  # [price, quantity]
+    bids: list[list[Decimal]]  # [price, quantity]
+    asks: list[list[Decimal]]  # [price, quantity]
     timestamp: datetime

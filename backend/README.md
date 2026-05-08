@@ -174,36 +174,47 @@ Prefix : `/api/v1`
 ## Installation locale
 
 ```bash
+# Depuis la racine du monorepo
+cd backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements-dev.txt
-
-cp src/.env.example .env
-# Editer .env avec vos valeurs
 ```
 
 ## Lancement
 
 ```bash
-# Mode developpement
-uvicorn src.main:app --reload --port 8009
+# Via le Makefile (recommande — charge versions.env automatiquement)
+make dev-up          # Demarrer tous les services
+make dev-build       # Rebuild les images (sans cache)
 
-# Ou via Docker
-docker build -t crypto-bot-backend .
-docker run -p 8009:8009 crypto-bot-backend
+# Ou en local sans Docker
+cd backend
+uvicorn src.main:app --reload --port 8009
 ```
 
 ## Tests
 
 ```bash
+cd backend
+
+# Tests unitaires + integration (SQLite en memoire)
 pytest src/tests -v
+
+# Avec coverage
 pytest src/tests -v --cov=src --cov-report=html
+
+# Tests unitaires seuls
+pytest src/tests/unit -v
+
+# Tests d'integration seuls (CRUD user avec BDD)
+pytest src/tests/integration -v
 ```
 
 ## Documentation interactive
 
-- Swagger UI : http://localhost:8009/docs
-- ReDoc : http://localhost:8009/redoc
+- Swagger UI : http://localhost:8009/api/v1/docs
+- ReDoc : http://localhost:8009/api/v1/redoc
 
 ## Variables d'environnement
 
@@ -224,19 +235,17 @@ pytest src/tests -v --cov=src --cov-report=html
 | `MINIO_SECRET_KEY` | Cle secrete MinIO | - |
 | `BINANCE_API_KEY` | Cle API Binance (optionnel) | - |
 | `BINANCE_API_SECRET` | Secret API Binance (optionnel) | - |
+| `BINANCE_ENC_KEY` | Cle AES-GCM base64 pour le chiffrement des clés Binance | - |
 
-## CI/CD et workflow submodule
+## CI/CD
 
-Ce repo dispose de son propre `.gitlab-ci.yml` qui execute les stages **lint** et **test** sur chaque MR et branche feature.
+Le backend fait partie du monorepo `Crypto-bot-app`. La CI est definie dans `.gitlab-ci.yml` a la racine.
 
-### Synchronisation automatique avec le repo parent
+| Stage | Jobs | Description |
+|-------|------|-------------|
+| lint | `lint:python`, `lint:dockerfile:backend`, `semgrep_sast` | Ruff, Hadolint, Semgrep |
+| build | `build:docker` | Build image Docker + push au registry |
+| test | `test:integration` | Tests avec vrais services (Postgres, MongoDB) |
+| deploy | `deploy:staging`, `deploy:production` | Deploy VM AWS + GitOps K8s |
 
-Lorsqu'une MR est mergee dans `staging`, un job `sync:parent` met a jour automatiquement le pointeur de submodule dans la branche `staging` du repo `crypto-bot`. Le repo parent detecte alors le changement et declenche sa propre CI pour construire les images Docker et deployer.
-
-### Mecanisme anti-boucle
-
-Les commits de synchronisation sont prefixes avec `ci(...)` dans leur message. Le job `sync:parent` est configure pour ne pas se declencher sur ces commits, ce qui evite une boucle infinie entre les deux pipelines.
-
-### Variable CI requise
-
-La variable `GROUP_PAT_TOKEN` (definie au niveau du groupe `dst_crypto`) est necessaire pour que le job `sync:parent` puisse pousser le commit de mise a jour du submodule dans le repo parent.
+Voir `docs/SETUP.md` pour le detail du workflow et des commandes Makefile.

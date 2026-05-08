@@ -3,15 +3,16 @@ User service for the Crypto Trading Bot application.
 Handles user CRUD operations and business logic.
 """
 
-from typing import List, Optional
-from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
 import uuid
+from datetime import UTC, datetime, timedelta
+
+from fastapi import HTTPException, status
+from shared.database.connection import get_db_session
+from sqlalchemy.orm import Session
 
 from auth.models import User, UserSettings
-from auth.schemas import UserCreate, UserUpdate, UserSettingsUpdate
+from auth.schemas import UserCreate, UserSettingsUpdate, UserUpdate
 from auth.service import auth_service
-from shared.database.connection import get_db_session
 
 # Constants
 USER_NOT_FOUND = "User not found"
@@ -53,6 +54,7 @@ class UserService:
                 last_name=user_data.last_name,
                 is_active=True,
                 is_admin=False,
+                last_active_at=datetime.now(UTC),
             )
 
             session.add(db_user)
@@ -90,17 +92,17 @@ class UserService:
         )
         session.add(default_settings)
 
-    def get_user_by_id(self, user_id: str) -> Optional[User]:
+    def get_user_by_id(self, user_id: str) -> User | None:
         """Get user by ID."""
         with get_db_session() as session:
             return session.query(User).filter(User.id == user_id).first()
 
-    def get_user_by_username(self, username: str) -> Optional[User]:
+    def get_user_by_username(self, username: str) -> User | None:
         """Get user by username."""
         with get_db_session() as session:
             return session.query(User).filter(User.username == username).first()
 
-    def get_user_by_email(self, email: str) -> Optional[User]:
+    def get_user_by_email(self, email: str) -> User | None:
         """Get user by email."""
         with get_db_session() as session:
             return session.query(User).filter(User.email == email).first()
@@ -153,15 +155,70 @@ class UserService:
             session.delete(user)
             return True
 
-    def get_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+    def get_users(self, skip: int = 0, limit: int = 100) -> list[User]:
         """Get list of users with pagination."""
         with get_db_session() as session:
             return session.query(User).offset(skip).limit(limit).all()
 
-    def get_user_settings(self, user_id: str) -> Optional[UserSettings]:
+    def get_user_settings(self, user_id: str) -> UserSettings | None:
         """Get user settings."""
         with get_db_session() as session:
             return session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+
+    def export_user_data(self, user_id: str) -> dict:
+        """Return the user's personal data for portability export."""
+        with get_db_session() as session:
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND)
+
+            settings = user.settings
+            settings_data = None
+            if settings:
+                settings_data = {
+                    "theme": settings.theme,
+                    "risk_profile": settings.risk_profile,
+                    "notification_preferences": settings.notification_preferences,
+                    "has_binance_credentials": bool(settings.api_keys and "binance" in settings.api_keys),
+                }
+
+            accounts_data = [
+                {
+                    "provider": account.provider,
+                    "provider_id": account.provider_id,
+                    "account_id": account.account_id,
+                    "is_oauth": account.is_oauth_provider,
+                }
+                for account in user.accounts
+            ]
+
+            return {
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "is_active": user.is_active,
+                    "is_admin": user.is_admin,
+                    "last_active_at": user.last_active_at,
+                    "created_at": user.created_at,
+                    "updated_at": user.updated_at,
+                },
+                "settings": settings_data,
+                "accounts": accounts_data,
+            }
+
+    def delete_inactive_users_older_than(self, days: int = 730) -> int:
+        """Delete users whose last_active_at is older than the configured threshold."""
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        with get_db_session() as session:
+            users = session.query(User).filter(User.last_active_at.isnot(None), User.last_active_at < cutoff).all()
+            deleted_count = 0
+            for user in users:
+                session.delete(user)
+                deleted_count += 1
+            return deleted_count
 
     def update_user_settings(self, user_id: str, settings_data: UserSettingsUpdate) -> UserSettings:
         """Update user settings."""
@@ -192,8 +249,23 @@ class UserService:
                 )
                 session.add(settings)
 
-            # Update settings fields if provided
+            # Update API credentials if provided
             update_data = settings_data.model_dump(exclude_unset=True)
+            binance_api_key = update_data.pop("binance_api_key", None)
+            binance_api_secret = update_data.pop("binance_api_secret", None)
+
+            if binance_api_key is not None or binance_api_secret is not None:
+                if binance_api_key is None or binance_api_secret is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Both binance_api_key and binance_api_secret are required together.",
+                    )
+                if binance_api_key == "" and binance_api_secret == "":
+                    settings.remove_api_credentials("binance")
+                else:
+                    settings.set_api_credentials("binance", binance_api_key, binance_api_secret)
+
+            # Update other settings fields if provided
             for field, value in update_data.items():
                 if hasattr(settings, field):
                     setattr(settings, field, value)

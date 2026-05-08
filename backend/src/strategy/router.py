@@ -2,22 +2,23 @@
 Strategy router for handling strategy-related API endpoints.
 """
 
-from typing import List, Dict, Any, Optional, TypeVar, Generic
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Any, Generic, TypeVar
 
 from auth.dependencies import get_current_user
 from auth.models import User
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from market.service import MarketDataService
+from shared.core.exceptions import BusinessLogicError, NotFoundError, ValidationError
+from shared.schemas.common import BaseResponse
+
 from strategy.schemas import (
     StrategyCreate,
-    StrategyUpdate,
-    StrategyResponse,
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
+    StrategyResponse,
+    StrategyUpdate,
 )
-from shared.schemas.common import BaseResponse
 from strategy.service import StrategyService
-from market.service import MarketDataService
-from shared.core.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
 # Generic data response model
 T = TypeVar("T")
@@ -40,7 +41,7 @@ def get_strategy_service() -> StrategyService:
     return StrategyService(market_data_service)
 
 
-@router.get("/available", response_model=Dict[str, Dict[str, Any]])
+@router.get("/available", response_model=dict[str, dict[str, Any]])
 async def get_available_strategies(
     strategy_service: StrategyService = Depends(get_strategy_service),
 ):
@@ -56,11 +57,11 @@ async def get_available_strategies(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get available strategies: {str(e)}",
-        )
+            detail=f"Failed to get available strategies: {e!s}",
+        ) from None
 
 
-@router.get("/", response_model=DataResponse[List[StrategyResponse]])
+@router.get("/", response_model=DataResponse[list[StrategyResponse]])
 async def get_user_strategies(
     include_public: bool = Query(True, description="Include public strategies"),
     current_user: User = Depends(get_current_user),
@@ -87,8 +88,8 @@ async def get_user_strategies(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get strategies: {str(e)}",
-        )
+            detail=f"Failed to get strategies: {e!s}",
+        ) from None
 
 
 @router.post("/", response_model=DataResponse[StrategyResponse])
@@ -118,12 +119,12 @@ async def create_strategy(
             data=strategy_response,
         )
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create strategy: {str(e)}",
-        )
+            detail=f"Failed to create strategy: {e!s}",
+        ) from None
 
 
 @router.get("/{strategy_id}", response_model=DataResponse[StrategyResponse])
@@ -158,8 +159,8 @@ async def get_strategy(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get strategy: {str(e)}",
-        )
+            detail=f"Failed to get strategy: {e!s}",
+        ) from None
 
 
 @router.put("/{strategy_id}", response_model=DataResponse[StrategyResponse])
@@ -185,14 +186,14 @@ async def update_strategy(
 
         return DataResponse(success=True, message="Strategy updated successfully", data=strategy)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
     except (ValidationError, BusinessLogicError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update strategy: {str(e)}",
-        )
+            detail=f"Failed to update strategy: {e!s}",
+        ) from None
 
 
 @router.delete("/{strategy_id}", response_model=BaseResponse)
@@ -230,12 +231,12 @@ async def delete_strategy(
     except HTTPException:
         raise
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete strategy: {str(e)}",
-        )
+            detail=f"Failed to delete strategy: {e!s}",
+        ) from None
 
 
 @router.post("/{strategy_id}/deploy", response_model=DataResponse[StrategyDeploymentResponse])
@@ -264,17 +265,17 @@ async def deploy_strategy(
 
         return DataResponse(success=True, message="Strategy deployed successfully", data=deployment)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
     except (ValidationError, BusinessLogicError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from None
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to deploy strategy: {str(e)}",
-        )
+            detail=f"Failed to deploy strategy: {e!s}",
+        ) from None
 
 
-@router.get("/deployments/", response_model=DataResponse[List[StrategyDeploymentResponse]])
+@router.get("/deployments/", response_model=DataResponse[list[StrategyDeploymentResponse]])
 async def get_user_deployments(
     active_only: bool = Query(False, description="Return only active deployments"),
     current_user: User = Depends(get_current_user),
@@ -301,8 +302,8 @@ async def get_user_deployments(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get deployments: {str(e)}",
-        )
+            detail=f"Failed to get deployments: {e!s}",
+        ) from None
 
 
 @router.post(
@@ -311,7 +312,7 @@ async def get_user_deployments(
 )
 async def stop_deployment(
     deployment_id: str,
-    reason: Optional[str] = Query(None, description="Reason for stopping"),
+    reason: str | None = Query(None, description="Reason for stopping"),
     current_user: User = Depends(get_current_user),
     strategy_service: StrategyService = Depends(get_strategy_service),
 ):
@@ -331,18 +332,18 @@ async def stop_deployment(
 
         return DataResponse(success=True, message="Deployment stopped successfully", data=deployment)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to stop deployment: {str(e)}",
-        )
+            detail=f"Failed to stop deployment: {e!s}",
+        ) from None
 
 
 @router.post("/validate", response_model=BaseResponse)
 async def validate_strategy_parameters(
     strategy_type: str,
-    parameters: Dict[str, Any],
+    parameters: dict[str, Any],
     strategy_service: StrategyService = Depends(get_strategy_service),
 ):
     """
@@ -365,5 +366,5 @@ async def validate_strategy_parameters(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to validate parameters: {str(e)}",
-        )
+            detail=f"Failed to validate parameters: {e!s}",
+        ) from None

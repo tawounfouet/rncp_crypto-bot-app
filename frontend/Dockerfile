@@ -1,7 +1,8 @@
 # Dockerfile pour le frontend Streamlit
 # ======================================
 
-FROM python:3.11-slim
+ARG PYTHON_VERSION
+FROM python:${PYTHON_VERSION}-slim
 
 ARG APP_VERSION=dev
 ENV PYTHONDONTWRITEBYTECODE=1 \

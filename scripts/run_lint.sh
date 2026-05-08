@@ -31,25 +31,30 @@ run_lint() {
 
     echo -e "${CYAN}=== Linting $name ===${NC}"
 
-    # Flake8
-    echo -e "${YELLOW}Running flake8...${NC}"
-    if flake8 "$path" --max-line-length=120 --exclude=tests --statistics; then
-        echo -e "${GREEN}flake8: OK${NC}"
+    # Ruff check
+    echo -e "${YELLOW}Running ruff check...${NC}"
+    if [ "$FIX_MODE" = true ]; then
+        ruff check "$path" --fix --output-format=concise
+        echo -e "${GREEN}ruff check: Fixed${NC}"
     else
-        echo -e "${RED}flake8: FAILED${NC}"
-        LINT_FAILED=true
+        if ruff check "$path" --output-format=concise; then
+            echo -e "${GREEN}ruff check: OK${NC}"
+        else
+            echo -e "${RED}ruff check: FAILED${NC}"
+            LINT_FAILED=true
+        fi
     fi
 
-    # Black
-    echo -e "${YELLOW}Running black...${NC}"
+    # Ruff format
+    echo -e "${YELLOW}Running ruff format...${NC}"
     if [ "$FIX_MODE" = true ]; then
-        black "$path" --exclude='tests/'
-        echo -e "${GREEN}black: Fixed${NC}"
+        ruff format "$path"
+        echo -e "${GREEN}ruff format: Fixed${NC}"
     else
-        if black --check "$path" --exclude='tests/'; then
-            echo -e "${GREEN}black: OK${NC}"
+        if ruff format --check "$path"; then
+            echo -e "${GREEN}ruff format: OK${NC}"
         else
-            echo -e "${RED}black: FAILED (run with --fix to auto-format)${NC}"
+            echo -e "${RED}ruff format: FAILED (run with --fix to auto-format)${NC}"
             LINT_FAILED=true
         fi
     fi

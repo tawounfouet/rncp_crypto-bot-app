@@ -1,10 +1,12 @@
 # Docker Compose pour environnement STAGING
 # ==========================================
+# IMPORTANT : ne pas lancer directement avec "docker compose".
+# Utiliser : make staging-up / make staging-down / make staging-config
 # Ports: Backend 8009, Postgres 5434, Mongo 27017
 
 services:
   mongo:
-    image: mongo
+    image: ${MONGO_IMAGE}
     container_name: staging-mongo
     restart: always
     environment:
@@ -13,7 +15,7 @@ services:
     ports:
       - "27017:27017"
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
+      test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongo --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -23,8 +25,27 @@ services:
     networks:
       - staging-network
 
+  # MongoDB Admin UI
+  mongo-express:
+    image: ${MONGO_EXPRESS_IMAGE}
+    container_name: staging-mongo-admin-ui
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGODB_USER_ADMIN}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGODB_PWD_ADMIN}
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USER}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PWD}
+      ME_CONFIG_MONGODB_URL: "mongodb://${MONGODB_USER}:${MONGODB_PWD}@mongo:27017/admin?authSource=admin"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - staging-network
+
   postgres:
-    image: postgres:14
+    image: ${POSTGRES_IMAGE}
     container_name: staging-postgres
     restart: always
     environment:
@@ -45,8 +66,23 @@ services:
     networks:
       - staging-network
 
+  # PostgreSQL Admin UI
+  adminer:
+    image: ${ADMINER_IMAGE}
+    container_name: staging-postgres-admin-ui
+    restart: always
+    ports:
+      - "8085:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - staging-network
+
   minio:
-    image: minio/minio
+    image: ${MINIO_IMAGE}
     container_name: staging-minio
     restart: always
     ports:
@@ -67,11 +103,33 @@ services:
     networks:
       - staging-network
 
+  # MinIO bucket creation (one-time)
+  createbuckets:
+    image: ${MINIO_MC_IMAGE}
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb --ignore-existing myminio/crypto-bot-data;
+      /usr/bin/mc anonymous set download myminio/crypto-bot-data;
+      echo 'Buckets created successfully.';
+      exit 0;
+      "
+    profiles:
+      - tools
+    networks:
+      - staging-network
+
   crypto-bot-backend:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: staging-backend
     restart: always
     ports:
@@ -114,6 +172,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: staging-frontend
     restart: always
     ports:

@@ -3,18 +3,52 @@ Security configuration for the Crypto Trading Bot.
 Handles authentication, authorization, and secret management.
 """
 
+import hashlib
 import os
 import secrets
-import hashlib
-from typing import Optional, Dict, Any
+from base64 import b64decode, b64encode
 from datetime import datetime, timedelta
+from typing import Any
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+BINANCE_ENC_KEY_ENV = "BINANCE_ENC_KEY"
+
+
+def _get_binance_aes_key() -> bytes:
+    key_b64 = os.getenv(BINANCE_ENC_KEY_ENV)
+    if not key_b64:
+        raise RuntimeError("Missing required environment variable BINANCE_ENC_KEY for Binance API key encryption")
+
+    key = b64decode(key_b64)
+    if len(key) not in (16, 24, 32):
+        raise ValueError("BINANCE_ENC_KEY must decode to a 128-, 192- or 256-bit AES key")
+
+    return key
+
+
+def encrypt_secret(plaintext: str) -> dict:
+    aesgcm = AESGCM(_get_binance_aes_key())
+    nonce = os.urandom(12)
+    ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
+    return {
+        "ciphertext": b64encode(ciphertext).decode(),
+        "nonce": b64encode(nonce).decode(),
+    }
+
+
+def decrypt_secret(ciphertext_b64: str, nonce_b64: str) -> str:
+    aesgcm = AESGCM(_get_binance_aes_key())
+    ciphertext = b64decode(ciphertext_b64)
+    nonce = b64decode(nonce_b64)
+    return aesgcm.decrypt(nonce, ciphertext, None).decode()
 
 
 class SecurityConfig:
     """Security configuration and utilities."""
 
     # Default settings
-    DEFAULT_SECRET_KEY = "your-secret-key-change-this-in-production"  # nosec B105
+    DEFAULT_SECRET_KEY = "your-secret-key-change-this-in-production"  # noqa: S105
     DEFAULT_ALGORITHM = "HS256"
     DEFAULT_TOKEN_EXPIRE_MINUTES = 30
     DEFAULT_REFRESH_TOKEN_EXPIRE_DAYS = 7
@@ -56,40 +90,42 @@ class SecurityConfig:
         except Exception:
             return False
 
-    def create_token_payload(self, data: Dict[str, Any], token_type: str, expire_delta: timedelta) -> Dict[str, Any]:
+    def create_token_payload(self, data: dict[str, Any], token_type: str, expire_delta: timedelta) -> dict[str, Any]:
         """Create token payload."""
         to_encode = data.copy()
         expire = datetime.utcnow() + expire_delta
         to_encode.update({"exp": expire, "type": token_type})
         return to_encode
 
-    def create_access_token(self, data: Dict[str, Any]) -> str:
+    def create_access_token(self, data: dict[str, Any]) -> str:
         """Create JWT access token (simplified - requires PyJWT for production)."""
         payload = self.create_token_payload(data, "access", timedelta(minutes=self.access_token_expire_minutes))
         # For now, return a simple token format (replace with JWT in production)
-        import json
         import base64
+        import json
 
         token_data = json.dumps(payload, default=str)
         return base64.b64encode(token_data.encode()).decode()
 
-    def create_refresh_token(self, data: Dict[str, Any]) -> str:
+    def create_refresh_token(self, data: dict[str, Any]) -> str:
         """Create JWT refresh token (simplified)."""
         payload = self.create_token_payload(data, "refresh", timedelta(days=self.refresh_token_expire_days))
         # For now, return a simple token format (replace with JWT in production)
-        import json
         import base64
+        import json
 
         token_data = json.dumps(payload, default=str)
         return base64.b64encode(token_data.encode()).decode()
 
-    def verify_token(  # nosec B107 - not a password
-        self, token: str, token_type: str = "access"
-    ) -> Optional[Dict[str, Any]]:
+    def verify_token(
+        self,
+        token: str,
+        token_type: str = "access",  # noqa: S107
+    ) -> dict[str, Any] | None:
         """Verify and decode token (simplified)."""
         try:
-            import json
             import base64
+            import json
             from datetime import datetime
 
             token_data = base64.b64decode(token.encode()).decode()
@@ -178,17 +214,17 @@ def verify_password(password: str, hashed_password: str) -> bool:
     return security_config.verify_password(password, hashed_password)
 
 
-def create_access_token(data: Dict[str, Any]) -> str:
+def create_access_token(data: dict[str, Any]) -> str:
     """Create access token."""
     return security_config.create_access_token(data)
 
 
-def create_refresh_token(data: Dict[str, Any]) -> str:
+def create_refresh_token(data: dict[str, Any]) -> str:
     """Create refresh token."""
     return security_config.create_refresh_token(data)
 
 
-def verify_token(token: str, token_type: str = "access") -> Optional[Dict[str, Any]]:  # nosec B107
+def verify_token(token: str, token_type: str = "access") -> dict[str, Any] | None:  # noqa: S107
     """Verify token."""
     return security_config.verify_token(token, token_type)
 

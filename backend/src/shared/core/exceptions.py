@@ -2,13 +2,13 @@
 Custom exceptions for the Crypto Trading Bot application.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class CryptoBotException(Exception):
     """Base exception for Crypto Trading Bot."""
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
         self.message = message
         self.details = details or {}
         super().__init__(self.message)
@@ -20,8 +20,8 @@ class ValidationError(CryptoBotException):
     def __init__(
         self,
         message: str,
-        field: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        field: str | None = None,
+        details: dict[str, Any] | None = None,
     ):
         self.field = field
         super().__init__(message, details)
@@ -33,8 +33,8 @@ class NotFoundError(CryptoBotException):
     def __init__(
         self,
         message: str,
-        resource_type: Optional[str] = None,
-        resource_id: Optional[str] = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
     ):
         self.resource_type = resource_type
         self.resource_id = resource_id
@@ -64,8 +64,8 @@ class ExternalServiceError(CryptoBotException):
     def __init__(
         self,
         message: str,
-        service_name: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        service_name: str | None = None,
+        details: dict[str, Any] | None = None,
     ):
         self.service_name = service_name
         if service_name:

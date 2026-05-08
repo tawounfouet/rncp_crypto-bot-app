@@ -3,10 +3,10 @@ Technical indicators for trading strategies.
 Common technical analysis indicators used in trading strategies.
 """
 
-import pandas as pd
-import numpy as np
-from typing import Optional, Tuple
 import logging
+
+import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class TechnicalIndicators:
         return data.rolling(window=window).mean()
 
     @staticmethod
-    def exponential_moving_average(data: pd.Series, window: int, alpha: Optional[float] = None) -> pd.Series:
+    def exponential_moving_average(data: pd.Series, window: int, alpha: float | None = None) -> pd.Series:
         """
         Calculate Exponential Moving Average (EMA).
 
@@ -85,7 +85,7 @@ class TechnicalIndicators:
     @staticmethod
     def macd(
         data: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
-    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """
         Calculate MACD (Moving Average Convergence Divergence).
 
@@ -115,7 +115,7 @@ class TechnicalIndicators:
     @staticmethod
     def bollinger_bands(
         data: pd.Series, window: int = 20, num_std: float = 2.0
-    ) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series, pd.Series]:
         """
         Calculate Bollinger Bands.
 
@@ -147,7 +147,7 @@ class TechnicalIndicators:
         close: pd.Series,
         k_window: int = 14,
         d_window: int = 3,
-    ) -> Tuple[pd.Series, pd.Series]:
+    ) -> tuple[pd.Series, pd.Series]:
         """
         Calculate Stochastic Oscillator.
 
@@ -326,7 +326,7 @@ class TechnicalIndicators:
         low: pd.Series,
         close: pd.Series,
         volume: pd.Series,
-        window: Optional[int] = None,
+        window: int | None = None,
     ) -> pd.Series:
         """
         Calculate Volume Weighted Average Price (VWAP).

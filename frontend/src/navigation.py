@@ -1,9 +1,9 @@
 import streamlit as st
 from auth.auth_manager import AuthManager
-from page.login_page import login_page
-from page.signup_page import signup_page
 from page.app import app_page
 from page.info_page import info_page
+from page.login_page import login_page
+from page.signup_page import signup_page
 from utils.init_session import init_session, reset_session
 
 init_session()

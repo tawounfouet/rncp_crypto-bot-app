@@ -1,10 +1,12 @@
 # Docker Compose pour environnement PRODUCTION
 # =============================================
+# IMPORTANT : ne pas lancer directement avec "docker compose".
+# Utiliser : make prod-up / make prod-down / make prod-config
 # Ports: Backend 9009, Postgres 5435, Mongo 27018 (cohabite avec staging)
 
 services:
   mongo:
-    image: mongo
+    image: ${MONGO_IMAGE}
     container_name: prod-mongo
     restart: always
     environment:
@@ -13,7 +15,7 @@ services:
     ports:
       - "27018:27017"
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
+      test: echo 'db.runCommand("ping").ok' | mongo mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
       interval: 10s
       timeout: 5s
       retries: 5
@@ -23,8 +25,29 @@ services:
     networks:
       - prod-network
 
+  # MongoDB Admin UI (debug only — not started by default)
+  mongo-express:
+    image: ${MONGO_EXPRESS_IMAGE}
+    container_name: prod-mongo-admin-ui
+    restart: always
+    ports:
+      - "8082:8081"
+    environment:
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGODB_USER_ADMIN}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGODB_PWD_ADMIN}
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USER}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PWD}
+      ME_CONFIG_MONGODB_URL: "mongodb://${MONGODB_USER}:${MONGODB_PWD}@mongo:27017/admin?authSource=admin"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    profiles:
+      - debug
+    networks:
+      - prod-network
+
   postgres:
-    image: postgres:14
+    image: ${POSTGRES_IMAGE}
     container_name: prod-postgres
     restart: always
     environment:
@@ -45,8 +68,25 @@ services:
     networks:
       - prod-network
 
+  # PostgreSQL Admin UI (debug only — not started by default)
+  adminer:
+    image: ${ADMINER_IMAGE}
+    container_name: prod-postgres-admin-ui
+    restart: always
+    ports:
+      - "8086:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - debug
+    networks:
+      - prod-network
+
   minio:
-    image: minio/minio
+    image: ${MINIO_IMAGE}
     container_name: prod-minio
     restart: always
     ports:
@@ -64,6 +104,26 @@ services:
       timeout: 20s
       retries: 3
       start_period: 30s
+    networks:
+      - prod-network
+
+  # MinIO bucket creation (one-time)
+  createbuckets:
+    image: ${MINIO_MC_IMAGE}
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb --ignore-existing myminio/crypto-bot-data;
+      /usr/bin/mc anonymous set download myminio/crypto-bot-data;
+      echo 'Buckets created successfully.';
+      exit 0;
+      "
+    profiles:
+      - tools
     networks:
       - prod-network
 

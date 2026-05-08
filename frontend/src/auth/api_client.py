@@ -3,22 +3,24 @@ API Client for authentication operations.
 Based on notebook: 01_auth_endpoints_testing.ipynb
 """
 
-import requests
 import urllib.parse
-from typing import Dict, Any, Optional
+from typing import Any
+
+import requests
+
 from .config import (
     AUTH_URL,
-    USERS_URL,
     DEFAULT_HEADERS,
     OAUTH2_HEADERS,
     REQUEST_TIMEOUT,
+    USERS_URL,
 )
 
 
 class APIResponse:
     """Standardized API response wrapper."""
 
-    def __init__(self, status_code: int, data: Any = None, error: Optional[str] = None):
+    def __init__(self, status_code: int, data: Any = None, error: str | None = None):
         self.status_code = status_code
         self.data = data
         self.error = error
@@ -42,7 +44,7 @@ class AuthAPIClient:
     - GET /users/me - Get current user info
     """
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: str | None = None):
         """
         Initialize the API client.
 
@@ -57,9 +59,9 @@ class AuthAPIClient:
         self,
         method: str,
         url: str,
-        data: Optional[Dict] = None,
-        headers: Optional[Dict] = None,
-        auth_token: Optional[str] = None,
+        data: dict | None = None,
+        headers: dict | None = None,
+        auth_token: str | None = None,
         is_form_data: bool = False,
     ) -> APIResponse:
         """
@@ -121,8 +123,8 @@ class AuthAPIClient:
         email: str,
         username: str,
         password: str,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
     ) -> APIResponse:
         """
         Register a new user.
