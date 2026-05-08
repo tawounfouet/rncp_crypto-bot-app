@@ -3,6 +3,8 @@ User domain models for the Crypto Trading Bot.
 Contains User, UserSession, UserAccount, and UserSettings models.
 """
 
+import strategy.models  # noqa: F401
+import trading.models  # noqa: F401
 from shared.config.security import decrypt_secret, encrypt_secret
 from shared.models.base import BaseModel, register_model
 from sqlalchemy import (
