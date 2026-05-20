@@ -8,7 +8,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from shared.schemas.common import BaseResponse
 
 
@@ -62,9 +62,8 @@ class StrategyCreate(BaseModel):
     asset_class: AssetClassEnum = AssetClassEnum.CRYPTO
     is_public: bool = Field(False, description="Make strategy public")
     version: str = Field("1.0", description="Strategy version")
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "My MA Crossover Strategy",
                 "description": "Simple moving average crossover strategy",
@@ -79,6 +78,7 @@ class StrategyCreate(BaseModel):
                 "is_public": False,
             }
         }
+    )
 
 
 class StrategyUpdate(BaseModel):
@@ -101,9 +101,8 @@ class StrategyDeploymentCreate(BaseModel):
     timeframe: str = Field(..., description="Timeframe (e.g., 1h, 4h, 1d)")
     amount: Decimal = Field(..., gt=0, description="Amount to trade")
     parameters: dict[str, Any] | None = Field(None, description="Deployment-specific parameters")
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "strategy_id": "strategy-123",
                 "exchange": "binance",
@@ -113,6 +112,7 @@ class StrategyDeploymentCreate(BaseModel):
                 "parameters": {"risk_per_trade": 0.01, "max_positions": 3},
             }
         }
+    )
 
 
 class StrategyDeploymentUpdate(BaseModel):
@@ -152,9 +152,8 @@ class BacktestCreate(BaseModel):
     end_date: datetime = Field(..., description="Backtest end date")
     initial_balance: Decimal = Field(..., gt=0, description="Initial balance")
     parameters: dict[str, Any] | None = Field(None, description="Backtest parameters")
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "strategy_id": "strategy-123",
                 "symbol": "BTCUSDT",
@@ -165,6 +164,7 @@ class BacktestCreate(BaseModel):
                 "parameters": {"commission": 0.001},
             }
         }
+    )
 
 
 # Response Models
@@ -174,7 +174,7 @@ class StrategyBase(BaseModel):
     id: str
     user_id: str
     name: str
-    description: str | None
+    description: str | None = None
     strategy_type: StrategyTypeEnum
     asset_class: AssetClassEnum
     is_public: bool
@@ -188,10 +188,8 @@ class StrategyResponse(StrategyBase):
     """Complete strategy response."""
 
     parameters: dict[str, Any]
-    parameter_hash: str | None
-
-    class Config:
-        from_attributes = True
+    parameter_hash: str | None = None
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StrategyPublic(BaseModel):
@@ -199,14 +197,12 @@ class StrategyPublic(BaseModel):
 
     id: str
     name: str
-    description: str | None
+    description: str | None = None
     strategy_type: StrategyTypeEnum
     asset_class: AssetClassEnum
     version: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StrategyDeploymentResponse(BaseModel):
@@ -219,15 +215,13 @@ class StrategyDeploymentResponse(BaseModel):
     symbol: str
     timeframe: str
     amount: Decimal
-    parameters: dict[str, Any] | None
+    parameters: dict[str, Any] | None = None
     status: DeploymentStatusEnum
     start_time: datetime
-    end_time: datetime | None
+    end_time: datetime | None = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StrategyStateResponse(BaseModel):
@@ -235,10 +229,10 @@ class StrategyStateResponse(BaseModel):
 
     id: str
     deployment_id: str
-    position: str | None
+    position: str | None = None
     position_size: Decimal
-    entry_price: Decimal | None
-    entry_time: datetime | None
+    entry_price: Decimal | None = None
+    entry_time: datetime | None = None
     total_trades: int
     winning_trades: int
     losing_trades: int
@@ -246,13 +240,11 @@ class StrategyStateResponse(BaseModel):
     cumulative_profit_loss: Decimal
     max_drawdown: Decimal
     is_active: bool
-    last_signal: str | None
-    last_signal_time: datetime | None
-    last_price: Decimal | None
-    last_update: datetime | None
-
-    class Config:
-        from_attributes = True
+    last_signal: str | None = None
+    last_signal_time: datetime | None = None
+    last_price: Decimal | None = None
+    last_update: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TradingSessionResponse(BaseModel):
@@ -262,22 +254,20 @@ class TradingSessionResponse(BaseModel):
     deployment_id: str
     user_id: str
     start_time: datetime
-    end_time: datetime | None
-    duration_seconds: int | None
+    end_time: datetime | None = None
+    duration_seconds: int | None = None
     initial_balance: Decimal
-    final_balance: Decimal | None
-    max_trades: int | None
+    final_balance: Decimal | None = None
+    max_trades: int | None = None
     total_trades: int
     profitable_trades: int
     total_profit_loss: Decimal
-    win_rate: Decimal | None
+    win_rate: Decimal | None = None
     status: SessionStatusEnum
-    stop_reason: str | None
+    stop_reason: str | None = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BacktestResponse(BaseModel):
@@ -290,15 +280,13 @@ class BacktestResponse(BaseModel):
     timeframe: str
     start_date: datetime
     end_date: datetime
-    parameters: dict[str, Any] | None
+    parameters: dict[str, Any] | None = None
     results: dict[str, Any]
     metrics: dict[str, Any]
-    transactions: list[dict[str, Any]] | None
+    transactions: list[dict[str, Any]] | None = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Strategy Performance
@@ -312,9 +300,7 @@ class StrategyPerformance(BaseModel):
     avg_win_rate: float
     max_drawdown: Decimal
     total_runtime_hours: float
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # List Response Models
