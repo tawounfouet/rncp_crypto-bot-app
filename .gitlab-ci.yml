@@ -41,7 +41,7 @@ variables:
   # GitLab resout `image:` avant l'execution, donc on ne peut pas
   # sourcer versions.env dynamiquement pour les images.
   # Le job lint:versions verifie la synchronisation a chaque pipeline.
-  PYTHON_CI_IMAGE: "python:3.11-slim"
+  PYTHON_CI_IMAGE: "python:3.14.3-slim"
   SEMGREP_IMAGE: "semgrep/semgrep:1.121.0"
   HADOLINT_IMAGE: "hadolint/hadolint:v2.12.0-debian"
   RELEASE_CLI_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:v0.18.0"

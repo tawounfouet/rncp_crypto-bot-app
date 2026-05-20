@@ -21,7 +21,7 @@ repos:
 
   # Ruff (remplace black + flake8 + isort + bandit)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.1
+    rev: v0.12.0
     hooks:
       - id: ruff
         name: "Run ruff linter"

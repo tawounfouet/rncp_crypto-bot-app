@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Security settings
-    SECRET_KEY: SecretStr = "your-secret-key-change-this-in-production"
+    SECRET_KEY: SecretStr = "your-secret-key-change-this-in-production"  # noqa: S105
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # MinIO settings (optional)
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "miniouser"
-    MINIO_SECRET_KEY: SecretStr = "miniopassword"
+    MINIO_SECRET_KEY: SecretStr = "miniopassword"  # noqa: S105
     MINIO_SECURE: bool = False
     MINIO_BUCKET: str = "crypto-bot-data"
     USE_MINIO: bool = False

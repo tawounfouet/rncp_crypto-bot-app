@@ -3,7 +3,7 @@ Strategy service for managing strategy execution and lifecycle.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -138,7 +138,7 @@ class StrategyService:
                 if not is_valid:
                     raise ValidationError(f"Invalid strategy parameters: {error_msg}")
 
-            strategy.updated_at = datetime.utcnow()
+            strategy.updated_at = datetime.now(UTC)
             session.commit()
             session.refresh(strategy)
 
@@ -210,7 +210,7 @@ class StrategyService:
                 timeframe=deployment_data.timeframe,
                 amount=deployment_data.amount,
                 parameters=deployment_data.parameters,
-                start_time=datetime.utcnow(),
+                start_time=datetime.now(UTC),
             )
 
             session.add(deployment)
@@ -319,7 +319,7 @@ class StrategyService:
                 # Update strategy state
                 state = deployment.state
                 if state:
-                    state.last_execution = datetime.utcnow()
+                    state.last_execution = datetime.now(UTC)
                     state.last_signal = latest_signal
                     session.commit()
 
@@ -329,7 +329,7 @@ class StrategyService:
                     "latest_signal": latest_signal,
                     "signal_info": signal_info,
                     "data_points": len(results),
-                    "execution_time": datetime.utcnow().isoformat(),
+                    "execution_time": datetime.now(UTC).isoformat(),
                 }
 
                 logger.info(f"Executed strategy {strategy_model.strategy_type} for deployment {deployment_id}")

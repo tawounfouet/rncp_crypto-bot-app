@@ -1,9 +1,10 @@
 [project]
 name = "crypto-bot-app"
+version = "0.1.0"
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py314"
 exclude = [".git", ".venv", "venv", "tests", "__pycache__"]
 
 [tool.ruff.lint]
@@ -23,6 +24,7 @@ ignore = [
     "B008",    # Depends() dans les args — pattern standard FastAPI
     "RUF012",  # ClassVar sur Pydantic models — faux positif
     "RUF013",  # PEP 484 implicit Optional — faux positif Pydantic
+    "UP046",   # `class Foo(Base, Generic[T])` -> `class Foo[T](Base)` — refactor a faire dans un commit dedie
 ]
 
 [tool.ruff.lint.per-file-ignores]

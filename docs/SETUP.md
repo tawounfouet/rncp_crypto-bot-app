@@ -44,7 +44,7 @@ fallback sur la VM AWS DataScientest.
 - Git >= 2.13
 - Docker >= 20.10
 - Docker Compose >= 2.0
-- Python 3.11 (pour le venv local)
+- Python 3.14 (pour le venv local)
 - pre-commit (pour les hooks)
 - kubectl (pour le deploiement K8s dev)
 - kubeseal (pour la gestion des secrets K8s)
@@ -96,7 +96,7 @@ BINANCE_API_SECRET=
 ### 3. Creer le venv local (tests + lint)
 
 ```bash
-python3.11 -m venv .venv
+python3.14 -m venv .venv
 .venv/bin/pip install -r backend/requirements-dev.txt
 ```
 

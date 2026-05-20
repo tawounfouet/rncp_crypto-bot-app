@@ -4,7 +4,7 @@ Provides common functionality like UUID primary keys, timestamps, etc.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Boolean, Column, DateTime, String, func
@@ -54,7 +54,7 @@ class SoftDeleteMixin:
     def soft_delete(self):
         """Mark the record as deleted."""
         self.is_deleted = True
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = datetime.now(UTC)
 
     def restore(self):
         """Restore a soft-deleted record."""
