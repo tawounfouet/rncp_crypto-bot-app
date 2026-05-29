@@ -10,10 +10,12 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   ├── Dockerfile              # Multi-stage : builder, test, runtime
 │   ├── requirements.txt        # Dependances de production
 │   └── requirements-dev.txt    # Dependances de dev/test (inclut requirements.txt)
-├── frontend/                   # Code Streamlit
-│   ├── src/
+├── frontend/                   # Code Streamlit (mock-first multi-pages)
+│   ├── src/                    # app.py + pages/ + components/ + services/ + ...
+│   ├── tests/                  # unit + integration + smoke (135 tests)
 │   ├── Dockerfile
-│   └── requirements.txt
+│   ├── pyproject.toml          # Config pytest + ruff specifique frontend
+│   └── requirements.txt        # Deps runtime (streamlit, plotly, pandas, pydantic)
 ├── ci/                         # Tests d'integration CI
 │   ├── docker-compose.test.yml # Compose pour tests (Postgres + Mongo reels)
 │   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
@@ -95,13 +97,30 @@ BINANCE_API_SECRET=
 
 ### 3. Creer le venv local (tests + lint)
 
+Le `.venv` racine est **partage entre backend et frontend** (un seul Python 3.14,
+streamlit + fastapi cohabitent sans conflit). Cela evite de jongler avec deux
+venvs en dev local. En prod, l'isolation est garantie par les images Docker
+separees (backend / frontend), pas besoin de la dupliquer ici.
+
 ```bash
 python3.14 -m venv .venv
+
+# Deps backend (FastAPI, SQLAlchemy, PyJWT, pytest, ruff, ...)
 .venv/bin/pip install -r backend/requirements-dev.txt
+
+# Deps frontend (Streamlit, Plotly, Pandas, Pydantic v2)
+.venv/bin/pip install -r frontend/requirements.txt
 ```
 
-Le `.venv` est utilise par `make lint`, `make test` et le hook pre-commit
-`run-tests-if-needed.sh`.
+> Si `uv` est installe, prefere `uv pip install --python .venv/bin/python -r ...`
+> (10x plus rapide, resolution deterministe).
+
+`pytest` et `ruff` sont fournis par `backend/requirements-dev.txt` ; ils
+servent aussi aux tests / lint du frontend (pas besoin d'un install dev separe
+cote frontend).
+
+Le `.venv` est utilise par `make lint`, `make test`, `make test-backend`,
+`make test-frontend` et le hook pre-commit `run-tests-if-needed.sh`.
 
 ### 4. Installer les hooks pre-commit
 
@@ -147,12 +166,30 @@ Services disponibles (dev local) :
 ### Lancer les tests
 
 ```bash
-# Tests unitaires en local (utilise le venv .venv)
+# Tous les tests (backend + frontend)
 make test
 
-# Equivalent manuel :
-PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+# Backend uniquement
+make test-backend
+
+# Frontend uniquement (tests mock-first Streamlit)
+make test-frontend
 ```
+
+Equivalents manuels :
+
+```bash
+# Backend
+PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+
+# Frontend (depuis frontend/ pour respecter pythonpath du pyproject.toml de Ben)
+cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
+```
+
+> **Note** : le `cache_dir` est override car le `frontend/pyproject.toml` definit
+> `%TEMP%/crypto-bot-app-pytest-cache` (style Windows), qui creerait un dossier
+> litteral `%TEMP%/` sur Linux. A nettoyer dans le pyproject.toml de Ben quand
+> on aura un moment.
 
 ### Lancer le linting
 
@@ -313,7 +350,9 @@ Taper `make` pour afficher toutes les commandes disponibles.
 | `make prod-init` | Creer les buckets MinIO (prod) |
 | `make prod-debug-up` | Activer Adminer + Mongo Express en prod |
 | `make prod-debug-down` | Desactiver Adminer + Mongo Express en prod |
-| `make test` | Tests unitaires (venv local) |
+| `make test` | Tous les tests (backend + frontend) |
+| `make test-backend` | Tests unitaires backend |
+| `make test-frontend` | Tests frontend mock-first (Streamlit) |
 | `make lint` | Ruff check + format |
 | `make lint-fix` | Corriger automatiquement |
 | `make check-infra` | Valider coherence infra |
