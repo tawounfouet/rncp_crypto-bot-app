@@ -6,11 +6,11 @@ Handles user authentication, JWT tokens, and session management.
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import HTTPException, status
 from fastapi.security import HTTPBearer
-from jose import JWTError, jwt
 from shared.config.settings import get_settings
 from shared.database.connection import get_db_session
 
@@ -67,9 +67,9 @@ class AuthService:
         try:
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             if payload.get("type") != token_type:
-                raise JWTError("Invalid token type")
+                raise jwt.InvalidTokenError("Invalid token type")
             return payload
-        except JWTError:
+        except jwt.PyJWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
@@ -94,7 +94,10 @@ class AuthService:
             user.last_active_at = datetime.now(UTC)
             session.commit()
 
-            # Detach the user from the session to make it independent
+            # Recharger les attributs (session.commit() les a expires en SQLAlchemy 2.0)
+            # avant de detacher l'objet, sinon l'appelant declenche une lazy-load sur un
+            # objet detache -> "Instance is not bound to a Session".
+            session.refresh(user)
             session.expunge(user)
             return user
 
@@ -227,7 +230,10 @@ class AuthService:
             user.last_active_at = datetime.now(UTC)
             session.commit()
 
-            # Detach the user from the session to make it independent
+            # Recharger les attributs (session.commit() les a expires en SQLAlchemy 2.0)
+            # avant de detacher l'objet, sinon l'appelant declenche une lazy-load sur un
+            # objet detache -> "Instance is not bound to a Session".
+            session.refresh(user)
             session.expunge(user)
             return user
 

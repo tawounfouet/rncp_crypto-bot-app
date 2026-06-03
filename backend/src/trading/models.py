@@ -176,8 +176,7 @@ class OrderFill(BaseModel):
 
     def __repr__(self) -> str:
         return (
-            f"<OrderFill(id={self.id}, order_id={self.order_id}, "
-            f"trade_id={self.trade_id}, quantity={self.quantity})>"
+            f"<OrderFill(id={self.id}, order_id={self.order_id}, trade_id={self.trade_id}, quantity={self.quantity})>"
         )
 
 
@@ -269,7 +268,7 @@ class Transaction(BaseModel):
         return total_cost / self.amount
 
     @classmethod
-    def create_from_order_fill(cls, order: Order, fill: OrderFill, user_id: str) -> "Transaction":
+    def create_from_order_fill(cls, order: Order, fill: OrderFill, user_id: str) -> Transaction:
         """Create a transaction from an order fill."""
         # Determine asset and quote asset from symbol
         # This is a simplified version - in practice, you'd need symbol mapping

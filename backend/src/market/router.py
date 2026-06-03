@@ -89,9 +89,7 @@ async def insert_historical_data(
     - `total`: Total records processed
     """
     try:
-        logger.info(
-            f"User {current_user.username} requesting data insertion for " f"{request.symbol} ({request.interval})"
-        )
+        logger.info(f"User {current_user.username} requesting data insertion for {request.symbol} ({request.interval})")
 
         # Create insert service
         insert_service = MarketDataInsertService(db)
@@ -111,9 +109,7 @@ async def insert_historical_data(
         # Check existing data count
         existing_count = insert_service.get_data_count(request.symbol, request.interval, request.start_time, end_time)
 
-        logger.info(
-            f"Found {existing_count} existing records for {request.symbol} " f"({request.interval}) in database"
-        )
+        logger.info(f"Found {existing_count} existing records for {request.symbol} ({request.interval}) in database")
 
         # Insert data from Binance
         result = insert_service.insert_historical_data(

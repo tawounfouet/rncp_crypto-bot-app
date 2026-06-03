@@ -3,7 +3,7 @@ Common Pydantic schemas for the Crypto Trading Bot application.
 Contains base schemas, pagination, and shared response models.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, Field
@@ -17,7 +17,7 @@ class BaseResponse(BaseModel):
     success: bool = True
     message: str | None = None
     data: Any | None = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class ErrorResponse(BaseResponse):
@@ -41,7 +41,7 @@ class PaginatedResponse(BaseResponse, Generic[T]):
     """Paginated response model."""
 
     data: list[T]
-    pagination: "PaginationInfo"
+    pagination: PaginationInfo
 
 
 class PaginationInfo(BaseModel):
@@ -60,7 +60,7 @@ class StatusResponse(BaseModel):
 
     status: str
     version: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     services: dict | None = None
 
 

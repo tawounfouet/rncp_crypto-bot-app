@@ -3,6 +3,8 @@ User domain models for the Crypto Trading Bot.
 Contains User, UserSession, UserAccount, and UserSettings models.
 """
 
+import strategy.models  # noqa: F401
+import trading.models  # noqa: F401
 from shared.config.security import decrypt_secret, encrypt_secret
 from shared.models.base import BaseModel, register_model
 from sqlalchemy import (
@@ -106,9 +108,9 @@ class UserSession(BaseModel):
 
     def is_expired(self) -> bool:
         """Check if the session is expired."""
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(UTC) > self.expires_at
 
     def __repr__(self) -> str:
         return f"<UserSession(id={self.id}, user_id={self.user_id}, expires_at={self.expires_at})>"
@@ -160,17 +162,17 @@ class UserAccount(BaseModel):
         """Check if the access token is expired."""
         if not self.access_token_expires_at:
             return False
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        return datetime.utcnow() > self.access_token_expires_at
+        return datetime.now(UTC) > self.access_token_expires_at
 
     def is_refresh_token_expired(self) -> bool:
         """Check if the refresh token is expired."""
         if not self.refresh_token_expires_at:
             return False
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        return datetime.utcnow() > self.refresh_token_expires_at
+        return datetime.now(UTC) > self.refresh_token_expires_at
 
     def __repr__(self) -> str:
         return f"<UserAccount(id={self.id}, user_id={self.user_id}, provider={self.provider})>"

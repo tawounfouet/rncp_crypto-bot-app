@@ -163,7 +163,7 @@ class DatabaseManager:
         return self._session_factory
 
     @contextmanager
-    def get_session(self) -> Generator[Session, None, None]:
+    def get_session(self) -> Generator[Session]:
         """
         Context manager for database sessions.
 
@@ -241,7 +241,7 @@ db_manager = DatabaseManager()
 
 
 # Convenience functions for common operations
-def get_db_session() -> Generator[Session, None, None]:
+def get_db_session() -> Generator[Session]:
     """Get database session (convenience function)."""
     return db_manager.get_session()
 

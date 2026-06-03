@@ -8,9 +8,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import validator
+from pydantic import field_validator
 from pydantic.types import SecretStr
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # Security settings
-    SECRET_KEY: SecretStr = "your-secret-key-change-this-in-production"
+    SECRET_KEY: SecretStr = "your-secret-key-change-this-in-production"  # noqa: S105
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     # MinIO settings (optional)
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "miniouser"
-    MINIO_SECRET_KEY: SecretStr = "miniopassword"
+    MINIO_SECRET_KEY: SecretStr = "miniopassword"  # noqa: S105
     MINIO_SECURE: bool = False
     MINIO_BUCKET: str = "crypto-bot-data"
     USE_MINIO: bool = False
@@ -117,11 +117,12 @@ class Settings(BaseSettings):
     # Environment detection
     IS_DOCKER: bool = False
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
-        extra = "ignore"  # Ignore extra env vars not defined in the model
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",  # Ignore extra env vars not defined in the model
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -179,19 +180,20 @@ class Settings(BaseSettings):
             log_dir = Path(self.LOG_FILE).parent
             log_dir.mkdir(parents=True, exist_ok=True)
 
-    @validator("DATABASE_URL", pre=False, always=True)
-    def build_database_url(cls, v, values):
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def build_database_url(cls, v, info):
         """Build database URL with automatic fallback to SQLite."""
         if v:
             return v
 
         # Try to build PostgreSQL URL
-        postgres_host = values.get("POSTGRES_HOST")
-        postgres_port = values.get("POSTGRES_PORT", 5432)
-        postgres_user = values.get("POSTGRES_USER")
-        postgres_password = values.get("POSTGRES_PWD")
-        postgres_db = values.get("POSTGRES_DB")
-        postgres_url = values.get("POSTGRES_URL")
+        postgres_host = info.data.get("POSTGRES_HOST")
+        postgres_port = info.data.get("POSTGRES_PORT", 5432)
+        postgres_user = info.data.get("POSTGRES_USER")
+        postgres_password = info.data.get("POSTGRES_PWD")
+        postgres_db = info.data.get("POSTGRES_DB")
+        postgres_url = info.data.get("POSTGRES_URL")
 
         # Use explicit PostgreSQL URL if provided
         if postgres_url:
@@ -205,8 +207,8 @@ class Settings(BaseSettings):
             return url
 
         # Fallback to SQLite
-        sqlite_path = values.get("SQLITE_DB_PATH", "data/crypto_bot.db")
-        use_fallback = values.get("USE_SQLITE_FALLBACK", True)
+        sqlite_path = info.data.get("SQLITE_DB_PATH", "data/crypto_bot.db")
+        use_fallback = info.data.get("USE_SQLITE_FALLBACK", True)
 
         if use_fallback:
             # Convert to absolute path
@@ -220,33 +222,35 @@ class Settings(BaseSettings):
 
         raise ValueError("No database configuration provided and SQLite fallback is disabled")
 
-    @validator("MONGODB_URL", pre=False, always=True)
-    def build_mongodb_url(cls, v, values):
+    @field_validator("MONGODB_URL", mode="after")
+    @classmethod
+    def build_mongodb_url(cls, v, info):
         """Build MongoDB URL if enabled."""
-        if v or not values.get("USE_MONGODB", False):
+        if v or not info.data.get("USE_MONGODB", False):
             return v
 
-        host = values.get("MONGODB_HOST", "localhost")
-        port = values.get("MONGODB_PORT", 27017)
-        user = values.get("MONGODB_USER")
-        password = values.get("MONGODB_PWD")
-        db = values.get("MONGODB_DB", "crypto_market_data")
+        host = info.data.get("MONGODB_HOST", "localhost")
+        port = info.data.get("MONGODB_PORT", 27017)
+        user = info.data.get("MONGODB_USER")
+        password = info.data.get("MONGODB_PWD")
+        db = info.data.get("MONGODB_DB", "crypto_market_data")
 
         if user and password:
             return f"mongodb://{user}:{password}@{host}:{port}/{db}?authSource=admin"
         else:
             return f"mongodb://{host}:{port}/{db}"
 
-    @validator("REDIS_URL", pre=False, always=True)
-    def build_redis_url(cls, v, values):
+    @field_validator("REDIS_URL", mode="after")
+    @classmethod
+    def build_redis_url(cls, v, info):
         """Build Redis URL if enabled."""
-        if v or not values.get("USE_REDIS", False):
+        if v or not info.data.get("USE_REDIS", False):
             return v
 
-        host = values.get("REDIS_HOST", "localhost")
-        port = values.get("REDIS_PORT", 6379)
-        password = values.get("REDIS_PASSWORD")
-        db = values.get("REDIS_DB", 0)
+        host = info.data.get("REDIS_HOST", "localhost")
+        port = info.data.get("REDIS_PORT", 6379)
+        password = info.data.get("REDIS_PASSWORD")
+        db = info.data.get("REDIS_DB", 0)
 
         if password:
             return f"redis://:{password.get_secret_value()}@{host}:{port}/{db}"

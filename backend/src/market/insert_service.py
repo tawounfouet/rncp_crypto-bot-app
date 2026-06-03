@@ -73,7 +73,7 @@ class MarketDataInsertService:
             end_time = datetime.now(UTC)
 
         logger.info(
-            f"Fetching historical data for {symbol} ({interval}) " f"from {start_time} to {end_time}, limit={limit}"
+            f"Fetching historical data for {symbol} ({interval}) from {start_time} to {end_time}, limit={limit}"
         )
 
         # Convert interval to Binance format
