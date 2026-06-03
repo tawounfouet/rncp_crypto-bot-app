@@ -322,7 +322,7 @@ build:docker:
 scan:images:
   stage: build
   image:
-    name: aquasecurity/trivy:0.70.0
+    name: ghcr.io/aquasecurity/trivy:0.70.0
     entrypoint: [""]
   variables:
     TRIVY_USERNAME: $CI_REGISTRY_USER
