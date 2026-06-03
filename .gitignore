@@ -35,3 +35,14 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Frontend temporary caches
+pytest-cache-files-*/
+.cacheprobe/
+.mypy_cache/
+.ruff_cache/
+.pre-commit-cache/
+frontend/.tmp_run/
+frontend/.streamlit/secrets.toml
+frontend_legacy/
+backend/scripts/ensure_dev_admin.py

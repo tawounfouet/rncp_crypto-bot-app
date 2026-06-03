@@ -23,7 +23,6 @@ from .constants import (
     TransactionType,
     UserRole,
 )
-from .security import SecurityConfig
 from .settings import Settings, get_settings
 
 # Core configuration exports only
@@ -36,8 +35,6 @@ __all__ = [
     "OrderType",
     "PositionSide",
     "RiskLevel",
-    # Security
-    "SecurityConfig",
     # Settings
     "Settings",
     "StrategyStatus",

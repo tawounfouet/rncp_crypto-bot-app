@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from shared.schemas.common import BaseResponse
 
 
@@ -87,9 +87,8 @@ class OrderCreate(BaseModel):
     stop_price: Decimal | None = Field(None, gt=0, description="Stop price for stop orders")
     time_in_force: TimeInForceEnum | None = Field(None, description="Time in force")
     quote_order_quantity: Decimal | None = Field(None, gt=0, description="Quote asset quantity")
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "deployment_id": "deploy-123",
                 "symbol": "BTCUSDT",
@@ -100,6 +99,7 @@ class OrderCreate(BaseModel):
                 "time_in_force": "GTC",
             }
         }
+    )
 
 
 class OrderUpdate(BaseModel):
@@ -123,9 +123,7 @@ class OrderFill(BaseModel):
     timestamp: datetime
     is_buyer: bool
     is_maker: bool
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrderResponse(BaseModel):
@@ -135,27 +133,25 @@ class OrderResponse(BaseModel):
     deployment_id: str
     user_id: str
     exchange: str
-    exchange_order_id: str | None
-    client_order_id: str | None
+    exchange_order_id: str | None = None
+    client_order_id: str | None = None
     symbol: str
     order_type: OrderTypeEnum
     side: OrderSideEnum
-    time_in_force: TimeInForceEnum | None
+    time_in_force: TimeInForceEnum | None = None
     quantity: Decimal
     executed_quantity: Decimal
-    quote_order_quantity: Decimal | None
-    cumulative_quote_quantity: Decimal | None
-    price: Decimal | None
-    stop_price: Decimal | None
+    quote_order_quantity: Decimal | None = None
+    cumulative_quote_quantity: Decimal | None = None
+    price: Decimal | None = None
+    stop_price: Decimal | None = None
     status: OrderStatusEnum
-    transact_time: datetime | None
-    working_time: datetime | None
+    transact_time: datetime | None = None
+    working_time: datetime | None = None
     created_at: datetime
     updated_at: datetime
     fills: list[OrderFill] = []
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class OrderSummary(BaseModel):
@@ -167,12 +163,10 @@ class OrderSummary(BaseModel):
     side: OrderSideEnum
     quantity: Decimal
     executed_quantity: Decimal
-    price: Decimal | None
+    price: Decimal | None = None
     status: OrderStatusEnum
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Transaction Schemas
@@ -192,9 +186,8 @@ class TransactionCreate(BaseModel):
     fee_asset: str | None = None
     external_id: str | None = None
     description: str | None = None
-
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "exchange": "binance",
                 "transaction_type": "TRADE",
@@ -206,6 +199,7 @@ class TransactionCreate(BaseModel):
                 "price": "45000.00",
             }
         }
+    )
 
 
 class TransactionResponse(BaseModel):
@@ -215,23 +209,21 @@ class TransactionResponse(BaseModel):
     user_id: str
     exchange: str
     transaction_type: TransactionTypeEnum
-    order_id: str | None
+    order_id: str | None = None
     asset: str
     amount: Decimal
     direction: TransactionDirectionEnum
-    quote_asset: str | None
-    quote_amount: Decimal | None
-    price: Decimal | None
-    fee_amount: Decimal | None
-    fee_asset: str | None
-    external_id: str | None
+    quote_asset: str | None = None
+    quote_amount: Decimal | None = None
+    price: Decimal | None = None
+    fee_amount: Decimal | None = None
+    fee_asset: str | None = None
+    external_id: str | None = None
     status: str
-    description: str | None
+    description: str | None = None
     timestamp: datetime
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TransactionSummary(BaseModel):
@@ -242,11 +234,9 @@ class TransactionSummary(BaseModel):
     asset: str
     amount: Decimal
     direction: TransactionDirectionEnum
-    price: Decimal | None
+    price: Decimal | None = None
     timestamp: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Portfolio and Balance
@@ -277,13 +267,11 @@ class PositionInfo(BaseModel):
     symbol: str
     position: PositionEnum
     position_size: Decimal
-    entry_price: Decimal | None
-    current_price: Decimal | None
-    unrealized_pnl: Decimal | None
+    entry_price: Decimal | None = None
+    current_price: Decimal | None = None
+    unrealized_pnl: Decimal | None = None
     realized_pnl: Decimal
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Trading Statistics
@@ -299,9 +287,7 @@ class TradingStats(BaseModel):
     average_loss: Decimal
     max_drawdown: Decimal
     sharpe_ratio: float | None = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Response Models

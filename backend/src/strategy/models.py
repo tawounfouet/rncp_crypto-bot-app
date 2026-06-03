@@ -3,7 +3,7 @@ Strategy domain models for the Crypto Trading Bot.
 Contains Strategy, StrategyDeployment, StrategyState, TradingSession, and BacktestResult models.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from shared.models.base import BaseModel, register_model
@@ -136,7 +136,7 @@ class StrategyDeployment(BaseModel):
     def stop(self, reason: str = None):
         """Stop the deployment."""
         self.status = "stopped"
-        self.end_time = datetime.utcnow()
+        self.end_time = datetime.now(UTC)
         if self.state:
             self.state.is_active = False
             if reason:
@@ -247,15 +247,15 @@ class StrategyState(BaseModel):
         if self.cumulative_profit_loss < -self.max_drawdown:
             self.max_drawdown = -self.cumulative_profit_loss
 
-        self.last_update = datetime.utcnow()
+        self.last_update = datetime.now(UTC)
 
     def open_position(self, position_type: str, size: Decimal, price: Decimal):
         """Open a new position."""
         self.position = position_type
         self.position_size = size
         self.entry_price = price
-        self.entry_time = datetime.utcnow()
-        self.last_update = datetime.utcnow()
+        self.entry_time = datetime.now(UTC)
+        self.last_update = datetime.now(UTC)
 
     def close_position(self):
         """Close the current position."""
@@ -263,7 +263,7 @@ class StrategyState(BaseModel):
         self.position_size = Decimal(0)
         self.entry_price = None
         self.entry_time = None
-        self.last_update = datetime.utcnow()
+        self.last_update = datetime.now(UTC)
 
     def __repr__(self) -> str:
         return f"<StrategyState(id={self.id}, deployment_id={self.deployment_id}, position={self.position})>"
@@ -324,7 +324,7 @@ class TradingSession(BaseModel):
 
     def end_session(self, reason: str = None):
         """End the trading session."""
-        self.end_time = datetime.utcnow()
+        self.end_time = datetime.now(UTC)
         self.duration_seconds = int((self.end_time - self.start_time).total_seconds())
         self.status = "COMPLETED"
         if reason:

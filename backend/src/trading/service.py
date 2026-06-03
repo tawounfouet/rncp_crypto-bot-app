@@ -5,7 +5,7 @@ Handles interaction with exchanges and order lifecycle management.
 
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -117,9 +117,7 @@ class TradingService:
             # order.update_from_exchange_response(exchange_response)
             # self.db.commit()
 
-            logger.info(
-                f"Created order {order.id} for user {user_id}: " f"{order.side} {order.quantity} {order.symbol}"
-            )
+            logger.info(f"Created order {order.id} for user {user_id}: {order.side} {order.quantity} {order.symbol}")
 
             return OrderResponse.model_validate(order)
 
@@ -342,7 +340,7 @@ class TradingService:
                 external_id=transaction_data.external_id,
                 status="COMPLETED",
                 description=transaction_data.description,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
 
             self.db.add(transaction)
@@ -463,7 +461,7 @@ class TradingService:
                 )
             ],
             total_usd_value=Decimal("10000.00"),
-            last_updated=datetime.utcnow(),
+            last_updated=datetime.now(UTC),
         )
 
         return PortfolioResponse(success=True, message="Portfolio retrieved", portfolio=portfolio)
@@ -497,7 +495,7 @@ class TradingService:
 
             start_date = None
             if period_days.get(period):
-                start_date = datetime.utcnow() - timedelta(days=period_days[period])
+                start_date = datetime.now(UTC) - timedelta(days=period_days[period])
 
             # Query orders
             query = self.db.query(Order).filter(Order.user_id == user_id, Order.status == OrderStatusEnum.FILLED.value)

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from .connection import db_manager
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     """
     Dependency that provides a database session for route handlers.
 

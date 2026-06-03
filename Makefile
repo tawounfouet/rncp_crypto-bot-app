@@ -76,8 +76,13 @@ prod-logs: ## Suivre les logs prod
 # Tests & Lint (venv local)
 # ===========================================================================
 
-test: ## Lancer les tests unitaires en local
+test: test-backend test-frontend ## Lancer tous les tests (backend + frontend)
+
+test-backend: ## Lancer les tests unitaires backend
 	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+
+test-frontend: ## Lancer les tests frontend mock-first
+	cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
 
 lint: ## Lancer ruff check + format
 	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise

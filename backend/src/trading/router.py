@@ -71,7 +71,7 @@ async def create_order(
         HTTPException: If order creation fails
     """
     try:
-        logger.info(f"User {current_user.username} creating {order_data.side} order " f"for {order_data.symbol}")
+        logger.info(f"User {current_user.username} creating {order_data.side} order for {order_data.symbol}")
 
         order = await trading_service.create_order(user_id=current_user.id, order_data=order_data)
 

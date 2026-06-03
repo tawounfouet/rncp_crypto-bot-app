@@ -6,7 +6,7 @@ Contains schemas for market data, symbols, and price information.
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from shared.schemas.common import BaseResponse
 
 
@@ -25,15 +25,14 @@ class MarketDataResponse(BaseModel):
     close_price: Decimal
     volume: Decimal
     close_time: datetime
-    quote_asset_volume: Decimal | None
-    number_of_trades: int | None
-    taker_buy_base_volume: Decimal | None
-    taker_buy_quote_volume: Decimal | None
+    quote_asset_volume: Decimal | None = None
+    number_of_trades: int | None = None
+    taker_buy_base_volume: Decimal | None = None
+    taker_buy_quote_volume: Decimal | None = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-        json_schema_extra = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
             "example": {
                 "id": "BTCUSDT_1h_2024-01-01T00:00:00",
                 "symbol": "BTCUSDT",
@@ -48,7 +47,8 @@ class MarketDataResponse(BaseModel):
                 "close_time": "2024-01-01T01:00:00",
                 "created_at": "2024-01-01T01:00:00",
             }
-        }
+        },
+    )
 
 
 class MarketDataRequest(BaseModel):
@@ -59,9 +59,7 @@ class MarketDataRequest(BaseModel):
     start_time: datetime | None = Field(None, description="Start time")
     end_time: datetime | None = Field(None, description="End time")
     limit: int = Field(100, ge=1, le=1000, description="Number of records")
-
-    class Config:
-        json_schema_extra = {"example": {"symbol": "BTCUSDT", "interval": "1h", "limit": 100}}
+    model_config = ConfigDict(json_schema_extra={"example": {"symbol": "BTCUSDT", "interval": "1h", "limit": 100}})
 
 
 class PriceInfo(BaseModel):
