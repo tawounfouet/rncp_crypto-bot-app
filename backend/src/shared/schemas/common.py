@@ -37,13 +37,6 @@ class PaginationParams(BaseModel):
     sort_order: str = Field("asc", pattern="^(asc|desc)$", description="Sort order")
 
 
-class PaginatedResponse(BaseResponse, Generic[T]):
-    """Paginated response model."""
-
-    data: list[T]
-    pagination: PaginationInfo
-
-
 class PaginationInfo(BaseModel):
     """Pagination information."""
 
@@ -53,6 +46,13 @@ class PaginationInfo(BaseModel):
     pages: int
     has_next: bool
     has_prev: bool
+
+
+class PaginatedResponse(BaseResponse, Generic[T]):
+    """Paginated response model."""
+
+    data: list[T]
+    pagination: PaginationInfo
 
 
 class StatusResponse(BaseModel):
