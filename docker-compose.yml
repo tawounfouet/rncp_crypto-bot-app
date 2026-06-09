@@ -7,6 +7,42 @@
 #   make dev-logs     Suivre les logs
 #   make dev-config   Valider la configuration
 
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: orchestration/Dockerfile
+    args:
+      AIRFLOW_IMAGE: ${AIRFLOW_IMAGE}
+  environment:
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+    - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+    - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+    - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+    - MONGODB_USER=${MONGODB_USER}
+    - MONGODB_PWD=${MONGODB_PWD}
+    - POSTGRES_USER=${POSTGRES_USER:-postgres}
+    - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+    # MinIO — requis par les jobs d'ingestion
+    - MINIO_ENDPOINT=minio:9000
+    - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+    - MINIO_SECURE=0
+    - MINIO_BUCKET=crypto-bot-data
+    - BINANCE_BASE_URL=https://api.binance.com
+  volumes:
+    - ./orchestration/dags:/opt/airflow/dags
+    - ./orchestration/logs:/opt/airflow/logs
+    - ./orchestration/plugins:/opt/airflow/plugins
+    - ./jobs:/opt/airflow/jobs       # jobs batch importés par les DAGs
+    - ./data:/app/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - dev-network
+
 services:
   # MongoDB
   mongo:
@@ -198,6 +234,54 @@ services:
         condition: service_healthy
     networks:
       - dev-network
+
+  # Airflow Services
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    command: version
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        airflow db init
+        airflow connections delete postgres_default || true
+        airflow connections add 'postgres_default' \
+          --conn-type 'postgres' \
+          --conn-host 'postgres' \
+          --conn-port '5432' \
+          --conn-login '${POSTGRES_USER:-postgres}' \
+          --conn-password '${POSTGRES_PWD:-postgres}' \
+          --conn-schema 'crypto_bot_db'
+        airflow users create \
+          --username '${AIRFLOW_ADMIN_USER:-admin}' \
+          --firstname Crypto \
+          --lastname Admin \
+          --role Admin \
+          --email admin@cryptobot.local \
+          --password '${AIRFLOW_ADMIN_PASSWORD:-admin}' || true
 
 volumes:
   mongo_data:

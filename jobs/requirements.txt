@@ -1,0 +1,8 @@
+# Dépendances légères pour les jobs d'ingestion
+# Pas de torch, mlflow, scikit-learn — seulement le nécessaire
+
+requests>=2.32
+pandas>=2.2
+pyarrow>=17.0          # sérialisation Parquet
+minio>=7.2.20
+python-binance>=1.0.35  # utilisé uniquement si on a besoin de l'API authentifiée
