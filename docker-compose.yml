@@ -283,6 +283,55 @@ services:
           --email admin@cryptobot.local \
           --password '${AIRFLOW_ADMIN_PASSWORD:-admin}' || true
 
+  # Service de prédiction ML (FastAPI)
+  crypto-bot-ml-api:
+    build:
+      context: ./models
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: crypto-bot-ml-api
+    restart: always
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./data:/app/data
+      - ./models/artifacts:/app/artifacts
+      - ./models/logs:/app/logs
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - BINANCE_API_KEY=${BINANCE_API_KEY}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
+      - MLFLOW_TRACKING_URI=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - dev-network
+
+  # Interface utilisateur MLflow
+  mlflow-ui:
+    build:
+      context: ./models
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: mlflow-ui
+    restart: always
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dev-network
+
 volumes:
   mongo_data:
   postgres_data:

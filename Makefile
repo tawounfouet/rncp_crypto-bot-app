@@ -41,6 +41,22 @@ dev-build: ## Rebuild les images dev (sans cache)
 	docker compose build --no-cache
 
 # ===========================================================================
+# ML / MLOps
+# ===========================================================================
+
+ml-up: ## Demarrer uniquement la couche ML (API + MLflow UI)
+	docker compose up -d crypto-bot-ml-api mlflow-ui
+
+ml-down: ## Arreter la couche ML
+	docker compose stop crypto-bot-ml-api mlflow-ui
+
+ml-logs: ## Suivre les logs de la couche ML
+	docker compose logs -f crypto-bot-ml-api mlflow-ui
+
+ml-train-rf: ## Lancer un entrainement Random Forest
+	docker compose exec crypto-bot-ml-api python -m src.main train-rf
+
+# ===========================================================================
 # Staging (usage local ou VM)
 # ===========================================================================
 
