@@ -33,7 +33,10 @@ x-airflow-common: &airflow-common
     - BINANCE_BASE_URL=https://api.binance.com
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
-    - ./orchestration/logs:/opt/airflow/logs
+    # Volume nommé (pas un bind-mount) : Docker gère l'ownership pour l'user
+    # airflow (UID 50000) -> évite le "Permission denied" sur un dossier hôte
+    # créé en root. Logs consultables via `docker compose logs` ou l'UI Airflow.
+    - airflow_logs:/opt/airflow/logs
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./jobs:/opt/airflow/jobs       # jobs batch importés par les DAGs
     - ./data:/app/data
@@ -336,6 +339,7 @@ volumes:
   mongo_data:
   postgres_data:
   minio_data:
+  airflow_logs:
 
 networks:
   dev-network:
