@@ -1,3 +1,6 @@
+# check=skip=InvalidDefaultArgInFrom
+# AIRFLOW_IMAGE n'a volontairement pas de défaut : la version est définie une
+# seule fois dans versions.env et injectée par docker-compose (build.args).
 ARG AIRFLOW_IMAGE
 FROM ${AIRFLOW_IMAGE}
 
@@ -19,4 +22,3 @@ COPY --chown=airflow:root orchestration/requirements.txt /tmp/requirements.txt
 # Installer les dépendances
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /tmp/requirements.txt
-

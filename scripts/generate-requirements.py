@@ -39,7 +39,7 @@ def load_env_vars(env_file_path: Path) -> dict[str, str]:
 def generate_from_template(template_path: Path, variables: dict[str, str]) -> None:
     """Remplace les variables dans le template et écrit le fichier final."""
     output_path = template_path.with_suffix("")  # Retire le .template
-    
+
     with open(template_path, "r", encoding="utf-8") as f:
         content = f.read()
 
@@ -67,9 +67,17 @@ def generate_from_template(template_path: Path, variables: dict[str, str]) -> No
 def main():
     versions_file = APP_ROOT / "versions.env"
     variables = load_env_vars(versions_file)
-    
-    # Trouver tous les fichiers .template dans le projet
-    templates_found = list(APP_ROOT.glob("**/*.template"))
+
+    # Trouver tous les fichiers .template DU PROJET.
+    # On exclut les venvs / dépendances installées : numpy (f2py) embarque un
+    # `meson.build.template` avec des placeholders ${...} qui seraient sinon pris
+    # à tort pour nos templates (et un meson.build corrompu serait écrit dans numpy).
+    excluded_parts = {".venv", "venv", "site-packages", "node_modules", ".git"}
+    templates_found = [
+        t
+        for t in APP_ROOT.glob("**/*.template")
+        if excluded_parts.isdisjoint(t.parts)
+    ]
     if not templates_found:
         print("Aucun fichier *.template trouvé.")
         return

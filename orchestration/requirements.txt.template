@@ -1,6 +1,11 @@
 # Dépendances pour l'orchestration Airflow
 # =======================================
 
+# Ré-épingler apache-airflow : sans ça, les providers ci-dessous tirent
+# apache-airflow 3.x (binaire `airflow` introuvable -> airflow-init casse).
+# Cf. 04-troubleshooting.md Problème 1 / ADR-003.
+apache-airflow==$AIRFLOW_VERSION
+
 apache-airflow-providers-postgres
 apache-airflow-providers-mongo
 apache-airflow-providers-amazon
