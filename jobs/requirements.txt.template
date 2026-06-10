@@ -1,0 +1,10 @@
+# Dépendances pour les jobs d'ingestion et de transformation
+# ========================================================
+
+requests==$REQUESTS_VERSION
+pandas==$PANDAS_VERSION
+pyarrow==$PYARROW_VERSION
+minio==$MINIO_VERSION
+python-binance==$BINANCE_VERSION
+sqlalchemy==$SQLALCHEMY_VERSION
+psycopg2-binary==$PSYCOPG2_VERSION

@@ -255,6 +255,28 @@ else
 fi
 
 # =============================================================================
+# 9. Coherence requirements.txt <-> requirements.txt.template
+# =============================================================================
+echo ""
+echo "=== 9. Verification des requirements.txt generes ==="
+
+if [ -f scripts/generate-requirements.py ]; then
+    # Executer le generateur de requirements
+    python3 scripts/generate-requirements.py > /dev/null 2>&1
+    
+    # Verifier s'il y a un diff git sur les fichiers generes
+    if git diff --exit-code -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt > /dev/null 2>&1; then
+        pass "Fichiers requirements.txt synchronises avec les templates"
+    else
+        fail "Fichiers requirements.txt desynchronises ! Lancez 'python3 scripts/generate-requirements.py' et commitez les modifications."
+        # Afficher le diff pour aider le developpeur
+        git diff -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt
+    fi
+else
+    fail "scripts/generate-requirements.py introuvable"
+fi
+
+# =============================================================================
 # Resultat
 # =============================================================================
 echo ""
@@ -262,6 +284,7 @@ if [ $ERRORS -gt 0 ]; then
     echo -e "${RED}=== $ERRORS erreur(s) detectee(s) ===${NC}"
     exit 1
 else
-    echo -e "${GREEN}=== Toutes les verifications passent (8 checks) ===${NC}"
+    echo -e "${GREEN}=== Toutes les verifications passent (9 checks) ===${NC}"
     exit 0
 fi
+

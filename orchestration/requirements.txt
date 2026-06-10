@@ -1,0 +1,10 @@
+# Dépendances pour l'orchestration Airflow
+# =======================================
+
+apache-airflow-providers-postgres
+apache-airflow-providers-mongo
+apache-airflow-providers-amazon
+pymongo==4.16.0
+
+# Inclure les dépendances des jobs (qui s'exécutent dans les DAGs)
+-r /opt/airflow/jobs/requirements.txt

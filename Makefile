@@ -21,23 +21,26 @@ help: ## Afficher cette aide
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
+generate-requirements: ## Generer les fichiers requirements.txt a partir de versions.env et des templates
+	python3 scripts/generate-requirements.py
+
 # ===========================================================================
 # Dev
 # ===========================================================================
 
-dev-up: ## Demarrer l'environnement dev
+dev-up: generate-requirements ## Demarrer l'environnement dev
 	docker compose up -d
 
 dev-down: ## Arreter l'environnement dev
 	docker compose down
 
-dev-config: ## Valider la configuration dev
+dev-config: generate-requirements ## Valider la configuration dev
 	docker compose config
 
 dev-logs: ## Suivre les logs dev
 	docker compose logs -f
 
-dev-build: ## Rebuild les images dev (sans cache)
+dev-build: generate-requirements ## Rebuild les images dev (sans cache)
 	docker compose build --no-cache
 
 # ===========================================================================
@@ -60,13 +63,13 @@ ml-train-rf: ## Lancer un entrainement Random Forest
 # Staging (usage local ou VM)
 # ===========================================================================
 
-staging-up: ## Demarrer staging
+staging-up: generate-requirements ## Demarrer staging
 	docker compose -f docker-compose.staging.yml up -d
 
 staging-down: ## Arreter staging
 	docker compose -f docker-compose.staging.yml down
 
-staging-config: ## Valider la configuration staging
+staging-config: generate-requirements ## Valider la configuration staging
 	docker compose -f docker-compose.staging.yml config
 
 staging-logs: ## Suivre les logs staging
@@ -76,13 +79,13 @@ staging-logs: ## Suivre les logs staging
 # Production (usage local ou VM)
 # ===========================================================================
 
-prod-up: ## Demarrer la production
+prod-up: generate-requirements ## Demarrer la production
 	docker compose -f docker-compose.prod.yml up -d
 
 prod-down: ## Arreter la production
 	docker compose -f docker-compose.prod.yml down
 
-prod-config: ## Valider la configuration prod
+prod-config: generate-requirements ## Valider la configuration prod
 	docker compose -f docker-compose.prod.yml config
 
 prod-logs: ## Suivre les logs prod
