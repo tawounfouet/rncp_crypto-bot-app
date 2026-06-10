@@ -6,3 +6,6 @@ pandas>=2.2
 pyarrow>=17.0          # sérialisation Parquet
 minio>=7.2.20
 python-binance>=1.0.35  # utilisé uniquement si on a besoin de l'API authentifiée
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+

@@ -41,9 +41,10 @@ if JOBS_PATH not in sys.path:
 # Import dynamique pour éviter les erreurs si le dossier n'est pas encore monté
 try:
     from ingest.collect_ohlcv import run_ingestion
+    from transform.load_ohlcv import run_loading
     _JOB_AVAILABLE = True
 except ImportError as exc:
-    logger.warning("collect_ohlcv job non disponible: %s", exc)
+    logger.warning("jobs non disponibles (collect_ohlcv ou load_ohlcv): %s", exc)
     _JOB_AVAILABLE = False
 
 
@@ -72,6 +73,26 @@ def _make_collect_callable(symbol: str, interval: str, limit: int):
     return collect
 
 
+def _make_load_callable(symbol: str, interval: str):
+    """Retourne un callable pour PythonOperator qui charge les données depuis MinIO vers PostgreSQL."""
+    def load(ti):
+        if not _JOB_AVAILABLE:
+            raise RuntimeError(
+                "Le job load_ohlcv n'est pas disponible. "
+                f"Vérifier que {JOBS_PATH}/transform/load_ohlcv.py est monté."
+            )
+        # Récupérer la clé d'objet MinIO retournée par la tâche collect
+        object_key = ti.xcom_pull(task_ids=f"collect_{symbol}_{interval}")
+        if not object_key:
+            raise ValueError(f"Aucune clé d'objet MinIO trouvée pour la tâche collect_{symbol}_{interval}")
+        
+        logger.info("Démarrage du chargement PostgreSQL pour symbol=%s, object_key=%s", symbol, object_key)
+        run_loading(object_key=object_key)
+        logger.info("Chargement complet pour symbol=%s, object_key=%s", symbol, object_key)
+    load.__name__ = f"load_{symbol}_{interval}"
+    return load
+
+
 # ---------------------------------------------------------------------------
 # Définition du DAG
 # ---------------------------------------------------------------------------
@@ -91,25 +112,26 @@ with DAG(
     dag_id="ingest_ohlcv_binance_to_minio",
     default_args=default_args,
     description=(
-        "Collecte les klines OHLCV depuis Binance (API publique) "
-        "et les stocke dans MinIO (raw/ohlcv/<SYMBOL>/<interval>/<date>.parquet)."
+        "Collecte les klines OHLCV depuis Binance (API publique), "
+        "les stocke dans MinIO et les charge dans PostgreSQL."
     ),
     schedule_interval="@hourly",
     catchup=False,
     max_active_runs=1,         # évite les runs parallèles qui écraseraient le même fichier
-    tags=["ingestion", "binance", "minio", "raw"],
+    tags=["ingestion", "binance", "minio", "raw", "postgres"],
 ) as dag:
 
-    # Créer une tâche de collecte par symbole (exécution parallèle)
-    collect_tasks = []
+    # Créer les tâches de collecte et de chargement pour chaque symbole
     for symbol in SYMBOLS:
-        task = PythonOperator(
+        collect_task = PythonOperator(
             task_id=f"collect_{symbol}_{INTERVAL}",
             python_callable=_make_collect_callable(symbol, INTERVAL, LIMIT),
         )
-        collect_tasks.append(task)
+        
+        load_task = PythonOperator(
+            task_id=f"load_{symbol}_{INTERVAL}",
+            python_callable=_make_load_callable(symbol, INTERVAL),
+        )
+        
+        collect_task >> load_task
 
-    # Les tâches de collecte sont indépendantes → exécution parallèle par défaut
-    # Pour forcer la séquentialité (éviter le rate-limiting Binance) :
-    # for i in range(len(collect_tasks) - 1):
-    #     collect_tasks[i] >> collect_tasks[i + 1]
