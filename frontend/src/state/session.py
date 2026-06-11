@@ -21,6 +21,8 @@ USER_DATA_KEY = "user_data"
 AUTHENTICATED_KEY = "authenticated"
 USER_SYNCED_AT_KEY = "user_synced_at"
 USER_SYNCED_TOKEN_KEY = "user_synced_token"
+BINANCE_CONFIGURED_KEY = "binance_configured"
+BINANCE_SYNCED_KEY = "binance_synced"
 
 
 def get_store() -> MockStore:
@@ -105,9 +107,29 @@ def clear_auth_session(store: MockStore | None = None) -> None:
     st.session_state[REFRESH_TOKEN_KEY] = None
     st.session_state[USER_DATA_KEY] = None
     st.session_state[AUTHENTICATED_KEY] = False
+    st.session_state[BINANCE_CONFIGURED_KEY] = False
+    st.session_state[BINANCE_SYNCED_KEY] = False
     _clear_user_sync_metadata()
     active_store = store or get_store()
     active_store.current_user_email = None
+
+
+def get_binance_configured() -> bool:
+    return bool(st.session_state.get(BINANCE_CONFIGURED_KEY, False))
+
+
+def set_binance_configured(configured: bool, store: MockStore | None = None) -> None:
+    st.session_state[BINANCE_CONFIGURED_KEY] = configured
+    st.session_state[BINANCE_SYNCED_KEY] = True
+    active_store = store or get_store()
+    if active_store.current_user_email:
+        user = active_store.users.get(active_store.current_user_email)
+        if user:
+            user.binance_configured = configured
+
+
+def is_binance_synced() -> bool:
+    return bool(st.session_state.get(BINANCE_SYNCED_KEY, False))
 
 
 def has_recent_current_user_sync(access_token: str, *, max_age_seconds: int) -> bool:

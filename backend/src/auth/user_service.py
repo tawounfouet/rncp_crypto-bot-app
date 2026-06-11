@@ -95,7 +95,12 @@ class UserService:
     def get_user_by_id(self, user_id: str) -> User | None:
         """Get user by ID."""
         with get_db_session() as session:
-            return session.query(User).filter(User.id == user_id).first()
+            user = session.query(User).filter(User.id == user_id).first()
+            if user is None:
+                return None
+            session.refresh(user)
+            session.expunge(user)
+            return user
 
     def get_user_by_username(self, username: str) -> User | None:
         """Get user by username."""
@@ -143,6 +148,8 @@ class UserService:
                 if hasattr(user, field):
                     setattr(user, field, value)
 
+            session.refresh(user)
+            session.expunge(user)
             return user
 
     def delete_user(self, user_id: str) -> bool:
@@ -155,15 +162,43 @@ class UserService:
             session.delete(user)
             return True
 
-    def get_users(self, skip: int = 0, limit: int = 100) -> list[User]:
-        """Get list of users with pagination."""
+    def get_users(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        search: str | None = None,
+        is_active: bool | None = None,
+        is_admin: bool | None = None,
+    ) -> list[User]:
+        """Get list of users with pagination and optional filters."""
         with get_db_session() as session:
-            return session.query(User).offset(skip).limit(limit).all()
+            query = session.query(User)
+            if search:
+                like = f"%{search}%"
+                query = query.filter((User.email.ilike(like)) | (User.username.ilike(like)))
+            if is_active is not None:
+                query = query.filter(User.is_active == is_active)
+            if is_admin is not None:
+                query = query.filter(User.is_admin == is_admin)
+            users = query.offset(skip).limit(limit).all()
+            for u in users:
+                session.refresh(u)
+                session.expunge(u)
+            return users
 
-    def get_user_settings(self, user_id: str) -> UserSettings | None:
-        """Get user settings."""
+    def get_user_settings(self, user_id: str) -> dict | None:
+        """Get user settings as a plain dict to avoid DetachedInstanceError."""
         with get_db_session() as session:
-            return session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if settings is None:
+                return None
+            has_binance = bool(settings.api_keys and "binance" in settings.api_keys)
+            return {
+                "theme": settings.theme,
+                "risk_profile": settings.risk_profile,
+                "notification_preferences": settings.notification_preferences,
+                "has_binance_credentials": has_binance,
+            }
 
     def export_user_data(self, user_id: str) -> dict:
         """Return the user's personal data for portability export."""
@@ -220,8 +255,8 @@ class UserService:
                 deleted_count += 1
             return deleted_count
 
-    def update_user_settings(self, user_id: str, settings_data: UserSettingsUpdate) -> UserSettings:
-        """Update user settings."""
+    def update_user_settings(self, user_id: str, settings_data: UserSettingsUpdate) -> dict:
+        """Update user settings and return a plain dict to avoid DetachedInstanceError."""
         with get_db_session() as session:
             # Verify user exists
             user = session.query(User).filter(User.id == user_id).first()
@@ -270,7 +305,14 @@ class UserService:
                 if hasattr(settings, field):
                     setattr(settings, field, value)
 
-            return settings
+            # Capture return values before session closes
+            has_binance = bool(settings.api_keys and "binance" in settings.api_keys)
+            return {
+                "theme": settings.theme,
+                "risk_profile": settings.risk_profile,
+                "notification_preferences": settings.notification_preferences,
+                "has_binance_credentials": has_binance,
+            }
 
     # Admin operations
     def activate_user(self, user_id: str) -> bool:

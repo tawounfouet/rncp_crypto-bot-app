@@ -20,8 +20,6 @@ x-airflow-common: &airflow-common
     - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
     - AIRFLOW__CORE__LOAD_EXAMPLES=false
     - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
-    - MONGODB_USER=${MONGODB_USER}
-    - MONGODB_PWD=${MONGODB_PWD}
     - POSTGRES_USER=${POSTGRES_USER:-postgres}
     - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
     # MinIO — requis par les jobs d'ingestion
@@ -33,7 +31,10 @@ x-airflow-common: &airflow-common
     - BINANCE_BASE_URL=https://api.binance.com
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
-    - ./orchestration/logs:/opt/airflow/logs
+    # Volume nommé (pas un bind-mount) : Docker gère l'ownership pour l'user
+    # airflow (UID 50000) -> évite le "Permission denied" sur un dossier hôte
+    # créé en root. Logs consultables via `docker compose logs` ou l'UI Airflow.
+    - airflow_logs:/opt/airflow/logs
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./jobs:/opt/airflow/jobs       # jobs batch importés par les DAGs
     - ./data:/app/data
@@ -44,46 +45,6 @@ x-airflow-common: &airflow-common
     - dev-network
 
 services:
-  # MongoDB
-  mongo:
-    image: ${MONGO_IMAGE}
-    container_name: mongo-nosql-db
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PWD}
-    ports:
-      - "27017:27017"
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - dev-network
-
-  # MongoDB Admin UI
-  mongo-express:
-    image: ${MONGO_EXPRESS_IMAGE}
-    container_name: mongo-admin-ui
-    restart: always
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_BASICAUTH_USERNAME: ${MONGODB_USER_ADMIN}
-      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGODB_PWD_ADMIN}
-      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USER}
-      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PWD}
-      ME_CONFIG_MONGODB_URL: "mongodb://${MONGODB_USER}:${MONGODB_PWD}@mongo:27017/admin?authSource=admin"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    networks:
-      - dev-network
-
   # PostgreSQL
   postgres:
     image: ${POSTGRES_IMAGE}
@@ -99,7 +60,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      # Vérifie aussi que les bases créées par init-user-db.sh existent : pg_isready
+      # seul passe via le socket DÈS la phase d'init (avant CREATE DATABASE airflow),
+      # ce qui faisait démarrer airflow-init trop tôt -> "database airflow does not exist".
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -q && psql -U ${POSTGRES_USER:-postgres} -d airflow -c 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -180,10 +144,6 @@ services:
       - ./backend/src:/app/src
       - ./data:/app/data
     environment:
-      - MONGODB_USER=${MONGODB_USER}
-      - MONGODB_PWD=${MONGODB_PWD}
-      - MONGODB_HOST=mongo
-      - MONGODB_PORT=27017
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
       - POSTGRES_HOST=postgres
@@ -196,10 +156,9 @@ services:
       - MINIO_BUCKET=crypto-bot-data
       - ENVIRONMENT=development
       - DEBUG=true
+      - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
     depends_on:
       postgres:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -266,6 +225,7 @@ services:
       - /bin/bash
       - -c
       - |
+        set -e   # échec bruyant : si `airflow db init` plante, ne pas sortir en exit 0
         airflow db init
         airflow connections delete postgres_default || true
         airflow connections add 'postgres_default' \
@@ -283,10 +243,59 @@ services:
           --email admin@cryptobot.local \
           --password '${AIRFLOW_ADMIN_PASSWORD:-admin}' || true
 
+  # Service de prédiction ML (FastAPI)
+  crypto-bot-ml-api:
+    build:
+      context: ./models
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: crypto-bot-ml-api
+    restart: always
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./data:/app/data
+      - ./models/artifacts:/app/artifacts
+      - ./models/logs:/app/logs
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - BINANCE_API_KEY=${BINANCE_API_KEY}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
+      - MLFLOW_TRACKING_URI=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - dev-network
+
+  # Interface utilisateur MLflow
+  mlflow-ui:
+    build:
+      context: ./models
+      dockerfile: Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: mlflow-ui
+    restart: always
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dev-network
+
 volumes:
-  mongo_data:
   postgres_data:
   minio_data:
+  airflow_logs:
 
 networks:
   dev-network:

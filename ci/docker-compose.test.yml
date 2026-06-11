@@ -1,7 +1,7 @@
 # Docker Compose pour les tests d'integration en CI
 # ==================================================
-# Utilise l'image backend buildee (${IMAGE_TAG}) avec de vrais services
-# PostgreSQL et MongoDB pour tester les migrations et connexions.
+# Utilise l'image backend buildee (${IMAGE_TAG}) avec un vrai service
+# PostgreSQL pour tester les migrations et connexions.
 #
 # Usage CI :
 #   IMAGE_TAG="$IMAGE" docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
@@ -23,20 +23,6 @@ services:
     networks:
       - test-network
 
-  mongo:
-    image: ${MONGO_IMAGE}
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: test
-      MONGO_INITDB_ROOT_PASSWORD: test
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongodb://test:test@localhost:27017/admin --quiet
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    networks:
-      - test-network
-
   test-runner:
     image: ${IMAGE_TAG}
     environment:
@@ -45,10 +31,6 @@ services:
       - POSTGRES_USER=test
       - POSTGRES_PWD=test
       - POSTGRES_DB=crypto_bot_test
-      - MONGODB_HOST=mongo
-      - MONGODB_PORT=27017
-      - MONGODB_USER=test
-      - MONGODB_PWD=test
       - MINIO_ENDPOINT=localhost:9000
       - MINIO_ACCESS_KEY=test
       - MINIO_SECRET_KEY=test
@@ -58,8 +40,6 @@ services:
       - DEBUG=true
     depends_on:
       postgres:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
     volumes:
       - ./test-results:/tmp/test-results

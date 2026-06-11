@@ -1,71 +1,147 @@
-"""Service de controle des bots Spot."""
+"""Service de controle des bots Spot - connecte au backend reel (strategies/deployments)."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
 from mocks.db import MockStore
-from mocks.scenarios import MockScenario
 from schemas.bot import BotActionResult, BotInfo
 from schemas.common import BotRuntimeStatus
-from services.base import ServiceError, raise_if_forced_error, simulate_latency
-from utils.constants import ACTION_PAUSE, ACTION_START, ACTION_STOP
+from services.api_client import BackendApiClient
+from services.base import ServiceError
+from state.session import get_access_token
+from utils.constants import ACTION_START, ACTION_STOP
+
+_DEPLOY_STATUS_MAP: dict[str, BotRuntimeStatus] = {
+    "active": BotRuntimeStatus.RUNNING,
+    "paused": BotRuntimeStatus.PAUSED,
+    "stopped": BotRuntimeStatus.STOPPED,
+    "error": BotRuntimeStatus.ERROR,
+}
+
+
+def _parse_dt(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    return datetime.now(UTC)
 
 
 class BotControlService:
-    def __init__(self, store: MockStore) -> None:
+    """
+    Mappe les strategies (+ leurs deployments actifs) aux BotInfo du frontend.
+    Un deployment actif = bot en cours d'execution.
+    bot.id = strategy.id (utilise aussi dans BotConfigService).
+    """
+
+    def __init__(self, store: MockStore, client: BackendApiClient | None = None) -> None:
         self.store = store
+        self.client = client or BackendApiClient()
+        # deployment_id par strategy_id (pour l'action STOP)
+        self._active_deployments: dict[str, str] = {}
+
+    def _token(self) -> str:
+        token = get_access_token()
+        if not token:
+            raise ServiceError("Non authentifie.")
+        return token
 
     def list_bots(self) -> list[BotInfo]:
-        simulate_latency(self.store, min_ms=100, max_ms=300)
-        raise_if_forced_error(self.store, "bots.list", "Erreur mock de listing bots.")
-        bots = list(self.store.bots.values())
-        if self.store.scenario == MockScenario.BOT_ERROR and bots:
-            bots[0].status = BotRuntimeStatus.ERROR
-            bots[0].last_action_result = "Perte de heartbeat detectee"
-        if self.store.scenario == MockScenario.BOT_RUNNING:
-            for bot in bots:
-                if bot.status not in {BotRuntimeStatus.ERROR, BotRuntimeStatus.RUNNING}:
-                    bot.status = BotRuntimeStatus.RUNNING
-                    bot.last_action_result = "Execution continue"
-        return sorted(bots, key=lambda bot: bot.name)
+        token = self._token()
+
+        # Recupere la liste des strategies
+        strat_resp = self.client.list_strategies(token)
+        if not strat_resp.success:
+            raise ServiceError("Impossible de charger les strategies.")
+
+        raw_strategies = []
+        data = strat_resp.data
+        if isinstance(data, dict):
+            raw_strategies = data.get("data") or data.get("strategies") or []
+        elif isinstance(data, list):
+            raw_strategies = data
+
+        # Recupere les deployments actifs
+        deploy_resp = self.client.list_deployments(token, active_only=True)
+        active_by_strategy: dict[str, dict] = {}
+        if deploy_resp.success:
+            raw_deploys = []
+            dd = deploy_resp.data
+            if isinstance(dd, dict):
+                raw_deploys = dd.get("data") or dd.get("deployments") or []
+            elif isinstance(dd, list):
+                raw_deploys = dd
+            for d in raw_deploys:
+                sid = d.get("strategy_id", "")
+                if sid and d.get("status") == "active":
+                    active_by_strategy[sid] = d
+
+        self._active_deployments = {sid: d["id"] for sid, d in active_by_strategy.items()}
+
+        bots: list[BotInfo] = []
+        now = datetime.now(UTC)
+        for s in raw_strategies:
+            sid = s.get("id", "")
+            deployment = active_by_strategy.get(sid)
+            if deployment:
+                status = _DEPLOY_STATUS_MAP.get(
+                    deployment.get("status", "stopped"), BotRuntimeStatus.STOPPED
+                )
+                heartbeat = _parse_dt(deployment.get("updated_at"))
+            else:
+                # Cherche le dernier deployment (pas forcement actif)
+                status = BotRuntimeStatus.STOPPED
+                heartbeat = _parse_dt(s.get("updated_at"))
+
+            bots.append(
+                BotInfo(
+                    id=sid,
+                    name=s.get("name") or sid[:12],
+                    strategy=s.get("strategy_type") or "custom",
+                    mode_live=True,
+                    status=status,
+                    heartbeat_at=heartbeat or now,
+                    last_action_result="",
+                    last_action_at=heartbeat or now,
+                )
+            )
+
+        return sorted(bots, key=lambda b: b.name)
 
     def apply_action(self, bot_id: str, action: str) -> BotActionResult:
-        simulate_latency(self.store, min_ms=180, max_ms=400)
-        raise_if_forced_error(self.store, "bots.action", "Action bot refusee (mock).")
-        if not self.store.current_user_email:
-            raise ServiceError("Utilisateur non connecte.")
-        bot = self.store.bots.get(bot_id)
-        if not bot:
-            return BotActionResult(success=False, message="Bot introuvable.")
+        token = self._token()
 
-        now = datetime.now(UTC)
+        if action == ACTION_STOP:
+            deployment_id = self._active_deployments.get(bot_id)
+            if not deployment_id:
+                return BotActionResult(success=False, message="Aucun deployment actif a arreter.")
+            response = self.client.stop_deployment(token, deployment_id)
+            if not response.success:
+                msg = (
+                    response.error
+                    or (response.data.get("detail") if isinstance(response.data, dict) else None)
+                    or f"Erreur backend ({response.status_code})."
+                )
+                return BotActionResult(success=False, message=msg)
+            self._active_deployments.pop(bot_id, None)
+            return BotActionResult(success=True, message="Deployment arrete.")
+
         if action == ACTION_START:
-            if bot.status == BotRuntimeStatus.RUNNING:
-                return BotActionResult(
-                    success=False, message="Le bot est deja en execution.", bot=bot
-                )
-            bot.status = BotRuntimeStatus.RUNNING
-            bot.last_action_result = "Demarrage mock confirme"
-        elif action == ACTION_PAUSE:
-            if bot.status not in {BotRuntimeStatus.RUNNING, BotRuntimeStatus.STARTING}:
-                return BotActionResult(
-                    success=False, message="Le bot ne peut pas etre mis en pause.", bot=bot
-                )
-            bot.status = BotRuntimeStatus.PAUSED
-            bot.last_action_result = "Pause mock validee"
-        elif action == ACTION_STOP:
-            if bot.status == BotRuntimeStatus.STOPPED:
-                return BotActionResult(success=False, message="Le bot est deja arrete.", bot=bot)
-            bot.status = BotRuntimeStatus.STOPPED
-            bot.last_action_result = "Arret mock securise"
-        else:
-            return BotActionResult(success=False, message="Action non supportee.", bot=bot)
+            return BotActionResult(
+                success=False,
+                message=(
+                    "Le demarrage d'un deployment necessite de renseigner "
+                    "exchange, symbole, timeframe et capital. "
+                    "Utilisez l'API ou creez un deployment depuis le backend."
+                ),
+            )
 
-        bot.last_action_at = now
-        bot.heartbeat_at = now
+        # ACTION_PAUSE - pas de endpoint backend dedie
         return BotActionResult(
-            success=True,
-            message=f"Action `{action}` appliquee sur {bot.name}.",
-            bot=bot,
+            success=False,
+            message="La mise en pause n'est pas supportee par l'API backend.",
         )

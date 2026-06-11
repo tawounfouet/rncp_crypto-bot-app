@@ -1,0 +1,11 @@
+# Dépendances pour les jobs d'ingestion et de transformation
+# ========================================================
+
+requests==$REQUESTS_VERSION
+pandas==$PANDAS_VERSION
+pyarrow==$PYARROW_VERSION
+minio==$MINIO_VERSION
+python-binance==$BINANCE_VERSION
+# <2.0 imposé par Airflow 2.8.1 (les jobs tournent dans son venv) — cf. versions.env
+sqlalchemy$AIRFLOW_SQLALCHEMY_SPEC
+psycopg2-binary==$PSYCOPG2_VERSION

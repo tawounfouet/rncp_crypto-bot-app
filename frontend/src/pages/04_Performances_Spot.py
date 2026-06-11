@@ -15,7 +15,6 @@ from components.headers import render_page_header, render_section_title
 from components.prerequisites import render_binance_prerequisite_state
 from components.tables import render_dataframe
 from layouts.page_shell import setup_page
-from mocks.scenarios import MockScenario
 from prerequisites.binance import evaluate_binance_prerequisite
 from services.base import ServiceError
 from services.bot_control_service import BotControlService
@@ -28,21 +27,11 @@ from utils.streamlit_compat import button as compat_button
 from utils.streamlit_compat import plotly_chart as compat_plotly_chart
 
 
-def _scenario_override_from_ui(label: str) -> MockScenario | None:
-    if label == "Scenario global":
-        return None
-    if label == "Performances fortes":
-        return MockScenario.PERFORMANCE_STRONG
-    if label == "Performances degradees":
-        return MockScenario.PERFORMANCE_WEAK
-    return MockScenario.USER_NORMAL
-
-
 def main() -> None:
     store, user = setup_page(title="Performances Spot", icon="📈", page_key="performance")
     render_page_header(
         "Performances Spot",
-        "Analyse detaillee des resultats de trading Spot avec scenarios mockes.",
+        "Analyse detaillee des resultats de trading Spot.",
     )
 
     gate = evaluate_binance_prerequisite("performance", user)
@@ -63,7 +52,7 @@ def main() -> None:
         show_feedback("warning", "Aucun bot disponible.")
         return
 
-    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([1.4, 1, 1.1, 0.7])
+    filter_col1, filter_col2, filter_col3 = st.columns([1.4, 1, 0.7])
     with filter_col1:
         bot_id = st.selectbox(
             "Bot selectionne",
@@ -73,23 +62,16 @@ def main() -> None:
     with filter_col2:
         period_days = st.radio("Periode", options=[7, 30], horizontal=True, index=1)
     with filter_col3:
-        scenario_label = st.selectbox(
-            "Scenario performance",
-            options=["Scenario global", "Performances fortes", "Performances degradees"],
-        )
-    with filter_col4:
         st.write("")
         st.write("")
         if compat_button("Refresh", width="stretch"):
             st.rerun()
 
-    scenario_override = _scenario_override_from_ui(scenario_label)
     try:
         with st.spinner("Chargement des performances..."):
             snapshot = perf_service.get_snapshot(
                 bot_id=bot_id,
                 period_days=period_days,
-                scenario_override=scenario_override,
             )
     except ServiceError as exc:
         show_feedback("error", str(exc))

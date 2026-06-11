@@ -7,7 +7,7 @@ import streamlit as st
 from components.navigation import render_private_sidebar, render_public_sidebar
 from navigation.rules import can_access
 from services.auth_service import AuthService
-from state.session import get_store, get_theme_mode
+from state.session import get_store, get_theme_mode, is_binance_synced
 from theme.styles import apply_global_styles
 
 
@@ -33,6 +33,12 @@ def setup_page(
                 st.caption("Aller a la page Connexion")
             st.stop()
         return store, user
+
+    # Synchronise le statut Binance une seule fois par session
+    if not is_binance_synced():
+        from services.account_service import AccountService
+
+        AccountService(store).get_binance_status()
 
     do_logout = render_private_sidebar(store, user)
     if do_logout:

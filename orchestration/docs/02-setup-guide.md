@@ -93,9 +93,7 @@ USER airflow
 RUN pip install --no-cache-dir \
     apache-airflow==2.8.1 \
     apache-airflow-providers-postgres \
-    apache-airflow-providers-mongo \
     apache-airflow-providers-amazon \
-    pymongo==4.16.0 \
     pandas==2.3.3 \
     numpy==2.4.3 \
     minio==7.2.20 \
@@ -219,7 +217,6 @@ postgres ──(healthy)──► airflow-init ──(completed)──► airflo
 |-----------|-----|--------------|
 | Airflow UI | http://localhost:8080 | admin / admin |
 | Adminer (PG) | http://localhost:8085 | voir `.env` |
-| Mongo Express | http://localhost:8081 | voir `.env` |
 
 ---
 

@@ -17,9 +17,6 @@ python-multipart==0.0.27
 sqlalchemy==2.0.48
 psycopg2-binary==2.9.12
 
-# Database - MongoDB
-pymongo==4.16.0
-
 # Object Storage - MinIO
 minio==7.2.20
 

@@ -2,7 +2,7 @@
 
 ## Vue d'ensemble
 
-Apache Airflow est intégré comme couche d'orchestration dans le projet `_dst-crypto-bot_v2`. Il coordonne les pipelines de données entre le backend FastAPI, PostgreSQL, MongoDB, et MinIO.
+Apache Airflow est intégré comme couche d'orchestration dans le projet `_dst-crypto-bot_v2`. Il coordonne les pipelines de données entre le backend FastAPI, PostgreSQL, et MinIO.
 
 ---
 
@@ -30,10 +30,10 @@ Apache Airflow est intégré comme couche d'orchestration dans le projet `_dst-c
 │                   │ SQL Alchemy        └──────────────────────────┘  │
 │                   │ (airflow db)                                      │
 │                   ▼                                                   │
-│  ┌──────────────────┐   ┌───────────────┐   ┌───────────────────┐   │
-│  │    MongoDB       │   │     MinIO     │   │  Mongo Express   │    │
-│  │    :27017        │   │   :9000/:9001 │   │     :8081        │    │
-│  └──────────────────┘   └───────────────┘   └───────────────────┘   │
+│                         ┌───────────────┐                           │
+│                         │     MinIO     │                           │
+│                         │   :9000/:9001 │                           │
+│                         └───────────────┘                           │
 │                                                                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -115,9 +115,7 @@ apache/airflow:2.8.1-python3.11  (image de base officielle)
          └── providers & libs pip :
                ├── apache-airflow==2.8.1          (version épinglée !)
                ├── apache-airflow-providers-postgres
-               ├── apache-airflow-providers-mongo
                ├── apache-airflow-providers-amazon
-               ├── pymongo==4.16.0
                ├── pandas==2.3.3
                ├── numpy==2.4.3
                ├── minio==7.2.20

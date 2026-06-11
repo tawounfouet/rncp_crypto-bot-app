@@ -80,7 +80,14 @@ def page_requires_binance(page_key: str) -> bool:
 
 
 def is_binance_configured(user: MockUser | None) -> bool:
-    return bool(user and user.binance_configured)
+    if user is None:
+        return False
+    from state.session import get_binance_configured, is_binance_synced
+
+    # Prefere la valeur en session (synchronisee avec le backend) si disponible
+    if is_binance_synced():
+        return get_binance_configured()
+    return bool(user.binance_configured)
 
 
 def evaluate_binance_prerequisite(

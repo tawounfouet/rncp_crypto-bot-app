@@ -246,68 +246,6 @@ class ClientMinIO:
             logger.error(f"Erreur suppression objet: {e} (bucket={bucket_name}, object={object_name})")
             return False
 
-    def backup_mongodb_collection(
-        self,
-        collection_name: str,
-        db_name: str = "crypto_market_data",
-        bucket: str | None = None,
-    ) -> bool:
-        """
-        Sauvegarde une collection MongoDB dans MinIO
-
-        Args:
-            collection_name (str): Nom de la collection
-            db_name (str): Nom de la base de données
-            bucket (str, optional): Nom du bucket
-
-        Returns:
-            bool: True si réussi, False sinon
-        """
-        import json
-
-        from src.tools.client_mongodb import ClientMongoDB
-
-        mongo_client = None
-        try:
-            # Connexion à MongoDB
-            mongo_client = ClientMongoDB()
-            collection = mongo_client.get_collection(collection_name, db_name)
-
-            # Récupérer les données
-            data = list(collection.find())
-
-            # Convertir ObjectId en string pour sérialisation JSON
-            for doc in data:
-                if "_id" in doc:
-                    doc["_id"] = str(doc["_id"])
-
-                # Convertir les dates en ISO format
-                for k, v in doc.items():
-                    if isinstance(v, datetime):
-                        doc[k] = v.isoformat()
-
-            # Créer un buffer et y écrire les données JSON
-            buffer = BytesIO()
-            buffer.write(json.dumps(data, default=str).encode("utf-8"))
-            buffer.seek(0)
-
-            # Chemin MinIO
-            timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
-            object_name = f"backups/mongodb/{db_name}/{collection_name}/{timestamp}.json"
-            bucket_name = bucket or self.default_bucket
-
-            # Upload sur MinIO
-            size = buffer.getbuffer().nbytes
-            self.client.put_object(bucket_name, object_name, buffer, size, content_type="application/json")
-            logger.info(f"Collection MongoDB sauvegardée: {bucket_name}/{object_name} ({len(data)} documents)")
-            return True
-        except Exception as e:
-            logger.error(f"Erreur sauvegarde MongoDB: {e} (collection={collection_name}, db={db_name})")
-            return False
-        finally:
-            if mongo_client:
-                mongo_client.close()
-
 
 # Test du client
 if __name__ == "__main__":

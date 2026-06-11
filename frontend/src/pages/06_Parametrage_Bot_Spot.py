@@ -22,7 +22,7 @@ def main() -> None:
     store, user = setup_page(title="Parametrage Bot Spot", icon="⚙️", page_key="bot_config")
     render_page_header(
         "Parametrage Bot Spot",
-        "Edition versionnee des parametres de trading mockes avec validations explicites.",
+        "Edition versionnee des parametres de trading avec validations explicites.",
     )
 
     gate = evaluate_binance_prerequisite("bot_config", user)

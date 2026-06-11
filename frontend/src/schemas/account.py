@@ -16,7 +16,6 @@ class AccountProfile(BaseModel):
 class BinanceCredentialInput(BaseModel):
     api_key: str
     api_secret: str
-    password_confirmation: str
 
 
 class BinanceCredentialStatus(BaseModel):

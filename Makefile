@@ -21,36 +21,69 @@ help: ## Afficher cette aide
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
+generate-requirements: ## Generer les fichiers requirements.txt a partir de versions.env et des templates
+	python3 scripts/generate-requirements.py
+
 # ===========================================================================
 # Dev
 # ===========================================================================
 
-dev-up: ## Demarrer l'environnement dev
-	docker compose up -d
+dev-up: generate-requirements ## Demarrer l'environnement dev (retry auto + backoff si le pull echoue)
+	@n=5; d=5; for i in $$(seq 1 $$n); do \
+		echo ">>> dev-up : tentative $$i/$$n" ; \
+		docker compose up -d && exit 0 ; \
+		if [ $$i -lt $$n ]; then \
+			echo ">>> echec (credsStore / Docker Desktop ?), nouvel essai dans $${d}s..." ; \
+			sleep $$d ; d=$$((d + 5)) ; \
+		fi ; \
+	done ; \
+	echo ">>> dev-up : echec apres $$n tentatives. Voir docs/04-troubleshooting.md (Probleme 6)." ; exit 1
 
 dev-down: ## Arreter l'environnement dev
 	docker compose down
 
-dev-config: ## Valider la configuration dev
+dev-down-v: ## Arreter dev ET supprimer tous les volumes du projet (reset complet "from 0")
+	docker compose down -v --remove-orphans
+
+dev-config: generate-requirements ## Valider la configuration dev
 	docker compose config
 
 dev-logs: ## Suivre les logs dev
 	docker compose logs -f
 
-dev-build: ## Rebuild les images dev (sans cache)
+dev-build: generate-requirements ## (Re)build les images dev (cache activé = rapide)
+	docker compose build
+
+dev-rebuild: generate-requirements ## Rebuild COMPLET sans cache (lent, en cas de pépin)
 	docker compose build --no-cache
+
+# ===========================================================================
+# ML / MLOps
+# ===========================================================================
+
+ml-up: ## Demarrer uniquement la couche ML (API + MLflow UI)
+	docker compose up -d crypto-bot-ml-api mlflow-ui
+
+ml-down: ## Arreter la couche ML
+	docker compose stop crypto-bot-ml-api mlflow-ui
+
+ml-logs: ## Suivre les logs de la couche ML
+	docker compose logs -f crypto-bot-ml-api mlflow-ui
+
+ml-train-rf: ## Lancer un entrainement Random Forest
+	docker compose exec crypto-bot-ml-api python -m src.main train-rf
 
 # ===========================================================================
 # Staging (usage local ou VM)
 # ===========================================================================
 
-staging-up: ## Demarrer staging
+staging-up: generate-requirements ## Demarrer staging
 	docker compose -f docker-compose.staging.yml up -d
 
 staging-down: ## Arreter staging
 	docker compose -f docker-compose.staging.yml down
 
-staging-config: ## Valider la configuration staging
+staging-config: generate-requirements ## Valider la configuration staging
 	docker compose -f docker-compose.staging.yml config
 
 staging-logs: ## Suivre les logs staging
@@ -60,13 +93,13 @@ staging-logs: ## Suivre les logs staging
 # Production (usage local ou VM)
 # ===========================================================================
 
-prod-up: ## Demarrer la production
+prod-up: generate-requirements ## Demarrer la production
 	docker compose -f docker-compose.prod.yml up -d
 
 prod-down: ## Arreter la production
 	docker compose -f docker-compose.prod.yml down
 
-prod-config: ## Valider la configuration prod
+prod-config: generate-requirements ## Valider la configuration prod
 	docker compose -f docker-compose.prod.yml config
 
 prod-logs: ## Suivre les logs prod
@@ -77,6 +110,9 @@ prod-logs: ## Suivre les logs prod
 # ===========================================================================
 
 test: test-backend test-frontend ## Lancer tous les tests (backend + frontend)
+
+verify: ## Verifier que tous les services installes sont presents et healthy (backend/frontend/airflow/minio/postgres/ml)
+	./scripts/verify.sh $(ARGS)
 
 test-backend: ## Lancer les tests unitaires backend
 	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
@@ -105,11 +141,11 @@ staging-init: ## Creer les buckets MinIO (staging)
 prod-init: ## Creer les buckets MinIO (prod)
 	docker compose -f docker-compose.prod.yml --profile tools up createbuckets
 
-prod-debug-up: ## Activer Adminer + Mongo Express en prod
-	docker compose -f docker-compose.prod.yml --profile debug up -d adminer mongo-express
+prod-debug-up: ## Activer Adminer en prod
+	docker compose -f docker-compose.prod.yml --profile debug up -d adminer
 
-prod-debug-down: ## Desactiver Adminer + Mongo Express en prod
-	docker compose -f docker-compose.prod.yml --profile debug stop adminer mongo-express
+prod-debug-down: ## Desactiver Adminer en prod
+	docker compose -f docker-compose.prod.yml --profile debug stop adminer
 
 check-infra: ## Valider la coherence versions.env / Dockerfiles / docker-compose
 	bash scripts/check-infra.sh

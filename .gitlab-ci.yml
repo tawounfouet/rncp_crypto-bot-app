@@ -195,7 +195,7 @@ lint:python:
 # ============================================
 # STAGE: TEST — Tests d'integration (image buildee)
 # ============================================
-# Teste l'image Docker buildee avec de vrais services (Postgres, MongoDB).
+# Teste l'image Docker buildee avec un vrai service Postgres.
 # Garantit qu'on deploie exactement ce qui a ete teste.
 
 test:integration:
