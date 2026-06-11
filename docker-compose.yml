@@ -20,8 +20,6 @@ x-airflow-common: &airflow-common
     - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
     - AIRFLOW__CORE__LOAD_EXAMPLES=false
     - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
-    - MONGODB_USER=${MONGODB_USER}
-    - MONGODB_PWD=${MONGODB_PWD}
     - POSTGRES_USER=${POSTGRES_USER:-postgres}
     - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
     # MinIO — requis par les jobs d'ingestion
@@ -47,46 +45,6 @@ x-airflow-common: &airflow-common
     - dev-network
 
 services:
-  # MongoDB
-  mongo:
-    image: ${MONGO_IMAGE}
-    container_name: mongo-nosql-db
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PWD}
-    ports:
-      - "27017:27017"
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - dev-network
-
-  # MongoDB Admin UI
-  mongo-express:
-    image: ${MONGO_EXPRESS_IMAGE}
-    container_name: mongo-admin-ui
-    restart: always
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_BASICAUTH_USERNAME: ${MONGODB_USER_ADMIN}
-      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGODB_PWD_ADMIN}
-      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USER}
-      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PWD}
-      ME_CONFIG_MONGODB_URL: "mongodb://${MONGODB_USER}:${MONGODB_PWD}@mongo:27017/admin?authSource=admin"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    networks:
-      - dev-network
-
   # PostgreSQL
   postgres:
     image: ${POSTGRES_IMAGE}
@@ -186,10 +144,6 @@ services:
       - ./backend/src:/app/src
       - ./data:/app/data
     environment:
-      - MONGODB_USER=${MONGODB_USER}
-      - MONGODB_PWD=${MONGODB_PWD}
-      - MONGODB_HOST=mongo
-      - MONGODB_PORT=27017
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
       - POSTGRES_HOST=postgres
@@ -204,8 +158,6 @@ services:
       - DEBUG=true
     depends_on:
       postgres:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -340,7 +292,6 @@ services:
       - dev-network
 
 volumes:
-  mongo_data:
   postgres_data:
   minio_data:
   airflow_logs:

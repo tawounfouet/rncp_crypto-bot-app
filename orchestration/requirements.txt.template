@@ -7,9 +7,7 @@
 apache-airflow==$AIRFLOW_VERSION
 
 apache-airflow-providers-postgres
-apache-airflow-providers-mongo
 apache-airflow-providers-amazon
-pymongo==$PYMONGO_VERSION
 
 # Inclure les dépendances des jobs (qui s'exécutent dans les DAGs)
 -r /opt/airflow/jobs/requirements.txt

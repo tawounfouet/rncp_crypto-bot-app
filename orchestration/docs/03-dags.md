@@ -98,7 +98,7 @@ Les connexions sont créées automatiquement par `airflow-init` au 1er démarrag
 |---------------|------|-------|
 | `postgres_default` | PostgreSQL | `postgres:5432` → `crypto_bot_db` |
 
-Pour ajouter une connexion MongoDB ou MinIO manuellement via l'UI :
+Pour ajouter une connexion MinIO manuellement via l'UI :
 > **Admin → Connections → + Add Connection**
 
 ---
@@ -150,7 +150,7 @@ orchestration/dags/
 ├── example_cryptobot.py            ✅ Healthcheck (existant)
 │
 ├── collect_prices.py               📋 À créer
-│     └── Collecte OHLCV Binance → MongoDB
+│     └── Collecte OHLCV Binance → MinIO
 │
 ├── generate_signals.py             📋 À créer
 │     └── Calcul d'indicateurs techniques → PostgreSQL
@@ -167,7 +167,7 @@ orchestration/dags/
       ▼
 collect_prices  (toutes les heures)
       │
-      ▼  [MongoDB]
+      ▼  [MinIO]
       │
 generate_signals  (toutes les 2h)
       │

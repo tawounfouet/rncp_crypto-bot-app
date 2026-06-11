@@ -226,10 +226,6 @@ pytest src/tests/integration -v
 | `POSTGRES_USER` | Utilisateur PostgreSQL | - |
 | `POSTGRES_PWD` | Mot de passe PostgreSQL | - |
 | `POSTGRES_DB` | Nom de la base | crypto_bot_db |
-| `MONGODB_HOST` | Host MongoDB | localhost |
-| `MONGODB_PORT` | Port MongoDB | 27017 |
-| `MONGODB_USER` | Utilisateur MongoDB | - |
-| `MONGODB_PWD` | Mot de passe MongoDB | - |
 | `MINIO_ENDPOINT` | Endpoint MinIO | localhost:9000 |
 | `MINIO_ACCESS_KEY` | Cle d'acces MinIO | - |
 | `MINIO_SECRET_KEY` | Cle secrete MinIO | - |
@@ -245,7 +241,7 @@ Le backend fait partie du monorepo `Crypto-bot-app`. La CI est definie dans `.gi
 |-------|------|-------------|
 | lint | `lint:python`, `lint:dockerfile:backend`, `semgrep_sast` | Ruff, Hadolint, Semgrep |
 | build | `build:docker` | Build image Docker + push au registry |
-| test | `test:integration` | Tests avec vrais services (Postgres, MongoDB) |
+| test | `test:integration` | Tests avec vrais services (Postgres) |
 | deploy | `deploy:staging`, `deploy:production` | Deploy VM AWS + GitOps K8s |
 
 Voir `docs/SETUP.md` pour le detail du workflow et des commandes Makefile.

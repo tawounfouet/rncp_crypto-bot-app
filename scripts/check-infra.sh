@@ -36,8 +36,6 @@ echo ""
 echo "=== 1. Verification versions.env ==="
 
 REQUIRED_VARS=(
-    MONGO_IMAGE
-    MONGO_EXPRESS_IMAGE
     POSTGRES_IMAGE
     ADMINER_IMAGE
     MINIO_IMAGE
@@ -263,7 +261,7 @@ echo "=== 9. Verification des requirements.txt generes ==="
 if [ -f scripts/generate-requirements.py ]; then
     # Executer le generateur de requirements
     python3 scripts/generate-requirements.py > /dev/null 2>&1
-    
+
     # Verifier s'il y a un diff git sur les fichiers generes
     if git diff --exit-code -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt > /dev/null 2>&1; then
         pass "Fichiers requirements.txt synchronises avec les templates"
@@ -287,4 +285,3 @@ else
     echo -e "${GREEN}=== Toutes les verifications passent (9 checks) ===${NC}"
     exit 0
 fi
-
