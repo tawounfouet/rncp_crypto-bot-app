@@ -108,6 +108,7 @@ services:
       - MINIO_BUCKET=crypto-bot-data
       - ENVIRONMENT=staging
       - DEBUG=true
+      - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
     depends_on:
       postgres:
         condition: service_healthy

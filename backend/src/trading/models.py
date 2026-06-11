@@ -3,6 +3,8 @@ Trading domain models for the Crypto Trading Bot.
 Contains Order, OrderFill, and Transaction models with Binance API compatibility.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal
 

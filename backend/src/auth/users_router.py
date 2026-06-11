@@ -20,11 +20,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 async def get_current_user_profile(
     current_user: UserModel = Depends(get_current_user),
 ) -> UserResponse:
-    """
-    Get current user's profile information.
-
-    Returns the authenticated user's profile data.
-    """
+    """Get current user's profile information."""
     return current_user
 
 
@@ -32,16 +28,9 @@ async def get_current_user_profile(
 async def update_current_user_profile(
     user_update: UserUpdate, current_user: UserModel = Depends(get_current_user)
 ) -> UserResponse:
-    """
-    Update current user's profile information.
-
-    - **email**: New email address (must be unique)
-    - **username**: New username (must be unique)
-    - **first_name**: New first name
-    - **last_name**: New last name
-    """
+    """Update current user's profile information."""
     try:
-        updated_user = await user_service.update_user(current_user.id, user_update)
+        updated_user = user_service.update_user(current_user.id, user_update)
         return updated_user
 
     except HTTPException:
@@ -57,13 +46,9 @@ async def update_current_user_profile(
 async def delete_current_user_account(
     current_user: UserModel = Depends(get_current_user),
 ) -> dict:
-    """
-    Delete current user's account.
-
-    This action is irreversible and will remove all user data.
-    """
+    """Delete current user's account."""
     try:
-        success = await user_service.delete_user(current_user.id)
+        success = user_service.delete_user(current_user.id)
 
         if not success:
             raise HTTPException(
@@ -86,11 +71,9 @@ async def delete_current_user_account(
 async def get_user_settings(
     current_user: UserModel = Depends(get_current_user),
 ) -> dict:
-    """
-    Get current user's settings and preferences.
-    """
+    """Get current user's settings and preferences."""
     try:
-        settings = await user_service.get_user_settings(current_user.id)
+        settings = user_service.get_user_settings(current_user.id)
         return settings or {}
 
     except Exception as e:
@@ -104,9 +87,7 @@ async def get_user_settings(
 async def export_current_user_data(
     current_user: UserModel = Depends(get_current_user),
 ) -> dict:
-    """
-    Export current user's personal data for portability.
-    """
+    """Export current user's personal data for portability."""
     try:
         return user_service.export_user_data(current_user.id)
 
@@ -124,15 +105,9 @@ async def update_user_settings(
     settings_update: UserSettingsUpdate,
     current_user: UserModel = Depends(get_current_user),
 ) -> dict:
-    """
-    Update current user's settings and preferences.
-
-    - **theme**: UI theme preference
-    - **risk_profile**: Risk tolerance level
-    - **notification_preferences**: Notification settings
-    """
+    """Update current user's settings and preferences."""
     try:
-        updated_settings = await user_service.update_user_settings(current_user.id, settings_update)
+        updated_settings = user_service.update_user_settings(current_user.id, settings_update)
         return updated_settings
 
     except HTTPException:
@@ -154,13 +129,9 @@ async def list_users(
     is_admin: bool | None = Query(None, description="Filter by admin status"),
     current_admin: UserModel = Depends(get_current_admin_user),
 ) -> list[UserResponse]:
-    """
-    List all users (admin only).
-
-    Supports pagination, search, and filtering options.
-    """
+    """List all users (admin only)."""
     try:
-        users = await user_service.get_users(
+        users = user_service.get_users(
             skip=skip,
             limit=limit,
             search=search,
@@ -178,13 +149,9 @@ async def list_users(
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user_by_id(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> UserResponse:
-    """
-    Get user by ID (admin only).
-
-    - **user_id**: UUID of the user to retrieve
-    """
+    """Get user by ID (admin only)."""
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -206,23 +173,14 @@ async def update_user_by_id(
     user_update: UserUpdate,
     current_admin: UserModel = Depends(get_current_admin_user),
 ) -> UserResponse:
-    """
-    Update user by ID (admin only).
-
-    - **user_id**: UUID of the user to update
-    - **email**: New email address (must be unique)
-    - **username**: New username (must be unique)
-    - **first_name**: New first name
-    - **last_name**: New last name
-    - **is_active**: Enable/disable user account
-    """
+    """Update user by ID (admin only)."""
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
 
-        updated_user = await user_service.update_user(user_id, user_update)
+        updated_user = user_service.update_user(user_id, user_update)
         return updated_user
 
     except HTTPException:
@@ -236,13 +194,9 @@ async def update_user_by_id(
 
 @router.delete("/{user_id}")
 async def delete_user_by_id(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> dict:
-    """
-    Delete user by ID (admin only).
-
-    - **user_id**: UUID of the user to delete
-    """
+    """Delete user by ID (admin only)."""
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -254,7 +208,7 @@ async def delete_user_by_id(user_id: str, current_admin: UserModel = Depends(get
                 detail="Cannot delete your own account",
             )
 
-        success = await user_service.delete_user(user_id)
+        success = user_service.delete_user(user_id)
 
         if not success:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete user")
@@ -272,13 +226,9 @@ async def delete_user_by_id(user_id: str, current_admin: UserModel = Depends(get
 
 @router.post("/{user_id}/activate")
 async def activate_user(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> dict:
-    """
-    Activate user account (admin only).
-
-    - **user_id**: UUID of the user to activate
-    """
+    """Activate user account (admin only)."""
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -286,8 +236,7 @@ async def activate_user(user_id: str, current_admin: UserModel = Depends(get_cur
         if user.is_active:
             return {"message": "User is already active"}
 
-        await user_service.update_user(user_id, UserUpdate(is_active=True))
-
+        user_service.activate_user(user_id)
         return {"message": f"User {user_id} successfully activated"}
 
     except HTTPException:
@@ -301,13 +250,9 @@ async def activate_user(user_id: str, current_admin: UserModel = Depends(get_cur
 
 @router.post("/{user_id}/deactivate")
 async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> dict:
-    """
-    Deactivate user account (admin only).
-
-    - **user_id**: UUID of the user to deactivate
-    """
+    """Deactivate user account (admin only)."""
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -322,8 +267,7 @@ async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_c
         if not user.is_active:
             return {"message": "User is already inactive"}
 
-        await user_service.update_user(user_id, UserUpdate(is_active=False))
-
+        user_service.deactivate_user(user_id)
         return {"message": f"User {user_id} successfully deactivated"}
 
     except HTTPException:

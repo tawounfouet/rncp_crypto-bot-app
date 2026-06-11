@@ -54,7 +54,6 @@ def _render_binance_credentials_form(service: AccountService, title: str) -> Non
     with st.form("binance_form", clear_on_submit=True):
         api_key = st.text_input("API key")
         api_secret = st.text_input("API secret", type="password")
-        password_confirmation = st.text_input("Confirmation mot de passe", type="password")
         save_keys = compat_form_submit_button(
             "Enregistrer les cles Binance",
             type="primary",
@@ -66,7 +65,6 @@ def _render_binance_credentials_form(service: AccountService, title: str) -> Non
             BinanceCredentialInput(
                 api_key=api_key,
                 api_secret=api_secret,
-                password_confirmation=password_confirmation,
             )
         )
         show_feedback("success" if ok else "error", message)
@@ -78,7 +76,7 @@ def main() -> None:
     store, _ = setup_page(title="Gestion de compte", icon="👤", page_key="account")
     render_page_header(
         "Gestion de compte",
-        "Mise a jour du profil et gestion securisee des cles Binance mockees.",
+        "Mise a jour du profil et gestion securisee des cles Binance (chiffrees en base).",
     )
 
     service = AccountService(store)

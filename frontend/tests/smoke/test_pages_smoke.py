@@ -9,12 +9,13 @@ pytest.importorskip("streamlit.testing.v1")
 from streamlit.testing.v1 import AppTest
 
 from mocks.db import create_mock_store
-from schemas.account import AccountProfile
-from services.account_service import AccountService
 from utils.constants import BINANCE_SETUP_CTA_LABEL
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
+
+
+_SMOKE_TOKEN = "smoke-test-token"
 
 
 def _run_app(
@@ -27,6 +28,8 @@ def _run_app(
     at = AppTest.from_file(str(SRC_DIR / relative_path))
     if custom_store is not None:
         at.session_state["app_store"] = custom_store
+        # Injecte un token factice pour que les services puissent appeler le backend stub
+        at.session_state["access_token"] = _SMOKE_TOKEN
         at.run(timeout=20)
         return at
     if auth_email:
@@ -41,6 +44,8 @@ def _run_app(
                 store.binance_credentials[auth_email] = ("AK_RESTORED_1234", "AS_RESTORED_9876")
                 store.credential_updated_at[auth_email] = datetime.now(UTC)
         at.session_state["app_store"] = store
+        # Injecte un token factice pour que les services puissent appeler le backend stub
+        at.session_state["access_token"] = _SMOKE_TOKEN
     at.run(timeout=20)
     return at
 
@@ -348,16 +353,13 @@ def test_table_dataframes_do_not_expose_internal_technical_metadata(
         assert "__field_validators__" not in dataframe.value.columns
 
 
-def test_account_page_does_not_show_priority_banner_after_profile_update_with_configured_binance() -> None:
-    store = create_mock_store(disable_latency=True)
-    store.current_user_email = "alice@cryptobot.dev"
-    service = AccountService(store)
-    ok, _ = service.update_profile(
-        AccountProfile(first_name="Alice", last_name="Martin", email="alice_new@cryptobot.dev")
+def test_account_page_does_not_show_priority_banner_when_binance_configured() -> None:
+    # alice est configuree Binance par defaut dans le mock store
+    at = _run_app(
+        "pages/07_Gestion_de_compte.py",
+        auth_email="alice@cryptobot.dev",
+        binance_configured=True,
     )
-    assert ok is True
-
-    at = _run_app("pages/07_Gestion_de_compte.py", custom_store=store)
     _assert_no_exception(at)
     page_markdown = " ".join(entry.value for entry in at.markdown).lower()
     assert "prioritaire: configurer binance" not in page_markdown

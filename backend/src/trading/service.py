@@ -436,7 +436,7 @@ class TradingService:
 
     async def get_user_portfolio(self, user_id: str, exchange: str | None = None) -> PortfolioResponse:
         """
-        Get user portfolio with balances.
+        Get user portfolio with real balances from Binance.
 
         Args:
             user_id: User ID
@@ -445,26 +445,93 @@ class TradingService:
         Returns:
             Portfolio information
         """
-        # TODO: Implement real portfolio calculation from transactions
-        # This is a placeholder implementation
+        from auth.models import UserSettings  # lazy to avoid circular import
+        from market.clients.binance import ClientBinance
 
-        portfolio = Portfolio(
+        target_exchange = exchange or "binance"
+        empty_portfolio = Portfolio(
             user_id=user_id,
-            exchange=exchange or "binance",
-            balances=[
-                AssetBalance(
-                    asset="USDT",
-                    total=Decimal("10000.00"),
-                    available=Decimal("9500.00"),
-                    locked=Decimal("500.00"),
-                    usd_value=Decimal("10000.00"),
-                )
-            ],
-            total_usd_value=Decimal("10000.00"),
+            exchange=target_exchange,
+            balances=[],
+            total_usd_value=Decimal("0"),
             last_updated=datetime.now(UTC),
         )
 
-        return PortfolioResponse(success=True, message="Portfolio retrieved", portfolio=portfolio)
+        # Retrieve stored API credentials
+        settings = self.db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+        if not settings or not (settings.api_keys and "binance" in settings.api_keys):
+            return PortfolioResponse(
+                success=False,
+                message="Clés API Binance non configurées",
+                portfolio=empty_portfolio,
+            )
+
+        try:
+            binance_client = ClientBinance.from_user_settings(settings)
+        except ValueError as exc:
+            logger.warning("Binance credentials invalid for user %s: %s", user_id, exc)
+            return PortfolioResponse(
+                success=False,
+                message="Clés API Binance invalides ou manquantes",
+                portfolio=empty_portfolio,
+            )
+
+        account_info = binance_client.get_account_info()
+        if account_info is None:
+            return PortfolioResponse(
+                success=False,
+                message="Impossible de contacter Binance (vérifiez les permissions IP de vos clés API)",
+                portfolio=empty_portfolio,
+            )
+
+        # Keep only non-zero balances
+        raw_balances = [
+            b
+            for b in account_info.get("balances", [])
+            if float(b.get("free", "0")) > 0 or float(b.get("locked", "0")) > 0
+        ]
+
+        # Build USDT price map from all tickers
+        all_tickers = binance_client.get_all_tickers() or []
+        usdt_prices: dict[str, Decimal] = {
+            "USDT": Decimal("1"),
+            "BUSD": Decimal("1"),
+            "USDC": Decimal("1"),
+            "TUSD": Decimal("1"),
+        }
+        for ticker in all_tickers:
+            symbol = ticker.get("symbol", "")
+            price_str = ticker.get("price")
+            if symbol.endswith("USDT") and price_str:
+                try:
+                    usdt_prices[symbol[:-4]] = Decimal(str(price_str))
+                except Exception:
+                    pass
+
+        balances: list[AssetBalance] = []
+        total_usd = Decimal("0")
+        for b in raw_balances:
+            asset = b["asset"]
+            free = Decimal(str(b.get("free", "0")))
+            locked = Decimal(str(b.get("locked", "0")))
+            total = free + locked
+            usd_price = usdt_prices.get(asset)
+            usd_value = (total * usd_price).quantize(Decimal("0.01")) if usd_price else None
+            if usd_value is not None:
+                total_usd += usd_value
+            balances.append(AssetBalance(asset=asset, total=total, available=free, locked=locked, usd_value=usd_value))
+
+        balances.sort(key=lambda b: b.usd_value or Decimal("0"), reverse=True)
+
+        portfolio = Portfolio(
+            user_id=user_id,
+            exchange=target_exchange,
+            balances=balances,
+            total_usd_value=total_usd.quantize(Decimal("0.01")),
+            last_updated=datetime.now(UTC),
+        )
+        logger.info("Binance portfolio user=%s: %d assets, total=$%.2f", user_id, len(balances), float(total_usd))
+        return PortfolioResponse(success=True, message="Portefeuille récupéré depuis Binance", portfolio=portfolio)
 
     async def get_trading_statistics(
         self,

@@ -21,7 +21,7 @@ def main() -> None:
     store, _ = setup_page(title="Admin", icon="🛡️", page_key="admin")
     render_page_header(
         "Administration",
-        "Gestion des utilisateurs mockes: statut, role, dernier login et details.",
+        "Gestion des utilisateurs: statut, role, dernier login et details.",
     )
 
     service = AdminService(store)
@@ -32,7 +32,7 @@ def main() -> None:
         return
 
     if not rows:
-        show_feedback("warning", "Aucun utilisateur en base mock.")
+        show_feedback("warning", "Aucun utilisateur en base de donnees.")
         return
 
     users_df = models_to_dataframe(rows)
