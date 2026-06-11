@@ -67,6 +67,13 @@ PAGES: dict[str, NavPage] = {
         requires_auth=True,
         show_when_authenticated=True,
     ),
+    "binance_testnet_lab": NavPage(
+        key="binance_testnet_lab",
+        label="Binance Testnet Lab",
+        path="pages/09_Binance_Testnet_Lab.py",
+        requires_auth=True,
+        show_when_authenticated=True,
+    ),
     "admin": NavPage(
         key="admin",
         label="Admin",
@@ -89,7 +96,14 @@ def allowed_page_keys_in_sidebar(user: MockUser | None) -> list[str]:
     if user is None:
         return ["login", "signup"]
 
-    keys = ["portfolio", "performance", "bot_control", "bot_config", "account"]
+    keys = [
+        "portfolio",
+        "performance",
+        "bot_control",
+        "bot_config",
+        "account",
+        "binance_testnet_lab",
+    ]
     if user.role == UserRole.ADMIN:
         keys.append("admin")
     return keys

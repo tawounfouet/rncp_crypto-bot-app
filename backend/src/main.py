@@ -233,6 +233,7 @@ async def api_info():
 # Router includes (after app configuration)
 from auth.router import router as auth_router  # noqa: E402
 from auth.users_router import router as users_router  # noqa: E402
+from market.binance_testnet_router import router as binance_testnet_router  # noqa: E402
 from market.router import router as market_router  # noqa: E402
 from strategy.router import router as strategies_router  # noqa: E402
 from trading.router import router as trading_router  # noqa: E402
@@ -249,6 +250,9 @@ app.include_router(trading_router, prefix=settings.API_PREFIX)
 
 # Include market data router
 app.include_router(market_router, prefix=settings.API_PREFIX)
+
+# Include temporary Binance Spot Testnet lab router
+app.include_router(binance_testnet_router, prefix=settings.API_PREFIX)
 
 # Future route includes will go here
 # app.include_router(trading_router, prefix=f"{settings.API_PREFIX}/trading", tags=["Trading"])

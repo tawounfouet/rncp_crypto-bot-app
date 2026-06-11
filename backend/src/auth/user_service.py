@@ -8,31 +8,77 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth.models import User, UserSettings
-from auth.schemas import UserCreate, UserSettingsUpdate, UserUpdate
+from auth.schemas import BinanceCredentialsStatus, UserCreate, UserSettingsUpdate, UserUpdate
 from auth.service import auth_service
 
 # Constants
 USER_NOT_FOUND = "User not found"
+BINANCE_EXCHANGE = "binance_spot_testnet"
+LEGACY_BINANCE_EXCHANGE = "binance"
 
 
 class UserService:
     """Service for handling user operations."""
 
+    @staticmethod
+    def _mask_secret(secret: str, visible: int = 4) -> str:
+        if not secret:
+            return ""
+        if len(secret) <= visible * 2:
+            return "*" * len(secret)
+        return f"{secret[:visible]}{'*' * (len(secret) - visible * 2)}{secret[-visible:]}"
+
+    def _settings_to_safe_dict(self, settings: UserSettings) -> dict:
+        return {
+            "theme": settings.theme,
+            "risk_profile": settings.risk_profile,
+            "notification_preferences": settings.notification_preferences,
+            "has_binance_credentials": self._has_binance_credentials(settings),
+        }
+
+    @staticmethod
+    def _has_binance_credentials(settings: UserSettings | None) -> bool:
+        return bool(
+            settings
+            and settings.api_keys
+            and (BINANCE_EXCHANGE in settings.api_keys or LEGACY_BINANCE_EXCHANGE in settings.api_keys)
+        )
+
+    def _create_settings(self, user_id: str, session: Session) -> UserSettings:
+        settings = UserSettings(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            theme="light",
+            notification_preferences={
+                "email": True,
+                "push": False,
+                "trading_alerts": True,
+                "price_alerts": True,
+                "portfolio_alerts": True,
+            },
+            risk_profile="moderate",
+            api_keys=None,
+        )
+        session.add(settings)
+        session.flush()
+        return settings
+
     def create_user(self, user_data: UserCreate) -> User:
         """Create a new user."""
+        email = str(user_data.email).strip().lower()
+        username = user_data.username.strip()
         with get_db_session() as session:
             # Check if user already exists
             existing_user = (
-                session.query(User)
-                .filter((User.email == user_data.email) | (User.username == user_data.username))
-                .first()
+                session.query(User).filter((func.lower(User.email) == email) | (User.username == username)).first()
             )
 
             if existing_user:
-                if existing_user.email == user_data.email:
+                if existing_user.email.lower() == email:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Email already registered",
@@ -47,8 +93,8 @@ class UserService:
             hashed_password = auth_service.get_password_hash(user_data.password)
             db_user = User(
                 id=str(uuid.uuid4()),
-                email=user_data.email,
-                username=user_data.username,
+                email=email,
+                username=username,
                 hashed_password=hashed_password,
                 first_name=user_data.first_name,
                 last_name=user_data.last_name,
@@ -76,21 +122,7 @@ class UserService:
 
     def create_default_settings(self, user_id: str, session: Session):
         """Create default settings for a user."""
-        default_settings = UserSettings(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            theme="light",
-            notification_preferences={
-                "email": True,
-                "push": False,
-                "trading_alerts": True,
-                "price_alerts": True,
-                "portfolio_alerts": True,
-            },
-            risk_profile="moderate",
-            api_keys=None,
-        )
-        session.add(default_settings)
+        self._create_settings(user_id, session)
 
     def get_user_by_id(self, user_id: str) -> User | None:
         """Get user by ID."""
@@ -155,15 +187,33 @@ class UserService:
             session.delete(user)
             return True
 
-    def get_users(self, skip: int = 0, limit: int = 100) -> list[User]:
+    def get_users(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        search: str | None = None,
+        is_active: bool | None = None,
+        is_admin: bool | None = None,
+    ) -> list[User]:
         """Get list of users with pagination."""
         with get_db_session() as session:
-            return session.query(User).offset(skip).limit(limit).all()
+            query = session.query(User)
+            if search:
+                pattern = f"%{search}%"
+                query = query.filter((User.username.ilike(pattern)) | (User.email.ilike(pattern)))
+            if is_active is not None:
+                query = query.filter(User.is_active == is_active)
+            if is_admin is not None:
+                query = query.filter(User.is_admin == is_admin)
+            return query.offset(skip).limit(limit).all()
 
-    def get_user_settings(self, user_id: str) -> UserSettings | None:
+    def get_user_settings(self, user_id: str) -> dict | None:
         """Get user settings."""
         with get_db_session() as session:
-            return session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                return None
+            return self._settings_to_safe_dict(settings)
 
     def export_user_data(self, user_id: str) -> dict:
         """Return the user's personal data for portability export."""
@@ -179,7 +229,7 @@ class UserService:
                     "theme": settings.theme,
                     "risk_profile": settings.risk_profile,
                     "notification_preferences": settings.notification_preferences,
-                    "has_binance_credentials": bool(settings.api_keys and "binance" in settings.api_keys),
+                    "has_binance_credentials": self._has_binance_credentials(settings),
                 }
 
             accounts_data = [
@@ -220,7 +270,7 @@ class UserService:
                 deleted_count += 1
             return deleted_count
 
-    def update_user_settings(self, user_id: str, settings_data: UserSettingsUpdate) -> UserSettings:
+    def update_user_settings(self, user_id: str, settings_data: UserSettingsUpdate) -> dict:
         """Update user settings."""
         with get_db_session() as session:
             # Verify user exists
@@ -233,44 +283,83 @@ class UserService:
 
             if not settings:
                 # Create new settings if none exist
-                settings = UserSettings(
-                    id=str(uuid.uuid4()),
-                    user_id=user_id,
-                    theme="light",
-                    notification_preferences={
-                        "email": True,
-                        "push": False,
-                        "trading_alerts": True,
-                        "price_alerts": True,
-                        "portfolio_alerts": True,
-                    },
-                    risk_profile="moderate",
-                    api_keys=None,
-                )
-                session.add(settings)
+                settings = self._create_settings(user_id, session)
 
-            # Update API credentials if provided
             update_data = settings_data.model_dump(exclude_unset=True)
-            binance_api_key = update_data.pop("binance_api_key", None)
-            binance_api_secret = update_data.pop("binance_api_secret", None)
-
-            if binance_api_key is not None or binance_api_secret is not None:
-                if binance_api_key is None or binance_api_secret is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Both binance_api_key and binance_api_secret are required together.",
-                    )
-                if binance_api_key == "" and binance_api_secret == "":
-                    settings.remove_api_credentials("binance")
-                else:
-                    settings.set_api_credentials("binance", binance_api_key, binance_api_secret)
 
             # Update other settings fields if provided
             for field, value in update_data.items():
                 if hasattr(settings, field):
                     setattr(settings, field, value)
 
-            return settings
+            session.flush()
+            return self._settings_to_safe_dict(settings)
+
+    def get_binance_credentials_status(self, user_id: str) -> BinanceCredentialsStatus:
+        """Return a safe Binance credentials status for the user."""
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not self._has_binance_credentials(settings):
+                return BinanceCredentialsStatus(configured=False)
+
+            api_key = settings.get_api_key(BINANCE_EXCHANGE) or settings.get_api_key(LEGACY_BINANCE_EXCHANGE)
+            return BinanceCredentialsStatus(
+                configured=True,
+                updated_at=settings.updated_at,
+                api_key_masked=self._mask_secret(api_key or ""),
+            )
+
+    def save_binance_credentials(
+        self,
+        user_id: str,
+        *,
+        api_key: str,
+        api_secret: str,
+        password_confirmation: str,
+    ) -> BinanceCredentialsStatus:
+        """Validate and store Binance credentials encrypted for the user."""
+        with get_db_session() as session:
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND)
+
+            if not auth_service.verify_password(password_confirmation, user.hashed_password):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Invalid password confirmation",
+                )
+
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                settings = self._create_settings(user_id, session)
+
+            try:
+                settings.set_api_credentials(BINANCE_EXCHANGE, api_key, api_secret)
+                settings.remove_api_credentials(LEGACY_BINANCE_EXCHANGE)
+            except (RuntimeError, ValueError) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Binance credential encryption is not configured correctly.",
+                ) from exc
+
+            settings.updated_at = datetime.now(UTC)
+            session.flush()
+            return BinanceCredentialsStatus(
+                configured=True,
+                updated_at=settings.updated_at,
+                api_key_masked=self._mask_secret(api_key),
+            )
+
+    def delete_binance_credentials(self, user_id: str) -> BinanceCredentialsStatus:
+        """Remove stored Binance credentials for the user."""
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if settings:
+                settings.remove_api_credentials(BINANCE_EXCHANGE)
+                settings.remove_api_credentials(LEGACY_BINANCE_EXCHANGE)
+                settings.updated_at = datetime.now(UTC)
+                session.flush()
+            return BinanceCredentialsStatus(configured=False)
 
     # Admin operations
     def activate_user(self, user_id: str) -> bool:

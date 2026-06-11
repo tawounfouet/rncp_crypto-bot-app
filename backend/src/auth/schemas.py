@@ -4,20 +4,20 @@ Contains schemas for user creation, authentication, and responses.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from shared.schemas.common import BaseResponse
 
 
-class ThemeEnum(str, Enum):
+class ThemeEnum(StrEnum):
     """Available UI themes."""
 
     LIGHT = "light"
     DARK = "dark"
 
 
-class RiskProfileEnum(str, Enum):
+class RiskProfileEnum(StrEnum):
     """Available risk profiles."""
 
     CONSERVATIVE = "conservative"
@@ -73,8 +73,6 @@ class UserSettingsUpdate(BaseModel):
     theme: ThemeEnum | None = None
     risk_profile: RiskProfileEnum | None = None
     notification_preferences: dict | None = None
-    binance_api_key: str | None = None
-    binance_api_secret: str | None = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -86,8 +84,6 @@ class UserSettingsUpdate(BaseModel):
                     "push": False,
                     "trading_alerts": True,
                 },
-                "binance_api_key": "your_binance_api_key",
-                "binance_api_secret": "your_binance_api_secret",
             }
         }
     )
@@ -131,6 +127,7 @@ class UserSettings(BaseModel):
     theme: ThemeEnum
     risk_profile: RiskProfileEnum
     notification_preferences: dict
+    has_binance_credentials: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -175,6 +172,22 @@ class LogoutRequest(BaseModel):
     """Logout request (optional token for specific session)."""
 
     refresh_token: str | None = None
+
+
+class BinanceCredentialsUpdate(BaseModel):
+    """Payload for saving Binance API credentials."""
+
+    api_key: str = Field(..., min_length=1, max_length=1024)
+    api_secret: str = Field(..., min_length=1, max_length=1024)
+    password_confirmation: str = Field(..., min_length=1, max_length=100)
+
+
+class BinanceCredentialsStatus(BaseModel):
+    """Safe status response for Binance API credentials."""
+
+    configured: bool
+    updated_at: datetime | None = None
+    api_key_masked: str = ""
 
 
 # User Lists and Statistics

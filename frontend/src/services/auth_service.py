@@ -32,7 +32,7 @@ class AuthService:
         self.client = client or AuthApiClient()
 
     def login(self, payload: LoginRequest) -> AuthResult:
-        identifier = payload.email.strip()
+        identifier = payload.email.strip().lower()
         ok, message = validate_email(identifier)
         if not ok:
             return AuthResult(success=False, message=message)

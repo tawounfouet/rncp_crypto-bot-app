@@ -13,6 +13,7 @@ from fastapi import HTTPException, status
 from fastapi.security import HTTPBearer
 from shared.config.settings import get_settings
 from shared.database.connection import get_db_session
+from sqlalchemy import func
 
 from auth.models import User, UserSession
 from auth.schemas import TokenResponse, UserResponse
@@ -45,20 +46,36 @@ class AuthService:
     def create_access_token(self, data: dict, expires_delta: timedelta | None = None) -> str:
         """Create access token."""
         to_encode = data.copy()
+        issued_at = datetime.now(UTC)
         if expires_delta:
-            expire = datetime.now(UTC) + expires_delta
+            expire = issued_at + expires_delta
         else:
-            expire = datetime.now(UTC) + timedelta(minutes=self.access_token_expire_minutes)
+            expire = issued_at + timedelta(minutes=self.access_token_expire_minutes)
 
-        to_encode.update({"exp": expire, "type": "access"})
+        to_encode.update(
+            {
+                "exp": expire,
+                "iat": issued_at,
+                "jti": str(uuid.uuid4()),
+                "type": "access",
+            }
+        )
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
 
     def create_refresh_token(self, data: dict) -> str:
         """Create refresh token."""
         to_encode = data.copy()
-        expire = datetime.now(UTC) + timedelta(days=self.refresh_token_expire_days)
-        to_encode.update({"exp": expire, "type": "refresh"})
+        issued_at = datetime.now(UTC)
+        expire = issued_at + timedelta(days=self.refresh_token_expire_days)
+        to_encode.update(
+            {
+                "exp": expire,
+                "iat": issued_at,
+                "jti": str(uuid.uuid4()),
+                "type": "refresh",
+            }
+        )
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
         return encoded_jwt
 
@@ -78,9 +95,15 @@ class AuthService:
 
     def authenticate_user(self, username: str, password: str) -> User | None:
         """Authenticate user with username/email and password."""
+        identifier = username.strip()
+        email_identifier = identifier.lower()
         with get_db_session() as session:
             # Try to find user by username or email
-            user = session.query(User).filter((User.username == username) | (User.email == username)).first()
+            user = (
+                session.query(User)
+                .filter((User.username == identifier) | (func.lower(User.email) == email_identifier))
+                .first()
+            )
 
             if not user:
                 return None

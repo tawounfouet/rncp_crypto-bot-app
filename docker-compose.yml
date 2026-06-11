@@ -181,6 +181,7 @@ services:
       - "8009:8009"
     volumes:
       - ./backend/src:/app/src
+      - ./backend/scripts:/app/scripts
       - ./data:/app/data
     environment:
       - MONGODB_USER=${MONGODB_USER}
@@ -197,6 +198,7 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
       - ENVIRONMENT=development
       - DEBUG=true
     depends_on:

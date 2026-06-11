@@ -3,6 +3,7 @@ Authentication router for the Crypto Trading Bot API.
 Provides endpoints for user authentication, registration, and token management.
 """
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,6 +14,7 @@ from auth.service import auth_service
 from auth.user_service import user_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -41,10 +43,11 @@ async def register(request: Request, user_data: UserCreate) -> TokenResponse:
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to register user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register user: {e!s}",
+            detail="Failed to register user.",
         ) from None
 
 
@@ -79,10 +82,11 @@ async def login(request: Request, form_data: Annotated[OAuth2PasswordRequestForm
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Login failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {e!s}",
+            detail="Login failed.",
         ) from None
 
 
@@ -117,10 +121,11 @@ async def login_json(request: Request, login_data: LoginRequest) -> TokenRespons
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Login failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {e!s}",
+            detail="Login failed.",
         ) from None
 
 

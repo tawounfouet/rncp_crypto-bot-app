@@ -61,7 +61,7 @@ def generate_from_template(template_path: Path, variables: dict[str, str]) -> No
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(new_content)
 
-    print(f"✓ Généré : {output_path.relative_to(APP_ROOT)}")
+    print(f"OK genere : {output_path.relative_to(APP_ROOT)}")
 
 
 def main():

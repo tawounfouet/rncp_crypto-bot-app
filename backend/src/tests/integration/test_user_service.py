@@ -337,6 +337,98 @@ class TestUserExportData:
         assert exc_info.value.status_code == 404
 
 
+class TestBinanceCredentials:
+    """Tests du stockage chiffre des credentials Binance utilisateur."""
+
+    def _create_test_user(self):
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+        return service.create_user(
+            UserCreate(
+                email="binance@test.com",
+                username="binanceuser",
+                password="SecurePass123!",  # noqa: S106
+                first_name="Binance",
+                last_name="User",
+            )
+        ), service
+
+    @staticmethod
+    def _set_encryption_key(monkeypatch) -> None:
+        import base64
+        import os
+
+        monkeypatch.setenv("BINANCE_ENC_KEY", base64.b64encode(os.urandom(32)).decode())
+
+    def test_save_binance_credentials_encrypts_and_masks(self, patch_db_session, monkeypatch):
+        """Les credentials sont chiffres en BDD et seul un statut masque est retourne."""
+        from auth.models import UserSettings
+
+        self._set_encryption_key(monkeypatch)
+        created, service = self._create_test_user()
+
+        result = service.save_binance_credentials(
+            created.id,
+            api_key="AK_TEST_PUBLIC_1234",
+            api_secret="AS_TEST_SECRET_9876",  # noqa: S106
+            password_confirmation="SecurePass123!",  # noqa: S106
+        )
+
+        assert result.configured is True
+        assert result.api_key_masked.startswith("AK_T")
+        assert result.api_key_masked.endswith("1234")
+        assert "SECRET" not in result.model_dump_json()
+
+        settings = patch_db_session.query(UserSettings).filter(UserSettings.user_id == created.id).first()
+        stored = settings.api_keys["binance_spot_testnet"]
+        assert stored["api_key"] != "AK_TEST_PUBLIC_1234"
+        assert stored["api_secret"] != "AS_TEST_SECRET_9876"
+        assert isinstance(stored["api_key"], dict)
+        assert isinstance(stored["api_secret"], dict)
+        assert settings.get_api_key("binance_spot_testnet") == "AK_TEST_PUBLIC_1234"
+        assert settings.get_api_secret("binance_spot_testnet") == "AS_TEST_SECRET_9876"
+
+        safe_settings = service.get_user_settings(created.id)
+        assert safe_settings["has_binance_credentials"] is True
+        assert "api_keys" not in safe_settings
+
+    def test_save_binance_credentials_rejects_wrong_password(self, patch_db_session, monkeypatch):
+        """La confirmation du mot de passe est verifiee cote backend."""
+        from fastapi import HTTPException
+
+        self._set_encryption_key(monkeypatch)
+        created, service = self._create_test_user()
+
+        with pytest.raises(HTTPException) as exc_info:
+            service.save_binance_credentials(
+                created.id,
+                api_key="AK_TEST_PUBLIC_1234",
+                api_secret="AS_TEST_SECRET_9876",  # noqa: S106
+                password_confirmation="WrongPass123!",  # noqa: S106
+            )
+
+        assert exc_info.value.status_code == 403
+
+    def test_delete_binance_credentials_removes_credentials(self, patch_db_session, monkeypatch):
+        """La suppression retire les credentials stockes."""
+        self._set_encryption_key(monkeypatch)
+        created, service = self._create_test_user()
+        service.save_binance_credentials(
+            created.id,
+            api_key="AK_TEST_PUBLIC_1234",
+            api_secret="AS_TEST_SECRET_9876",  # noqa: S106
+            password_confirmation="SecurePass123!",  # noqa: S106
+        )
+
+        result = service.delete_binance_credentials(created.id)
+
+        assert result.configured is False
+        assert service.get_binance_credentials_status(created.id).configured is False
+        assert service.get_user_settings(created.id)["has_binance_credentials"] is False
+
+
 class TestDeleteInactiveUsers:
     """Tests pour la suppression des utilisateurs inactifs."""
 

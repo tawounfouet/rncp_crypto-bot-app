@@ -36,7 +36,7 @@ def _render_profile_section(service: AccountService, profile: AccountProfile) ->
 
 
 def _render_binance_status_card(credential_status: BinanceCredentialStatus) -> None:
-    render_section_title("Statut des cles Binance")
+    render_section_title("Statut des cles Binance Spot Testnet")
     st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
     render_status_badge("Binance", "ENABLED" if credential_status.configured else "DISABLED")
     st.caption(
@@ -45,7 +45,11 @@ def _render_binance_status_card(credential_status: BinanceCredentialStatus) -> N
         else "Aucune cle enregistree"
     )
     st.write(f"API key masque: `{credential_status.api_key_masked or 'non configuree'}`")
-    st.write(f"API secret masque: `{credential_status.api_secret_masked or 'non configure'}`")
+    st.write(
+        "API secret: `configure - non affiche`"
+        if credential_status.configured
+        else "API secret: `non configure`"
+    )
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -56,7 +60,7 @@ def _render_binance_credentials_form(service: AccountService, title: str) -> Non
         api_secret = st.text_input("API secret", type="password")
         password_confirmation = st.text_input("Confirmation mot de passe", type="password")
         save_keys = compat_form_submit_button(
-            "Enregistrer les cles Binance",
+            "Enregistrer les cles Binance Testnet",
             type="primary",
             width="stretch",
         )
@@ -74,11 +78,20 @@ def _render_binance_credentials_form(service: AccountService, title: str) -> Non
             st.rerun()
 
 
+def _render_binance_credentials_delete(service: AccountService) -> None:
+    render_section_title("Suppression des credentials Binance Testnet")
+    if st.button("Supprimer les cles Binance Testnet", type="secondary"):
+        ok, message = service.delete_binance_credentials()
+        show_feedback("success" if ok else "error", message)
+        if ok:
+            st.rerun()
+
+
 def main() -> None:
     store, _ = setup_page(title="Gestion de compte", icon="👤", page_key="account")
     render_page_header(
         "Gestion de compte",
-        "Mise a jour du profil et gestion securisee des cles Binance mockees.",
+        "Mise a jour du profil et stockage chiffre des cles Binance Spot Testnet.",
     )
 
     service = AccountService(store)
@@ -91,14 +104,14 @@ def main() -> None:
 
     if not credential_status.configured:
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        st.markdown("### Étape prioritaire: configurer Binance")
+        st.markdown("### Etape prioritaire: configurer Binance Testnet")
         st.caption(
             "Votre compte est cree mais le pre-requis Binance n'est pas encore rempli. "
-            "Configurez vos cles pour activer toutes les fonctionnalites Spot."
+            "Configurez vos cles Testnet pour activer le lab Binance Spot."
         )
         st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
-        _render_binance_credentials_form(service, "Configuration Binance (prioritaire)")
+        _render_binance_credentials_form(service, "Configuration Binance Testnet (prioritaire)")
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
 
     left, right = st.columns([1.1, 1], gap="large")
@@ -109,7 +122,9 @@ def main() -> None:
 
     if credential_status.configured:
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
-        _render_binance_credentials_form(service, "Mettre a jour les credentials Binance")
+        _render_binance_credentials_form(service, "Mettre a jour les credentials Binance Testnet")
+        st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+        _render_binance_credentials_delete(service)
 
 
 if __name__ == "__main__":

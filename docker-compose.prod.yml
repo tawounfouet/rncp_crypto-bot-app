@@ -148,6 +148,7 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
       - ENVIRONMENT=production
       - DEBUG=false
     depends_on:

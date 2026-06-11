@@ -22,7 +22,7 @@ help: ## Afficher cette aide
 	@echo ""
 
 generate-requirements: ## Generer les fichiers requirements.txt a partir de versions.env et des templates
-	python3 scripts/generate-requirements.py
+	python scripts/generate-requirements.py
 
 # ===========================================================================
 # Dev
@@ -30,6 +30,10 @@ generate-requirements: ## Generer les fichiers requirements.txt a partir de vers
 
 dev-up: generate-requirements ## Demarrer l'environnement dev
 	docker compose up -d
+	docker compose exec -T crypto-bot-backend python /app/scripts/ensure_dev_admin.py
+
+dev-admin: ## Creer ou reinitialiser le compte admin de demonstration
+	docker compose exec -T crypto-bot-backend python /app/scripts/ensure_dev_admin.py
 
 dev-down: ## Arreter l'environnement dev
 	docker compose down

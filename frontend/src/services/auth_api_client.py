@@ -88,6 +88,139 @@ class AuthApiClient:
             access_token=access_token,
         )
 
+    def get_binance_credentials_status(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/users/me/binance-credentials/status",
+            access_token=access_token,
+        )
+
+    def save_binance_credentials(
+        self,
+        *,
+        access_token: str,
+        api_key: str,
+        api_secret: str,
+        password_confirmation: str,
+    ) -> ApiResponse:
+        return self._request(
+            "PUT",
+            f"{API_PREFIX}/users/me/binance-credentials",
+            json_body={
+                "api_key": api_key,
+                "api_secret": api_secret,
+                "password_confirmation": password_confirmation,
+            },
+            access_token=access_token,
+        )
+
+    def delete_binance_credentials(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/users/me/binance-credentials",
+            access_token=access_token,
+        )
+
+    def get_testnet_ping(self, access_token: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/binance-testnet/ping", access_token=access_token)
+
+    def get_testnet_overview(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/overview",
+            query_params={"symbol": symbol},
+            access_token=access_token,
+        )
+
+    def get_testnet_account(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "GET", f"{API_PREFIX}/binance-testnet/account", access_token=access_token
+        )
+
+    def get_testnet_balances(self, access_token: str, *, non_zero: bool = True) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/balances",
+            query_params={"non_zero": str(non_zero).lower()},
+            access_token=access_token,
+        )
+
+    def get_testnet_ticker(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/ticker/{symbol}",
+            access_token=access_token,
+        )
+
+    def get_testnet_symbol_info(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/symbols/{symbol}",
+            access_token=access_token,
+        )
+
+    def get_testnet_open_orders(
+        self, access_token: str, *, symbol: str | None = None
+    ) -> ApiResponse:
+        query_params = {"symbol": symbol} if symbol else None
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/open-orders",
+            query_params=query_params,
+            access_token=access_token,
+        )
+
+    def get_testnet_all_orders(
+        self, access_token: str, *, symbol: str, limit: int = 50
+    ) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/all-orders/{symbol}",
+            query_params={"limit": str(limit)},
+            access_token=access_token,
+        )
+
+    def get_testnet_my_trades(
+        self, access_token: str, *, symbol: str, limit: int = 50
+    ) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/my-trades/{symbol}",
+            query_params={"limit": str(limit)},
+            access_token=access_token,
+        )
+
+    def test_testnet_order(self, access_token: str, payload: Mapping[str, Any]) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/binance-testnet/orders/test",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def place_testnet_order(self, access_token: str, payload: Mapping[str, Any]) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/binance-testnet/orders",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def cancel_testnet_order(self, access_token: str, payload: Mapping[str, Any]) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/binance-testnet/orders",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def cancel_testnet_open_orders(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/binance-testnet/open-orders/{symbol}",
+            access_token=access_token,
+        )
+
     def _request(
         self,
         method: str,

@@ -96,7 +96,7 @@ class UserSession(BaseModel):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Session information
-    token = Column(String(255), unique=True, nullable=False, index=True)
+    token = Column(String(1024), unique=True, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
 
     # Session metadata
@@ -239,18 +239,19 @@ class UserSettings(BaseModel):
 
     def set_api_credentials(self, exchange: str, api_key: str, api_secret: str) -> None:
         """Set encrypted API credentials for an exchange."""
-        if not self.api_keys:
-            self.api_keys = {}
-
-        self.api_keys[exchange] = {
+        api_keys = dict(self.api_keys or {})
+        api_keys[exchange] = {
             "api_key": encrypt_secret(api_key),
             "api_secret": encrypt_secret(api_secret),
         }
+        self.api_keys = api_keys
 
     def remove_api_credentials(self, exchange: str) -> None:
         """Remove API credentials for an exchange."""
         if self.api_keys and exchange in self.api_keys:
-            del self.api_keys[exchange]
+            api_keys = dict(self.api_keys)
+            del api_keys[exchange]
+            self.api_keys = api_keys or None
 
     def __repr__(self) -> str:
         return f"<UserSettings(id={self.id}, user_id={self.user_id}, theme={self.theme})>"

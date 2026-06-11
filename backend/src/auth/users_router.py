@@ -7,7 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth.dependencies import get_current_admin_user, get_current_user
 from auth.models import User as UserModel
-from auth.schemas import UserResponse, UserSettingsUpdate, UserUpdate
+from auth.schemas import (
+    BinanceCredentialsStatus,
+    BinanceCredentialsUpdate,
+    UserResponse,
+    UserSettingsUpdate,
+    UserUpdate,
+)
 from auth.user_service import user_service
 
 # Define a constant for the error message
@@ -41,7 +47,7 @@ async def update_current_user_profile(
     - **last_name**: New last name
     """
     try:
-        updated_user = await user_service.update_user(current_user.id, user_update)
+        updated_user = user_service.update_user(current_user.id, user_update)
         return updated_user
 
     except HTTPException:
@@ -63,7 +69,7 @@ async def delete_current_user_account(
     This action is irreversible and will remove all user data.
     """
     try:
-        success = await user_service.delete_user(current_user.id)
+        success = user_service.delete_user(current_user.id)
 
         if not success:
             raise HTTPException(
@@ -90,7 +96,7 @@ async def get_user_settings(
     Get current user's settings and preferences.
     """
     try:
-        settings = await user_service.get_user_settings(current_user.id)
+        settings = user_service.get_user_settings(current_user.id)
         return settings or {}
 
     except Exception as e:
@@ -132,7 +138,7 @@ async def update_user_settings(
     - **notification_preferences**: Notification settings
     """
     try:
-        updated_settings = await user_service.update_user_settings(current_user.id, settings_update)
+        updated_settings = user_service.update_user_settings(current_user.id, settings_update)
         return updated_settings
 
     except HTTPException:
@@ -141,6 +147,72 @@ async def update_user_settings(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update user settings: {e!s}",
+        ) from None
+
+
+@router.get("/me/binance-credentials/status", response_model=BinanceCredentialsStatus)
+async def get_binance_credentials_status(
+    current_user: UserModel = Depends(get_current_user),
+) -> BinanceCredentialsStatus:
+    """
+    Return whether the authenticated user has Binance credentials configured.
+
+    The response never exposes the API secret. The API key is returned only as a
+    masked display value.
+    """
+    try:
+        return user_service.get_binance_credentials_status(current_user.id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get Binance credentials status: {e!s}",
+        ) from None
+
+
+@router.put("/me/binance-credentials", response_model=BinanceCredentialsStatus)
+async def save_binance_credentials(
+    credentials: BinanceCredentialsUpdate,
+    current_user: UserModel = Depends(get_current_user),
+) -> BinanceCredentialsStatus:
+    """
+    Save Binance credentials for the authenticated user.
+
+    Credentials are encrypted server-side before being stored and are never
+    returned by the API.
+    """
+    try:
+        return user_service.save_binance_credentials(
+            current_user.id,
+            api_key=credentials.api_key,
+            api_secret=credentials.api_secret,
+            password_confirmation=credentials.password_confirmation,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save Binance credentials: {e!s}",
+        ) from None
+
+
+@router.delete("/me/binance-credentials", response_model=BinanceCredentialsStatus)
+async def delete_binance_credentials(
+    current_user: UserModel = Depends(get_current_user),
+) -> BinanceCredentialsStatus:
+    """
+    Delete Binance credentials for the authenticated user.
+    """
+    try:
+        return user_service.delete_binance_credentials(current_user.id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete Binance credentials: {e!s}",
         ) from None
 
 
@@ -160,7 +232,7 @@ async def list_users(
     Supports pagination, search, and filtering options.
     """
     try:
-        users = await user_service.get_users(
+        users = user_service.get_users(
             skip=skip,
             limit=limit,
             search=search,
@@ -184,7 +256,7 @@ async def get_user_by_id(user_id: str, current_admin: UserModel = Depends(get_cu
     - **user_id**: UUID of the user to retrieve
     """
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -217,12 +289,12 @@ async def update_user_by_id(
     - **is_active**: Enable/disable user account
     """
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
 
-        updated_user = await user_service.update_user(user_id, user_update)
+        updated_user = user_service.update_user(user_id, user_update)
         return updated_user
 
     except HTTPException:
@@ -242,7 +314,7 @@ async def delete_user_by_id(user_id: str, current_admin: UserModel = Depends(get
     - **user_id**: UUID of the user to delete
     """
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -254,7 +326,7 @@ async def delete_user_by_id(user_id: str, current_admin: UserModel = Depends(get
                 detail="Cannot delete your own account",
             )
 
-        success = await user_service.delete_user(user_id)
+        success = user_service.delete_user(user_id)
 
         if not success:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete user")
@@ -278,7 +350,7 @@ async def activate_user(user_id: str, current_admin: UserModel = Depends(get_cur
     - **user_id**: UUID of the user to activate
     """
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -286,7 +358,7 @@ async def activate_user(user_id: str, current_admin: UserModel = Depends(get_cur
         if user.is_active:
             return {"message": "User is already active"}
 
-        await user_service.update_user(user_id, UserUpdate(is_active=True))
+        user_service.activate_user(user_id)
 
         return {"message": f"User {user_id} successfully activated"}
 
@@ -307,7 +379,7 @@ async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_c
     - **user_id**: UUID of the user to deactivate
     """
     try:
-        user = await user_service.get_user_by_id(user_id)
+        user = user_service.get_user_by_id(user_id)
 
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
@@ -322,7 +394,7 @@ async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_c
         if not user.is_active:
             return {"message": "User is already inactive"}
 
-        await user_service.update_user(user_id, UserUpdate(is_active=False))
+        user_service.deactivate_user(user_id)
 
         return {"message": f"User {user_id} successfully deactivated"}
 

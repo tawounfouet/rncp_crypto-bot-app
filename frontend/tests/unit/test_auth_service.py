@@ -93,6 +93,18 @@ def test_login_success(store) -> None:
     assert client.calls[0] == ("login_json", "nina@cryptobot.dev", "Strong123")
 
 
+def test_login_normalizes_email_before_backend_call(store) -> None:
+    st.session_state.clear()
+    client = StubAuthClient()
+    client.login_response = ApiResponse(status_code=200, data=_token_payload(email="nina@cryptobot.dev", username="nina"))
+
+    service = AuthService(store, client=client)
+    result = service.login(LoginRequest(email=" Nina@CryptoBot.Dev ", password="Strong123"))
+
+    assert result.success is True
+    assert client.calls[0] == ("login_json", "nina@cryptobot.dev", "Strong123")
+
+
 def test_register_surfaces_backend_error(store) -> None:
     st.session_state.clear()
     client = StubAuthClient()

@@ -73,6 +73,7 @@ def test_public_pages_render(relative_path: str) -> None:
         "pages/05_Controle_Bot_Spot.py",
         "pages/06_Parametrage_Bot_Spot.py",
         "pages/07_Gestion_de_compte.py",
+        "pages/09_Binance_Testnet_Lab.py",
     ],
 )
 def test_protected_pages_render_with_user_session(relative_path: str) -> None:
@@ -188,6 +189,7 @@ def test_select_pages_render_select_widgets_in_both_themes(
         ("pages/05_Controle_Bot_Spot.py", "alice@cryptobot.dev"),
         ("pages/06_Parametrage_Bot_Spot.py", "alice@cryptobot.dev"),
         ("pages/07_Gestion_de_compte.py", "alice@cryptobot.dev"),
+        ("pages/09_Binance_Testnet_Lab.py", "alice@cryptobot.dev"),
         ("pages/08_Admin.py", "admin@cryptobot.dev"),
     ],
 )
@@ -212,6 +214,7 @@ def test_pages_render_in_light_theme(relative_path: str, auth_email: str | None)
         ("pages/05_Controle_Bot_Spot.py", "alice@cryptobot.dev"),
         ("pages/06_Parametrage_Bot_Spot.py", "alice@cryptobot.dev"),
         ("pages/07_Gestion_de_compte.py", "alice@cryptobot.dev"),
+        ("pages/09_Binance_Testnet_Lab.py", "alice@cryptobot.dev"),
         ("pages/08_Admin.py", "admin@cryptobot.dev"),
     ],
 )
@@ -261,7 +264,9 @@ def test_portfolio_shows_binance_prerequisite_without_kpis_when_not_configured()
     assert BINANCE_SETUP_CTA_LABEL in [button.label for button in at.button]
 
 
-def test_performance_shows_binance_prerequisite_without_performance_content_when_not_configured() -> None:
+def test_performance_shows_binance_prerequisite_without_performance_content_when_not_configured() -> (
+    None
+):
     at = _run_app(
         "pages/04_Performances_Spot.py",
         auth_email="alice@cryptobot.dev",
@@ -348,7 +353,9 @@ def test_table_dataframes_do_not_expose_internal_technical_metadata(
         assert "__field_validators__" not in dataframe.value.columns
 
 
-def test_account_page_does_not_show_priority_banner_after_profile_update_with_configured_binance() -> None:
+def test_account_page_does_not_show_priority_banner_after_profile_update_with_configured_binance() -> (
+    None
+):
     store = create_mock_store(disable_latency=True)
     store.current_user_email = "alice@cryptobot.dev"
     service = AccountService(store)
