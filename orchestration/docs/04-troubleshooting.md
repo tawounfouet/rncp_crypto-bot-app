@@ -214,12 +214,15 @@ authentification (un `docker pull` simple, lui, retombe en anonyme et passe).
 
 ### Solution
 
-- **Immédiat** : relancer `make dev-up` (l'erreur est intermittente, le 2ᵉ essai passe
-  généralement). S'assurer que Docker Desktop est bien démarré.
-- **Permanent (par poste, non committable)** : comme `dev-up` ne tire que des images
-  **publiques**, on peut retirer le credential store. Éditer `~/.docker/config.json` et
-  supprimer la ligne `"credsStore": "desktop.exe"` (faire une sauvegarde avant). Les
-  pulls passent alors en anonyme, sans dépendre de Docker Desktop.
+- **Automatique (en place)** : `make dev-up` réessaie le démarrage jusqu'à **5 fois avec
+  backoff** (5s, 10s, 15s, 20s → ~50s de résilience). Ça absorbe les hoquets transitoires
+  de Docker Desktop sans intervention. S'assurer quand même que Docker Desktop est démarré.
+- **Si ça persiste après les 5 essais (par poste, non committable)** : le retry est une
+  mitigation, pas une garantie — un hoquet DD très long peut le dépasser. Le fix
+  **définitif** est de retirer le credential store (les images de `dev-up` sont
+  **publiques**, aucun identifiant requis) : éditer `~/.docker/config.json` et supprimer la
+  ligne `"credsStore": "desktop.exe"` (sauvegarde avant). Les pulls passent alors en
+  anonyme, le helper n'est plus jamais appelé.
 
 ---
 
@@ -263,12 +266,10 @@ test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -q && psql -U ${PO
 ### Procédure propre de « redeploy from 0 »
 
 ```bash
-make dev-down
-# /!\ docker compose down -v lancé seul échoue (variables versions.env non chargées).
-#     Supprimer les volumes explicitement :
-docker volume rm crypto-bot-app_postgres_data crypto-bot-app_mongo_data \
-                 crypto-bot-app_minio_data crypto-bot-app_airflow_logs
-make dev-build   # si le code/les deps ont changé
+make dev-down-v   # arrête tout ET supprime les volumes du projet (postgres, mongo,
+                  # minio, airflow_logs). À lancer via make : `docker compose down -v`
+                  # seul échoue (variables versions.env non chargées).
+make dev-build    # si le code / les deps ont changé
 make dev-up
 ```
 
