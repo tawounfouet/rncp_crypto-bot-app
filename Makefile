@@ -28,11 +28,22 @@ generate-requirements: ## Generer les fichiers requirements.txt a partir de vers
 # Dev
 # ===========================================================================
 
-dev-up: generate-requirements ## Demarrer l'environnement dev
-	docker compose up -d
+dev-up: generate-requirements ## Demarrer l'environnement dev (retry auto + backoff si le pull echoue)
+	@n=5; d=5; for i in $$(seq 1 $$n); do \
+		echo ">>> dev-up : tentative $$i/$$n" ; \
+		docker compose up -d && exit 0 ; \
+		if [ $$i -lt $$n ]; then \
+			echo ">>> echec (credsStore / Docker Desktop ?), nouvel essai dans $${d}s..." ; \
+			sleep $$d ; d=$$((d + 5)) ; \
+		fi ; \
+	done ; \
+	echo ">>> dev-up : echec apres $$n tentatives. Voir docs/04-troubleshooting.md (Probleme 6)." ; exit 1
 
 dev-down: ## Arreter l'environnement dev
 	docker compose down
+
+dev-down-v: ## Arreter dev ET supprimer tous les volumes du projet (reset complet "from 0")
+	docker compose down -v --remove-orphans
 
 dev-config: generate-requirements ## Valider la configuration dev
 	docker compose config
@@ -40,7 +51,10 @@ dev-config: generate-requirements ## Valider la configuration dev
 dev-logs: ## Suivre les logs dev
 	docker compose logs -f
 
-dev-build: generate-requirements ## Rebuild les images dev (sans cache)
+dev-build: generate-requirements ## (Re)build les images dev (cache activé = rapide)
+	docker compose build
+
+dev-rebuild: generate-requirements ## Rebuild COMPLET sans cache (lent, en cas de pépin)
 	docker compose build --no-cache
 
 # ===========================================================================
