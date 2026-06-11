@@ -189,6 +189,94 @@ airflow-webserver:
 
 ---
 
+## Problème 6 — `error getting credentials` au `docker compose up`
+
+### Symptôme
+
+```
+ ⠙ Image postgres:14   Pulling
+ ⠙ Image mongo:4.4     Pulling
+error getting credentials - err: exit status 1, out: ``
+make: *** [Makefile:32: dev-up] Error 1
+```
+
+Le build se termine bien, mais `make dev-up` échoue pendant le **pull des images de
+base** (postgres, mongo, adminer…).
+
+### Cause
+
+`~/.docker/config.json` contient `"credsStore": "desktop.exe"` : Docker délègue la
+récupération d'identifiants à `docker-credential-desktop.exe` (Docker Desktop). Quand
+l'intégration WSL/Docker Desktop est momentanément instable, ce helper renvoie
+`exit status 1`. Les pulls **parallèles** de `docker compose` traitent cette erreur
+comme fatale — **même pour des images publiques** qui ne demandent aucune
+authentification (un `docker pull` simple, lui, retombe en anonyme et passe).
+
+### Solution
+
+- **Immédiat** : relancer `make dev-up` (l'erreur est intermittente, le 2ᵉ essai passe
+  généralement). S'assurer que Docker Desktop est bien démarré.
+- **Permanent (par poste, non committable)** : comme `dev-up` ne tire que des images
+  **publiques**, on peut retirer le credential store. Éditer `~/.docker/config.json` et
+  supprimer la ligne `"credsStore": "desktop.exe"` (faire une sauvegarde avant). Les
+  pulls passent alors en anonyme, sans dépendre de Docker Desktop.
+
+---
+
+## Problème 7 — Airflow échoue « une fois sur deux » au déploiement à neuf
+
+### Symptôme
+
+Après suppression de tous les volumes puis `make dev-up`, Airflow ne démarre pas
+(`database "airflow" does not exist` dans les logs `airflow-init`). Un **2ᵉ** `make
+dev-up` fonctionne. Comportement non déterministe = **race condition**.
+
+### Cause
+
+Deux bugs combinés :
+
+1. **Course au démarrage** : le healthcheck Postgres (`pg_isready`) passe via le socket
+   **dès la phase d'init** (serveur temporaire qui exécute `init-user-db.sh`). Postgres
+   était donc signalé `healthy` **avant** que la base `airflow` soit créée. `airflow-init`
+   (`depends_on: service_healthy`) démarrait trop tôt → `airflow db init` sur une base
+   inexistante.
+2. **Échec silencieux** : l'entrypoint `airflow-init` n'avait pas `set -e` et finissait par
+   `... || true`, donc il sortait en `exit 0` même en cas d'échec → webserver/scheduler
+   démarraient sur une base cassée.
+
+Au 2ᵉ `dev-up`, les bases existent déjà (volume non vide) → plus de course.
+
+### Solution appliquée (déjà dans `docker-compose.yml`)
+
+```yaml
+# healthcheck postgres : ne devient healthy qu'une fois la base airflow créée
+test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -q && psql -U ${POSTGRES_USER:-postgres} -d airflow -c 'SELECT 1' >/dev/null 2>&1"]
+```
+```yaml
+# entrypoint airflow-init : échec bruyant
+- |
+  set -e
+  airflow db init
+  ...
+```
+
+### Procédure propre de « redeploy from 0 »
+
+```bash
+make dev-down
+# /!\ docker compose down -v lancé seul échoue (variables versions.env non chargées).
+#     Supprimer les volumes explicitement :
+docker volume rm crypto-bot-app_postgres_data crypto-bot-app_mongo_data \
+                 crypto-bot-app_minio_data crypto-bot-app_airflow_logs
+make dev-build   # si le code/les deps ont changé
+make dev-up
+```
+
+> Volume `postgres_data` vide ⇒ `init-user-db.sh` rejoue et crée `airflow` + `mlflow`.
+> Avec le healthcheck corrigé, `airflow-init` attend que ce soit fait : plus de course.
+
+---
+
 ## Checklist de diagnostic rapide
 
 ```
