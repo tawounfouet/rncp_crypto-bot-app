@@ -17,9 +17,6 @@ python-multipart==$PYTHON_MULTIPART_VERSION
 sqlalchemy==$SQLALCHEMY_VERSION
 psycopg2-binary==$PSYCOPG2_VERSION
 
-# Database - MongoDB
-pymongo==$PYMONGO_VERSION
-
 # Object Storage - MinIO
 minio==$MINIO_VERSION
 

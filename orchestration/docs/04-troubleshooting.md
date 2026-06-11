@@ -39,7 +39,6 @@ Ré-épingler **explicitement** la version Airflow dans le `pip install` du Dock
 RUN pip install --no-cache-dir \
     apache-airflow==2.8.1 \        ← ajouté ici
     apache-airflow-providers-postgres \
-    apache-airflow-providers-mongo \
     ...
 ```
 
@@ -195,13 +194,12 @@ airflow-webserver:
 
 ```
  ⠙ Image postgres:14   Pulling
- ⠙ Image mongo:4.4     Pulling
 error getting credentials - err: exit status 1, out: ``
 make: *** [Makefile:32: dev-up] Error 1
 ```
 
 Le build se termine bien, mais `make dev-up` échoue pendant le **pull des images de
-base** (postgres, mongo, adminer…).
+base** (postgres, adminer…).
 
 ### Cause
 
@@ -266,7 +264,7 @@ test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -q && psql -U ${PO
 ### Procédure propre de « redeploy from 0 »
 
 ```bash
-make dev-down-v   # arrête tout ET supprime les volumes du projet (postgres, mongo,
+make dev-down-v   # arrête tout ET supprime les volumes du projet (postgres,
                   # minio, airflow_logs). À lancer via make : `docker compose down -v`
                   # seul échoue (variables versions.env non chargées).
 make dev-build    # si le code / les deps ont changé

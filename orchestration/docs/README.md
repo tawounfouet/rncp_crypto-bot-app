@@ -29,7 +29,6 @@ Cryptobot Stack
 │   ├── crypto_bot_db            ← base applicative
 │   └── airflow                  ← base Airflow (créée au 1er boot)
 │
-├── MongoDB                      :27017
 └── MinIO (S3)                   :9000
 ```
 

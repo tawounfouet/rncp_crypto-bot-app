@@ -36,8 +36,6 @@ echo ""
 echo "=== 1. Verification versions.env ==="
 
 REQUIRED_VARS=(
-    MONGO_IMAGE
-    MONGO_EXPRESS_IMAGE
     POSTGRES_IMAGE
     ADMINER_IMAGE
     MINIO_IMAGE

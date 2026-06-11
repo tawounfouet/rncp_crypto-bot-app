@@ -17,7 +17,7 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   ├── pyproject.toml          # Config pytest + ruff specifique frontend
 │   └── requirements.txt        # Deps runtime (streamlit, plotly, pandas, pydantic)
 ├── ci/                         # Tests d'integration CI
-│   ├── docker-compose.test.yml # Compose pour tests (Postgres + Mongo reels)
+│   ├── docker-compose.test.yml # Compose pour tests (Postgres reel)
 │   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
 ├── scripts/
 │   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles (8 checks)
@@ -75,12 +75,6 @@ Variables importantes dans `.env` :
 # Base de donnees
 POSTGRES_USER=postgres
 POSTGRES_PWD=your_password
-
-# MongoDB
-MONGODB_USER=admin
-MONGODB_PWD=your_mongo_password
-MONGODB_USER_ADMIN=admin
-MONGODB_PWD_ADMIN=your_mongo_admin_password
 
 # MinIO
 MINIO_USER_ADMIN=minioadmin
@@ -158,7 +152,6 @@ Services disponibles (dev local) :
 | Backend API | http://localhost:8009/api/v1/docs |
 | Frontend | http://localhost:8501 |
 | Adminer (PostgreSQL) | http://localhost:8085 |
-| Mongo Express | http://localhost:8081 |
 | MinIO Console | http://localhost:9001 |
 
 ## Developpement
@@ -240,7 +233,6 @@ Ports par environnement :
 | Frontend   | 8501       | 8601       | 8701       |
 | Backend    | 8009       | 8109       | 8209       |
 | PostgreSQL | 5432       | 5532       | 5632       |
-| MongoDB    | 27017      | 27117      | 27217      |
 | MinIO      | 9000/9001  | 9100/9101  | 9200/9201  |
 
 ## Workflow Git
@@ -312,13 +304,12 @@ Le deploiement principal se fait sur le cluster Kubernetes Talos via ArgoCD
 Les versions d'images Docker sont centralisees dans `versions.env` (tracke dans git) :
 
 ```env
-MONGO_IMAGE=mongo:4.4
 POSTGRES_IMAGE=postgres:14
 ADMINER_IMAGE=adminer
 # ...
 ```
 
-Les docker-compose referent ces versions via `${MONGO_IMAGE}`, `${POSTGRES_IMAGE}`, etc.
+Les docker-compose referent ces versions via `${POSTGRES_IMAGE}`, etc.
 Le `Makefile` et la CI chargent ce fichier automatiquement.
 
 Pour mettre a jour une version :
@@ -348,8 +339,8 @@ Taper `make` pour afficher toutes les commandes disponibles.
 | `make prod-config` | Valider la config prod |
 | `make prod-logs` | Suivre les logs prod |
 | `make prod-init` | Creer les buckets MinIO (prod) |
-| `make prod-debug-up` | Activer Adminer + Mongo Express en prod |
-| `make prod-debug-down` | Desactiver Adminer + Mongo Express en prod |
+| `make prod-debug-up` | Activer Adminer en prod |
+| `make prod-debug-down` | Desactiver Adminer en prod |
 | `make test` | Tous les tests (backend + frontend) |
 | `make test-backend` | Tests unitaires backend |
 | `make test-frontend` | Tests frontend mock-first (Streamlit) |
@@ -365,13 +356,11 @@ Taper `make` pour afficher toutes les commandes disponibles.
 | Backend | 8009 | 8009 | 9009 |
 | Frontend | 8501 | 8501 | 8502 |
 | PostgreSQL | 5434 | 5434 | 5435 |
-| MongoDB | 27017 | 27017 | 27018 |
 | MinIO API | 9000 | 9000 | 9002 |
 | MinIO Console | 9001 | 9001 | 9003 |
 | Adminer | 8085 | 8085 | 8086 (profile debug) |
-| Mongo Express | 8081 | 8081 | 8082 (profile debug) |
 
-En production, Adminer et Mongo Express ne demarrent pas par defaut (profile `debug`).
+En production, Adminer ne demarre pas par defaut (profile `debug`).
 Le service `createbuckets` est sous le profile `tools` dans tous les environnements.
 
 ## Depannage

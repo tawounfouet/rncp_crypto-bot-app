@@ -117,6 +117,9 @@ prod-logs: ## Suivre les logs prod
 
 test: test-backend test-frontend ## Lancer tous les tests (backend + frontend)
 
+verify: ## Verifier que tous les services installes sont presents et healthy (backend/frontend/airflow/minio/postgres/ml)
+	./scripts/verify.sh $(ARGS)
+
 test-backend: ## Lancer les tests unitaires backend
 	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
 
@@ -144,11 +147,11 @@ staging-init: ## Creer les buckets MinIO (staging)
 prod-init: ## Creer les buckets MinIO (prod)
 	docker compose -f docker-compose.prod.yml --profile tools up createbuckets
 
-prod-debug-up: ## Activer Adminer + Mongo Express en prod
-	docker compose -f docker-compose.prod.yml --profile debug up -d adminer mongo-express
+prod-debug-up: ## Activer Adminer en prod
+	docker compose -f docker-compose.prod.yml --profile debug up -d adminer
 
-prod-debug-down: ## Desactiver Adminer + Mongo Express en prod
-	docker compose -f docker-compose.prod.yml --profile debug stop adminer mongo-express
+prod-debug-down: ## Desactiver Adminer en prod
+	docker compose -f docker-compose.prod.yml --profile debug stop adminer
 
 check-infra: ## Valider la coherence versions.env / Dockerfiles / docker-compose
 	bash scripts/check-infra.sh

@@ -98,10 +98,8 @@ make dev-down
 | Backend API | 8009 | http://localhost:8009/api/v1/docs |
 | Frontend | 8501 | http://localhost:8501 |
 | PostgreSQL | 5434 | - |
-| MongoDB | 27017 | - |
 | MinIO Console | 9001 | http://localhost:9001 |
 | Adminer | 8085 | http://localhost:8085 |
-| Mongo Express | 8081 | http://localhost:8081 |
 
 ## Tests et qualite
 
@@ -214,10 +212,10 @@ sur la VM et sur le cluster K8s.
 
 | Environnement | Repertoire | Compose file | Ports |
 |---------------|------------|--------------|-------|
-| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` | Backend 8009, Frontend 8501, PostgreSQL 5434, MongoDB 27017, MinIO 9000/9001, Adminer 8085, Mongo Express 8081 |
-| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` | Backend 9009, Frontend 8502, PostgreSQL 5435, MongoDB 27018, MinIO 9002/9003, Adminer 8086*, Mongo Express 8082* |
+| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` | Backend 8009, Frontend 8501, PostgreSQL 5434, MinIO 9000/9001, Adminer 8085 |
+| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` | Backend 9009, Frontend 8502, PostgreSQL 5435, MinIO 9002/9003, Adminer 8086* |
 
-\* En production, Adminer et Mongo Express sont sous le profile `debug` et ne demarrent pas par defaut.
+\* En production, Adminer est sous le profile `debug` et ne demarre pas par defaut.
 Pour les activer ponctuellement : `make prod-debug-up` / `make prod-debug-down`.
 
 ## Scripts utilitaires
@@ -251,8 +249,8 @@ Taper `make` pour afficher toutes les commandes disponibles.
 | `make prod-config` | Valider la config prod |
 | `make prod-logs` | Suivre les logs prod |
 | `make prod-init` | Creer les buckets MinIO (prod) |
-| `make prod-debug-up` | Activer Adminer + Mongo Express en prod |
-| `make prod-debug-down` | Desactiver Adminer + Mongo Express en prod |
+| `make prod-debug-up` | Activer Adminer en prod |
+| `make prod-debug-down` | Desactiver Adminer en prod |
 | `make test` | Tests unitaires (venv local) |
 | `make lint` | Ruff check + format |
 | `make lint-fix` | Corriger automatiquement |
