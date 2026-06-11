@@ -102,7 +102,10 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      # Vérifie aussi que les bases créées par init-user-db.sh existent : pg_isready
+      # seul passe via le socket DÈS la phase d'init (avant CREATE DATABASE airflow),
+      # ce qui faisait démarrer airflow-init trop tôt -> "database airflow does not exist".
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -q && psql -U ${POSTGRES_USER:-postgres} -d airflow -c 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -269,6 +272,7 @@ services:
       - /bin/bash
       - -c
       - |
+        set -e   # échec bruyant : si `airflow db init` plante, ne pas sortir en exit 0
         airflow db init
         airflow connections delete postgres_default || true
         airflow connections add 'postgres_default' \
