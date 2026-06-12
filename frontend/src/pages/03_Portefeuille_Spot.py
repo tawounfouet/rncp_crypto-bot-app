@@ -77,7 +77,7 @@ def main() -> None:
 
     kpis = [
         KpiItem("Valeur totale", format_currency(snapshot.total_value_usdt)),
-        KpiItem("Cash USDT libre", format_currency(snapshot.free_cash_usdt)),
+        KpiItem("Cash USDC libre", format_currency(snapshot.free_cash_usdt)),
         KpiItem("Nombre d'actifs", str(snapshot.asset_count)),
         KpiItem("Nombre d'ordres", str(snapshot.open_order_count)),
     ]

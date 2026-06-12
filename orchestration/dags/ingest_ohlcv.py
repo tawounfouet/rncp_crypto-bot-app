@@ -11,9 +11,9 @@ Variables Airflow utilisées :
     (héritées du docker-compose.yml via x-airflow-common).
 
 Flux du DAG :
-    start → collect_BTCUSDT_1h ─┐
+    start → collect_BTCUSDC_1h ─┐
                                   ├→ notify_success
-            collect_ETHUSDT_1h ─┘
+            collect_ETHUSDC_1h ─┘
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ except ImportError as exc:
 # ---------------------------------------------------------------------------
 
 # Symboles et intervalles à collecter — modifiable sans toucher au DAG
-SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+SYMBOLS = ["BTCUSDC", "ETHUSDC"]
 INTERVAL = "1h"
 LIMIT = 1000   # klines par run (max API Binance = 1000)
 
@@ -85,7 +85,7 @@ def _make_load_callable(symbol: str, interval: str):
         object_key = ti.xcom_pull(task_ids=f"collect_{symbol}_{interval}")
         if not object_key:
             raise ValueError(f"Aucune clé d'objet MinIO trouvée pour la tâche collect_{symbol}_{interval}")
-        
+
         logger.info("Démarrage du chargement PostgreSQL pour symbol=%s, object_key=%s", symbol, object_key)
         run_loading(object_key=object_key)
         logger.info("Chargement complet pour symbol=%s, object_key=%s", symbol, object_key)
@@ -127,11 +127,10 @@ with DAG(
             task_id=f"collect_{symbol}_{INTERVAL}",
             python_callable=_make_collect_callable(symbol, INTERVAL, LIMIT),
         )
-        
+
         load_task = PythonOperator(
             task_id=f"load_{symbol}_{INTERVAL}",
             python_callable=_make_load_callable(symbol, INTERVAL),
         )
-        
-        collect_task >> load_task
 
+        collect_task >> load_task

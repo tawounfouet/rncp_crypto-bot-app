@@ -31,7 +31,7 @@ class BotConfig(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     strategy: str
     base_asset: str
-    quote_asset: str = "USDT"
+    quote_asset: str = "USDC"
     budget_usdt: float
     max_open_positions: int
     risk_per_trade_pct: float

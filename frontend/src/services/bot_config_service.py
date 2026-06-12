@@ -72,7 +72,7 @@ class BotConfigService:
 
         params: dict = strategy.get("parameters") or {}
         symbol: str = params.get("symbol") or ""
-        if len(symbol) > 4 and symbol.endswith("USDT"):
+        if len(symbol) > 4 and (symbol.endswith("USDT") or symbol.endswith("USDC")):
             base_asset = symbol[:-4]
         else:
             base_asset = params.get("base_asset") or "BTC"
@@ -83,7 +83,7 @@ class BotConfigService:
             updated_at=_parse_dt(strategy.get("updated_at")),
             strategy=strategy.get("strategy_type") or "custom",
             base_asset=base_asset,
-            quote_asset=params.get("quote_asset") or "USDT",
+            quote_asset=params.get("quote_asset") or "USDC",
             budget_usdt=_float(params.get("budget_usdt"), 1000.0),
             max_open_positions=_int(params.get("max_open_positions"), 3),
             risk_per_trade_pct=_float(params.get("risk_per_trade_pct"), 1.0),
@@ -155,7 +155,7 @@ class BotConfigService:
 
         updated_params: dict = updated_strategy.get("parameters") or new_params
         symbol = updated_params.get("symbol") or ""
-        if len(symbol) > 4 and symbol.endswith("USDT"):
+        if len(symbol) > 4 and (symbol.endswith("USDT") or symbol.endswith("USDC")):
             base_asset = symbol[:-4]
         else:
             base_asset = updated_params.get("base_asset") or "BTC"
@@ -166,7 +166,7 @@ class BotConfigService:
             updated_at=_parse_dt(updated_strategy.get("updated_at")),
             strategy=updated_strategy.get("strategy_type") or update.strategy,
             base_asset=base_asset,
-            quote_asset=updated_params.get("quote_asset") or "USDT",
+            quote_asset=updated_params.get("quote_asset") or "USDC",
             budget_usdt=_float(updated_params.get("budget_usdt"), update.budget_usdt),
             max_open_positions=_int(
                 updated_params.get("max_open_positions"), update.max_open_positions

@@ -8,8 +8,8 @@ Il réutilise les fonctions pures de models-training/src/data/binance.py
 (MLflow, PyTorch, etc.).
 
 Usage CLI :
-    python collect_ohlcv.py --symbol BTCUSDT --interval 1h
-    python collect_ohlcv.py --symbol ETHUSDT --interval 4h --limit 500
+    python collect_ohlcv.py --symbol BTCUSDC --interval 1h
+    python collect_ohlcv.py --symbol ETHUSDC --interval 4h --limit 500
 
 Variables d'environnement requises :
     BINANCE_BASE_URL       (optionnel, défaut: https://api.binance.com)
@@ -106,7 +106,7 @@ def fetch_klines(
     """Collecte les klines depuis l'API publique Binance (sans clé API).
 
     Args:
-        symbol: Paire de trading (ex: BTCUSDT)
+        symbol: Paire de trading (ex: BTCUSDC)
         interval: Intervalle (ex: 1h, 4h, 1d)
         limit: Nombre de klines (max 1000)
         start_time_ms: Timestamp de début en millisecondes
@@ -176,7 +176,7 @@ def upload_dataframe_parquet(
     Args:
         client: Client MinIO initialisé
         df: DataFrame à persister
-        object_key: Chemin de l'objet dans le bucket (ex: raw/BTCUSDT/1h/2026-06-09.parquet)
+        object_key: Chemin de l'objet dans le bucket (ex: raw/BTCUSDC/1h/2026-06-09.parquet)
         bucket: Nom du bucket cible
     """
     buffer = io.BytesIO()
@@ -216,7 +216,7 @@ def run_ingestion(
         raw/ohlcv/<SYMBOL>/<interval>/<YYYY-MM-DD>.parquet
 
     Args:
-        symbol: Paire de trading (ex: BTCUSDT)
+        symbol: Paire de trading (ex: BTCUSDC)
         interval: Intervalle de temps (ex: 1h)
         limit: Nombre de klines à collecter (max 1000 par appel)
         bucket: Bucket MinIO cible
@@ -235,7 +235,7 @@ def run_ingestion(
         symbol.upper(), interval, len(df), len(df.columns),
     )
 
-    # 2. Clé MinIO : raw/ohlcv/BTCUSDT/1h/2026-06-09.parquet
+    # 2. Clé MinIO : raw/ohlcv/BTCUSDC/1h/2026-06-09.parquet
     run_date = datetime.now(UTC).strftime("%Y-%m-%d")
     object_key = f"raw/ohlcv/{symbol.upper()}/{interval}/{run_date}.parquet"
 
@@ -259,7 +259,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Collecte OHLCV depuis Binance et stocke dans MinIO."
     )
-    parser.add_argument("--symbol", required=True, help="Paire de trading ex: BTCUSDT")
+    parser.add_argument("--symbol", required=True, help="Paire de trading ex: BTCUSDC")
     parser.add_argument("--interval", required=True, help="Intervalle ex: 1h, 4h, 1d")
     parser.add_argument("--limit", type=int, default=1000, help="Nombre de klines (max 1000)")
     parser.add_argument("--bucket", default=MINIO_BUCKET, help="Bucket MinIO cible")

@@ -62,7 +62,7 @@ class PortfolioService:
                 free = _float(b.get("available"))
                 locked = _float(b.get("locked"))
                 value = _float(b.get("usd_value"))
-                if asset == "USDT":
+                if asset in ("USDT", "USDC"):
                     free_cash_usdt = free
                 if free > 0 or locked > 0:
                     balances.append(
@@ -106,7 +106,7 @@ class PortfolioService:
                 recent_trades.append(
                     SpotTrade(
                         trade_id=t.get("id", ""),
-                        symbol=t.get("asset", "") + (t.get("quote_asset") or "USDT"),
+                        symbol=t.get("asset", "") + (t.get("quote_asset") or "USDC"),
                         side="BUY" if t.get("direction") == "IN" else "SELL",
                         price=_float(t.get("price")),
                         quantity=_float(t.get("amount")),

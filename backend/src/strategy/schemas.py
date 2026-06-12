@@ -97,7 +97,7 @@ class StrategyDeploymentCreate(BaseModel):
 
     strategy_id: str
     exchange: str = Field(..., description="Exchange name (e.g., binance)")
-    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
+    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDC)")
     timeframe: str = Field(..., description="Timeframe (e.g., 1h, 4h, 1d)")
     amount: Decimal = Field(..., gt=0, description="Amount to trade")
     parameters: dict[str, Any] | None = Field(None, description="Deployment-specific parameters")
@@ -106,7 +106,7 @@ class StrategyDeploymentCreate(BaseModel):
             "example": {
                 "strategy_id": "strategy-123",
                 "exchange": "binance",
-                "symbol": "BTCUSDT",
+                "symbol": "BTCUSDC",
                 "timeframe": "1h",
                 "amount": "100.00",
                 "parameters": {"risk_per_trade": 0.01, "max_positions": 3},
@@ -156,7 +156,7 @@ class BacktestCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "strategy_id": "strategy-123",
-                "symbol": "BTCUSDT",
+                "symbol": "BTCUSDC",
                 "timeframe": "1h",
                 "start_date": "2024-01-01T00:00:00Z",
                 "end_date": "2024-12-31T23:59:59Z",

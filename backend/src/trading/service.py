@@ -491,7 +491,7 @@ class TradingService:
             if float(b.get("free", "0")) > 0 or float(b.get("locked", "0")) > 0
         ]
 
-        # Build USDT price map from all tickers
+        # Build USD price map from all tickers (USDT and USDC pairs)
         all_tickers = binance_client.get_all_tickers() or []
         usdt_prices: dict[str, Decimal] = {
             "USDT": Decimal("1"),
@@ -502,7 +502,7 @@ class TradingService:
         for ticker in all_tickers:
             symbol = ticker.get("symbol", "")
             price_str = ticker.get("price")
-            if symbol.endswith("USDT") and price_str:
+            if (symbol.endswith("USDT") or symbol.endswith("USDC")) and price_str:
                 try:
                     usdt_prices[symbol[:-4]] = Decimal(str(price_str))
                 except Exception:

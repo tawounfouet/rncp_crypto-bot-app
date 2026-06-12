@@ -6,7 +6,7 @@ from utils.formatters import bool_to_label, format_currency, format_datetime, fo
 
 
 def test_format_currency() -> None:
-    assert format_currency(12345.6) == "12 345.60 USDT"
+    assert format_currency(12345.6) == "12 345.60 USDC"
 
 
 def test_format_pct() -> None:

@@ -5,7 +5,7 @@ les transforme pour correspondre au schéma PostgreSQL de la table 'market_data'
 et les y insère de manière idempotente (upsert).
 
 Usage CLI :
-    python load_ohlcv.py --object-key raw/ohlcv/BTCUSDT/1h/2026-06-10.parquet
+    python load_ohlcv.py --object-key raw/ohlcv/BTCUSDC/1h/2026-06-10.parquet
 """
 
 from __future__ import annotations
@@ -152,7 +152,7 @@ def transform_and_load(df: pd.DataFrame, db_url: str = DATABASE_URL) -> None:
     if engine.dialect.name == "postgresql":
         # Dialecte natif PostgreSQL : clause ON CONFLICT DO UPDATE
         stmt = insert(market_data_table).values(records)
-        
+
         # Liste des colonnes à mettre à jour en cas de conflit (on exclut la clé primaire et la date de création)
         update_cols = {
             col.name: stmt.excluded[col.name]

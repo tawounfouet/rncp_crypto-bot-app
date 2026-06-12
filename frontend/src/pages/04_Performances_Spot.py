@@ -113,7 +113,7 @@ def main() -> None:
                 theme_mode,
                 margin=dict(l=0, r=0, t=20, b=0),
                 xaxis_title="Date",
-                yaxis_title="USDT",
+                yaxis_title="USDC",
                 hovermode="x unified",
             )
         )

@@ -60,7 +60,7 @@ class MarketDataInsertService:
         Fetch historical data from Binance and insert into database.
 
         Args:
-            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            symbol: Trading pair symbol (e.g., 'BTCUSDC')
             interval: Time interval (e.g., '1h', '4h', '1d')
             start_time: Start datetime for historical data
             end_time: End datetime (default: now)
@@ -390,7 +390,7 @@ class MarketDataInsertService:
         Retrieve the latest market data from PostgreSQL database.
 
         Args:
-            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            symbol: Trading pair symbol (e.g., 'BTCUSDC')
             interval: Time interval (e.g., '1h', '4h', '1d')
             limit: Maximum number of records to retrieve (default: 100)
 

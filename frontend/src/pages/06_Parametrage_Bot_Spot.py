@@ -95,7 +95,7 @@ def main() -> None:
         c1, c2 = st.columns(2)
         with c1:
             budget_usdt = st.number_input(
-                "Budget USDT",
+                "Budget USDC",
                 min_value=0.0,
                 value=float(config.budget_usdt),
                 step=100.0,

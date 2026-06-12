@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["Market Data"])
 
 # Constants
-SYMBOL_DESCRIPTION = "Trading symbol (e.g., BTCUSDT)"
+SYMBOL_DESCRIPTION = "Trading symbol (e.g., BTCUSDC)"
 
 
 # Dependency to get market data service
@@ -64,7 +64,7 @@ async def insert_historical_data(
     Uses UPSERT logic to handle duplicate records (updates if exists, inserts if new).
 
     **Parameters:**
-    - **symbol**: Trading pair (e.g., 'BTCUSDT')
+    - **symbol**: Trading pair (e.g., 'BTCUSDC')
     - **interval**: Timeframe ('1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w')
     - **start_time**: Start datetime for historical data (ISO format)
     - **end_time**: End datetime (optional, defaults to now)
@@ -73,7 +73,7 @@ async def insert_historical_data(
     **Example Request:**
     ```json
     {
-        "symbol": "BTCUSDT",
+        "symbol": "BTCUSDC",
         "interval": "1h",
         "start_time": "2024-01-01T00:00:00Z",
         "end_time": "2024-01-31T23:59:59Z",
@@ -155,7 +155,7 @@ async def fetch_market_data(
     """
     Fetch historical market data (OHLCV) for a specific symbol and timeframe.
 
-    - **symbol**: Trading symbol (e.g., BTCUSDT)
+    - **symbol**: Trading symbol (e.g., BTCUSDC)
     - **interval**: Timeframe (e.g., 1m, 5m, 15m, 1h, 4h, 1d)
     - **start_time**: Optional start time for historical data
     - **end_time**: Optional end time for historical data
@@ -383,7 +383,7 @@ async def get_multiple_prices(
     """
     Get current prices for multiple symbols.
 
-    - **symbols**: Comma-separated list of trading symbols (e.g., BTCUSDT,ETHUSDT,BNBUSDT)
+    - **symbols**: Comma-separated list of trading symbols (e.g., BTCUSDC,ETHUSDC,BNBUSDC)
     """
     try:
         symbol_list = [s.strip().upper() for s in symbols.split(",")]

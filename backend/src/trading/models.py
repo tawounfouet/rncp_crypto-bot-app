@@ -204,7 +204,7 @@ class Transaction(BaseModel):
     direction = Column(String(10), nullable=False, index=True)  # IN, OUT
 
     # For trades
-    quote_asset = Column(String(20), nullable=True)  # USDT for BTCUSDT
+    quote_asset = Column(String(20), nullable=True)  # USDC for BTCUSDC
     quote_amount = Column(DECIMAL(20, 8), nullable=True)
     price = Column(DECIMAL(20, 8), nullable=True)
 

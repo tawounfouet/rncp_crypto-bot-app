@@ -90,7 +90,7 @@ class PerformanceService:
                         TradeJournalEntry(
                             id=t.get("id", ""),
                             bot_id=bot_id,
-                            symbol=t.get("asset", "") + (t.get("quote_asset") or "USDT"),
+                            symbol=t.get("asset", "") + (t.get("quote_asset") or "USDC"),
                             side="BUY" if t.get("direction") == "IN" else "SELL",
                             entry_price=_float(t.get("price")),
                             exit_price=_float(t.get("price")),
