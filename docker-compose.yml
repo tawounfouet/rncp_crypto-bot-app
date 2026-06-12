@@ -37,6 +37,8 @@ x-airflow-common: &airflow-common
     - airflow_logs:/opt/airflow/logs
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./jobs:/opt/airflow/jobs       # jobs batch importés par les DAGs
+    - ./models:/opt/airflow/models   # scripts ML (features, training) — requis par ml_pipeline DAG
+    - ./utils:/opt/airflow/utils     # package transverse partagé
     - ./data:/app/data
   depends_on:
     postgres:

@@ -6,6 +6,8 @@ from pathlib import Path
 
 from src.config.config_loader import load_config
 
+from utils.connectors.minio import MinioClient
+
 
 def check_mvp(config_path: str = "config.yaml") -> dict[str, str]:
     """Return status for major MVP areas."""
@@ -23,6 +25,14 @@ def check_mvp(config_path: str = "config.yaml") -> dict[str, str]:
     processed_path = Path(settings.data.paths.processed)
     if raw_path.exists() and any(raw_path.rglob("*.parquet")):
         statuses["DATA"] = "ok"
+    else:
+        try:
+            mc = MinioClient()
+            objs = mc.list_objects(prefix="raw/ohlcv/")
+            if objs:
+                statuses["DATA"] = "ok (MinIO)"
+        except Exception:
+            pass
     if processed_path.exists() and any(processed_path.rglob("*.parquet")):
         statuses["FEATURES"] = "ok"
     if (Path(settings.mlops.model_registry_path) / "random_forest" / "best").exists():

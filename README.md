@@ -60,7 +60,12 @@ cp .env.example .env
 ```bash
 # Creer le venv a la racine du projet (Python 3.14 requis)
 python3.14 -m venv .venv
-.venv/bin/pip install -r backend/requirements-dev.txt
+
+# Activer le venv
+source .venv/bin/activate
+
+# Installer les dependances
+pip install -r backend/requirements-dev.txt
 
 # Installer les hooks pre-commit
 pre-commit install
