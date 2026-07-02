@@ -22,7 +22,7 @@ htmlcov/
 logs/
 
 # Data
-data/
+/data/
 
 # OS
 .DS_Store

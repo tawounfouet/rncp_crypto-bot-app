@@ -50,12 +50,25 @@ logger = logging.getLogger("ingest.collect_ohlcv")
 # Configuration (variables d'environnement)
 # ---------------------------------------------------------------------------
 
+from pathlib import Path
+
+# Chargement du .env local si disponible (pour exécution hors Docker)
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    load_dotenv(dotenv_path=env_path)
+except ImportError:
+    pass
+
 BINANCE_BASE_URL = os.environ.get("BINANCE_BASE_URL", "https://api.binance.com")
 BINANCE_REQUEST_TIMEOUT = int(os.environ.get("BINANCE_REQUEST_TIMEOUT", "20"))
 
-MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "minio:9000")
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
+# En local (hors Docker), on fallback sur localhost:9000 si non défini
+_default_endpoint = "localhost:9000" if not Path("/.dockerenv").exists() else "minio:9000"
+
+MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", _default_endpoint)
+MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", os.environ.get("MINIO_ROOT_USER", "minioadmin"))
+MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin"))
 MINIO_SECURE = os.environ.get("MINIO_SECURE", "0").lower() in ("true", "1", "yes")
 MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "crypto-bot-data")
 
