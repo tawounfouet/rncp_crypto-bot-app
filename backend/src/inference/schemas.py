@@ -10,6 +10,7 @@ class PredictRequest(BaseModel):
 
     Accepts pre-computed feature values matching the model's ``feature_columns.json``.
     """
+
     symbol: str = Field(..., description="Trading pair (e.g. BTCUSDT)")
     interval: str = Field("1h", description="Kline interval")
     features: dict[str, float] = Field(
@@ -20,6 +21,7 @@ class PredictRequest(BaseModel):
 
 class PredictResponse(BaseModel):
     """Inference result."""
+
     success: bool = True
     symbol: str
     interval: str
@@ -36,6 +38,7 @@ class PredictResponse(BaseModel):
 
 class ModelInfoResponse(BaseModel):
     """Information about the deployed model."""
+
     success: bool = True
     model_name: str
     model_version: str

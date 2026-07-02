@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import tempfile
 import time
 from pathlib import Path
@@ -93,7 +92,7 @@ class InferenceService:
 
         proba = self._model.predict_proba(x_scaled)[0]
         classes = list(self._model.classes_)
-        probabilities = {str(label): float(p) for label, p in zip(classes, proba)}
+        probabilities = {str(label): float(p) for label, p in zip(classes, proba, strict=False)}
         signal = max(probabilities, key=probabilities.get)
 
         latency_ms = (time.perf_counter() - start) * 1000

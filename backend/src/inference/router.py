@@ -32,12 +32,12 @@ def predict(payload: PredictRequest):
     try:
         result = svc.predict(payload.features)
     except InferenceError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(
             status_code=400,
             detail=f"Missing feature column: {exc}",
-        )
+        ) from exc
 
     return PredictResponse(
         symbol=payload.symbol.upper(),

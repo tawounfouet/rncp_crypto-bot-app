@@ -317,6 +317,25 @@ Pour mettre a jour une version :
 2. Tester avec `make dev-config` / `make staging-config` / `make prod-config`
 3. Committer et pousser
 
+### Ajouter ou mettre a jour une dependance Python
+
+> **Ne jamais editer `requirements.txt` directement** : ces fichiers sont
+> *generes* a partir de `versions.env` + des templates `*.template` par
+> `scripts/generate-requirements.py` (lance automatiquement par `make dev-up`,
+> `make dev-build`, `make staging-up`, `make prod-up`...). Toute ligne ajoutee a
+> la main dans un `requirements.txt` est ecrasee a la regeneration.
+
+Procedure propre :
+1. Ajouter la version dans `versions.env` : `MA_LIB_VERSION=x.y.z`
+2. Ajouter le paquet dans le(s) template(s) concerne(s) avec le placeholder :
+   `ma-lib==$MA_LIB_VERSION`. Templates disponibles :
+   - `backend/requirements.txt.template` (API FastAPI)
+   - `jobs/requirements.txt.template` (jobs batch, tournent dans l'image Airflow)
+   - `orchestration/requirements.txt.template` (DAGs Airflow)
+3. Regenerer : `make generate-requirements` (ou `make dev-config`)
+4. Committer `versions.env`, le `*.template` **et** le `requirements.txt` regenere
+   (les trois doivent rester coherents).
+
 ### Commandes Makefile
 
 Taper `make` pour afficher toutes les commandes disponibles.
