@@ -1,5 +1,5 @@
 from utils.connectors.minio import MinioClient
-from utils.connectors.binance import map_kline, fetch_klines
+from utils.connectors.exchanges.binance_native import map_kline, fetch_klines
 from utils.connectors.postgres import get_database_url, create_db_engine
 
 __all__ = [

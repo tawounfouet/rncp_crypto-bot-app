@@ -109,7 +109,7 @@ prod-logs: ## Suivre les logs prod
 # Tests & Lint (venv local)
 # ===========================================================================
 
-test: test-backend test-frontend ## Lancer tous les tests (backend + frontend)
+test: test-backend test-frontend test-utils ## Lancer tous les tests (backend + frontend + utils)
 
 verify: ## Verifier que tous les services installes sont presents et healthy (backend/frontend/airflow/minio/postgres/ml)
 	./scripts/verify.sh $(ARGS)
@@ -119,6 +119,9 @@ test-backend: ## Lancer les tests unitaires backend
 
 test-frontend: ## Lancer les tests frontend mock-first
 	cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
+
+test-utils: ## Lancer les tests de la couche connecteurs partagee (utils/)
+	PYTHONPATH=. .venv/bin/pytest utils/tests -q -o cache_dir=/tmp/utils-pytest-cache
 
 lint: ## Lancer ruff check + format
 	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise
