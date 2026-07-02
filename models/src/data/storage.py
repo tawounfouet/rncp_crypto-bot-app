@@ -16,8 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 def metadata_path_for(path: str | Path) -> Path:
-    """Get the path for the metadata JSON file corresponding to a dataset."""
-    return Path(path).with_suffix(".json")
+    """Get the path for the metadata JSON file corresponding to a dataset.
+
+    Le nom du format est conservé (``1h.csv`` -> ``1h.csv.json``) pour que chaque
+    format ait ses propres métadonnées. Sinon tous les formats écraseraient un
+    unique ``1h.json`` (ordre d'écriture non déterministe -> test flaky).
+    """
+    return Path(f"{path}.json")
 
 
 def read_dataset(path: str | Path) -> pd.DataFrame:
@@ -39,6 +44,7 @@ def read_dataset(path: str | Path) -> pd.DataFrame:
 def read_raw_ohlcv_from_minio(
     symbol: str,
     interval: str,
+    exchange: str = "binance",
     bucket: str | None = None,
     minio_client: MinioClient | None = None,
 ) -> pd.DataFrame:
@@ -48,6 +54,7 @@ def read_raw_ohlcv_from_minio(
         ``raw/ohlcv/{SYMBOL}/{interval}/{YYYY-MM-DD}.parquet``
 
     Args:
+        exchange: Exchange name (e.g. ``binance``, ``kraken``)
         symbol: Trading pair (e.g. ``BTCUSDT``)
         interval: Kline interval (e.g. ``1h``, ``4h``)
         bucket: MinIO bucket (defaults to env ``MINIO_BUCKET`` or ``crypto-bot-data``)
@@ -58,7 +65,7 @@ def read_raw_ohlcv_from_minio(
     """
     client = minio_client or MinioClient()
     bucket = bucket or client.default_bucket
-    prefix = f"raw/ohlcv/{symbol.upper()}/{interval}/"
+    prefix = f"raw/ohlcv/{exchange.lower()}/{symbol.upper()}/{interval}/"
 
     objects = client.list_objects(prefix=prefix, bucket=bucket)
     if not objects:
@@ -80,7 +87,10 @@ def read_raw_ohlcv_from_minio(
     result = result.sort_values("open_time").reset_index(drop=True)
     logger.info(
         "Read %d rows from MinIO prefix=%s bucket=%s (%d files)",
-        len(result), prefix, bucket, len(frames),
+        len(result),
+        prefix,
+        bucket,
+        len(frames),
     )
     return result
 
@@ -103,7 +113,7 @@ def write_dataset(
     paths = []
     for fmt in formats:
         file_path = base_obj.with_suffix(f".{fmt}")
-        
+
         if fmt == "parquet":
             data.to_parquet(file_path, index=False)
         elif fmt == "csv":
@@ -112,7 +122,7 @@ def write_dataset(
             data.to_json(file_path, orient="records", lines=True)
         else:
             raise ValueError(f"Unsupported export format: {fmt}")
-            
+
         paths.append(file_path)
 
         if metadata is not None:

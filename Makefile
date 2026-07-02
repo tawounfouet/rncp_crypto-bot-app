@@ -109,7 +109,9 @@ prod-logs: ## Suivre les logs prod
 # Tests & Lint (venv local)
 # ===========================================================================
 
-test: test-backend test-frontend test-utils ## Lancer tous les tests (backend + frontend + utils)
+test: test-backend test-frontend test-utils test-jobs ## Lancer les tests (backend + frontend + utils + jobs)
+# NB: test-models exclu de l'agregat tant que la suite models n'est pas verte (echecs
+#     pre-existants: config/features/utils). Lancable seul via `make test-models`. Voir issue hygiene tests models.
 
 verify: ## Verifier que tous les services installes sont presents et healthy (backend/frontend/airflow/minio/postgres/ml)
 	./scripts/verify.sh $(ARGS)
@@ -122,6 +124,15 @@ test-frontend: ## Lancer les tests frontend mock-first
 
 test-utils: ## Lancer les tests de la couche connecteurs partagee (utils/)
 	PYTHONPATH=. .venv/bin/pytest utils/tests -q -o cache_dir=/tmp/utils-pytest-cache
+
+test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils)
+	PYTHONPATH=backend/src .venv/bin/pytest --cov=backend/src --cov=utils --cov-report=term-missing backend/src/tests utils/tests frontend/tests
+
+test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
+	PYTHONPATH=. .venv/bin/pytest jobs/tests -q -o cache_dir=/tmp/utils-pytest-cache
+
+test-models: ## Lancer les tests unitaires des models (backend/src/models)
+	PYTHONPATH=. .venv/bin/pytest models/tests -q -o cache_dir=/tmp/models-pytest-cache
 
 lint: ## Lancer ruff check + format
 	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise
