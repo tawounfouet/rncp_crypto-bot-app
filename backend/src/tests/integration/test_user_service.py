@@ -364,7 +364,7 @@ class TestBinanceCredentials:
 
     def test_save_binance_credentials_encrypts_and_masks(self, patch_db_session, monkeypatch):
         """Les credentials sont chiffres en BDD et seul un statut masque est retourne."""
-        from auth.models import UserSettings
+        from auth.models import UserExchangeCredential, UserSettings
 
         self._set_encryption_key(monkeypatch)
         created, service = self._create_test_user()
@@ -390,9 +390,58 @@ class TestBinanceCredentials:
         assert settings.get_api_key("binance_spot_testnet") == "AK_TEST_PUBLIC_1234"
         assert settings.get_api_secret("binance_spot_testnet") == "AS_TEST_SECRET_9876"
 
+        credential = (
+            patch_db_session.query(UserExchangeCredential)
+            .filter(UserExchangeCredential.user_id == created.id)
+            .first()
+        )
+        assert credential is not None
+        assert credential.exchange == "binance"
+        assert credential.environment == "testnet"
+        assert credential.is_active is True
+        assert credential.api_key_encrypted != "AK_TEST_PUBLIC_1234"
+        assert credential.api_secret_encrypted != "AS_TEST_SECRET_9876"
+        assert credential.get_api_key() == "AK_TEST_PUBLIC_1234"
+        assert credential.get_api_secret() == "AS_TEST_SECRET_9876"
+        assert service.list_exchange_credentials(created.id)[0].id == credential.id
+
         safe_settings = service.get_user_settings(created.id)
         assert safe_settings["has_binance_credentials"] is True
         assert "api_keys" not in safe_settings
+
+    def test_verify_exchange_credential_marks_permissions_checked(self, patch_db_session, monkeypatch):
+        """La verification Testnet enregistre l'etat des permissions."""
+        from auth.models import UserExchangeCredential
+
+        class FakeBinanceTestnet:
+            def account(self, user_id):
+                return {"canTrade": True}
+
+        self._set_encryption_key(monkeypatch)
+        created, service = self._create_test_user()
+        service.save_binance_credentials(
+            created.id,
+            api_key="AK_TEST_PUBLIC_1234",
+            api_secret="AS_TEST_SECRET_9876",  # noqa: S106
+            password_confirmation="SecurePass123!",  # noqa: S106
+        )
+        credential = (
+            patch_db_session.query(UserExchangeCredential)
+            .filter(UserExchangeCredential.user_id == created.id)
+            .first()
+        )
+        assert credential.permissions_checked is False
+
+        result = service.verify_exchange_credential(
+            created.id,
+            credential.id,
+            binance_service=FakeBinanceTestnet(),
+        )
+
+        assert result.permissions_checked is True
+        assert result.last_verified_at is not None
+        patch_db_session.refresh(credential)
+        assert credential.permissions_checked is True
 
     def test_save_binance_credentials_rejects_wrong_password(self, patch_db_session, monkeypatch):
         """La confirmation du mot de passe est verifiee cote backend."""
@@ -413,6 +462,8 @@ class TestBinanceCredentials:
 
     def test_delete_binance_credentials_removes_credentials(self, patch_db_session, monkeypatch):
         """La suppression retire les credentials stockes."""
+        from auth.models import UserExchangeCredential
+
         self._set_encryption_key(monkeypatch)
         created, service = self._create_test_user()
         service.save_binance_credentials(
@@ -427,6 +478,13 @@ class TestBinanceCredentials:
         assert result.configured is False
         assert service.get_binance_credentials_status(created.id).configured is False
         assert service.get_user_settings(created.id)["has_binance_credentials"] is False
+        credential = (
+            patch_db_session.query(UserExchangeCredential)
+            .filter(UserExchangeCredential.user_id == created.id)
+            .first()
+        )
+        assert credential is not None
+        assert credential.is_active is False
 
 
 class TestDeleteInactiveUsers:

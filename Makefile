@@ -12,6 +12,8 @@ export
 
 .DEFAULT_GOAL := help
 
+VENV_PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,$(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,.venv/bin/python))
+
 help: ## Afficher cette aide
 	@echo ""
 	@echo "  Crypto-bot-app — commandes disponibles"
@@ -63,6 +65,12 @@ dev-build: generate-requirements ## (Re)build les images dev (cache activé = ra
 dev-rebuild: generate-requirements ## Rebuild COMPLET sans cache (lent, en cas de pépin)
 	docker compose build --no-cache
 
+bot-sync-templates: ## Reseed les bot_templates integres sans toucher aux bots utilisateur
+	docker compose exec crypto-bot-backend python /app/scripts/sync_bot_templates.py --show-active
+
+bot-migrate-templates: ## Reseed les bot_templates et migre les snapshots des bots utilisateur integres
+	docker compose exec crypto-bot-backend python /app/scripts/sync_bot_templates.py --migrate-instances --show-active
+
 # ===========================================================================
 # ML / MLOps
 # ===========================================================================
@@ -78,6 +86,9 @@ ml-logs: ## Suivre les logs de la couche ML
 
 ml-train-rf: ## Lancer un entrainement Random Forest
 	docker compose exec crypto-bot-ml-api python -m src.main train-rf
+
+ml-train-bot-rsi: ## Entrainer et versionner le modele MLflow du bot RSI BTCUSDT 1h
+	docker compose exec crypto-bot-ml-api python -m src.main train-bot-rsi
 
 # ===========================================================================
 # Staging (usage local ou VM)
@@ -121,18 +132,18 @@ verify: ## Verifier que tous les services installes sont presents et healthy (ba
 	./scripts/verify.sh $(ARGS)
 
 test-backend: ## Lancer les tests unitaires backend
-	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+	PYTHONPATH=backend/src $(VENV_PYTHON) -m pytest backend/src/tests -v
 
 test-frontend: ## Lancer les tests frontend mock-first
-	cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
+	cd frontend && ../$(VENV_PYTHON) -m pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
 
 lint: ## Lancer ruff check + format
-	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise
-	.venv/bin/ruff format --check backend/src/ frontend/src/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ --output-format=concise
+	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/
 
 lint-fix: ## Corriger automatiquement les erreurs ruff
-	.venv/bin/ruff check backend/src/ frontend/src/ --fix
-	.venv/bin/ruff format backend/src/ frontend/src/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ --fix
+	$(VENV_PYTHON) -m ruff format backend/src/ frontend/src/
 
 # ===========================================================================
 # Outils

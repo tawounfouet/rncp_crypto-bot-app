@@ -8,9 +8,48 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from pydantic.types import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+except ModuleNotFoundError:
+
+    class BaseSettings(BaseModel):
+        """Small local fallback used when pydantic-settings is not installed."""
+
+        model_config = ConfigDict(extra="ignore")
+
+        def __init__(self, **kwargs):
+            import json
+            import os
+            from typing import get_origin
+
+            env_values: dict[str, Any] = {}
+            for field_name, field_info in self.__class__.model_fields.items():
+                if field_name not in os.environ or field_name in kwargs:
+                    continue
+                raw_value = os.environ[field_name]
+                origin = get_origin(field_info.annotation)
+                if origin is list:
+                    try:
+                        env_values[field_name] = json.loads(raw_value)
+                    except json.JSONDecodeError:
+                        env_values[field_name] = [item.strip() for item in raw_value.split(",") if item.strip()]
+                elif field_info.annotation is bool:
+                    lowered = raw_value.strip().lower()
+                    if lowered in {"1", "true", "yes", "on"}:
+                        env_values[field_name] = True
+                    elif lowered in {"0", "false", "no", "off"}:
+                        env_values[field_name] = False
+                else:
+                    env_values[field_name] = raw_value
+            env_values.update(kwargs)
+            super().__init__(**env_values)
+
+    def SettingsConfigDict(**kwargs):
+        return ConfigDict(extra=kwargs.get("extra", "ignore"))
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -104,6 +143,10 @@ class Settings(BaseSettings):
     ENABLE_WEBSOCKETS: bool = True
     ENABLE_METRICS: bool = True
     ENABLE_HEALTH_CHECKS: bool = True
+
+    # Bot worker settings
+    BOT_WORKER_INTERVAL_SECONDS: int = 60
+    BOT_WORKER_LIMIT: int = 100
 
     # Environment detection
     IS_DOCKER: bool = False

@@ -1,4 +1,4 @@
-"""Page Parametrage Bot Spot."""
+"""Page Catalogue Bots Spot."""
 
 from __future__ import annotations
 
@@ -10,172 +10,117 @@ from components.headers import render_page_header, render_section_title
 from components.prerequisites import render_binance_prerequisite_state
 from layouts.page_shell import setup_page
 from prerequisites.binance import evaluate_binance_prerequisite
-from schemas.bot import BotConfigUpdate
+from schemas.bot import BotTemplate
 from services.base import ServiceError
 from services.bot_config_service import BotConfigService
-from services.bot_control_service import BotControlService
-from utils.formatters import format_datetime
-from utils.streamlit_compat import form_submit_button as compat_form_submit_button
+from utils.streamlit_compat import button as compat_button
+
+
+def _render_mapping(title: str, values: dict[str, object]) -> None:
+    st.markdown(f"##### {title}")
+    for key, value in values.items():
+        st.caption(f"{key}: {value}")
+
+
+def _render_template_details(template: BotTemplate, already_selected: bool) -> None:
+    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+    st.markdown(f"### {template.name}")
+    st.caption(template.description)
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Paire", template.symbol)
+    with col2:
+        st.metric("Timeframe", template.timeframe)
+    with col3:
+        st.metric("Version", template.version)
+    with col4:
+        render_status_badge("Statut", "DEJA CHOISI" if already_selected else "DISPONIBLE")
+
+    st.markdown("---")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.write(f"Modele IA: `{template.model_type}`")
+        st.write(f"Strategie: `{template.strategy_type}`")
+        st.write(f"Signal: `{template.signal_source}`")
+    with c2:
+        _render_mapping("Execution verrouillee", template.execution_params)
+        _render_mapping("Risque verrouille", template.risk_limits)
+        _render_mapping("Ordres verrouilles", template.order_policy)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def main() -> None:
-    store, user = setup_page(title="Parametrage Bot Spot", icon="⚙️", page_key="bot_config")
+    store, user = setup_page(
+        title="Catalogue Bots Spot", icon=":material/smart_toy:", page_key="bot_config"
+    )
     render_page_header(
-        "Parametrage Bot Spot",
-        "Edition versionnee des parametres de trading mockes avec validations explicites.",
+        "Catalogue Bots Spot",
+        "Selection de bots cle en main. Strategie, timeframe, signal et risque sont verrouilles.",
     )
 
     gate = evaluate_binance_prerequisite("bot_config", user)
     if gate.missing:
         render_binance_prerequisite_state("bot_config", cta_key="cta_binance_bot_config")
 
-    bot_service = BotControlService(store)
-    config_service = BotConfigService(store)
-
+    service = BotConfigService(store)
     try:
-        bots = bot_service.list_bots()
+        templates = service.list_templates()
     except ServiceError as exc:
         show_feedback("error", str(exc))
         return
-    if not bots:
-        show_feedback("warning", "Aucun bot disponible pour parametrage.")
+
+    if not templates:
+        show_feedback("warning", "Aucun bot preconfigure disponible.")
         return
 
     if gate.missing:
         render_section_title(
             "Bots Spot disponibles",
-            "Le paramétrage détaillé sera disponible après configuration Binance.",
+            "La selection sera disponible apres configuration Binance.",
         )
         st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        for bot in bots:
-            st.markdown(f"- **{bot.name}**")
+        for template in templates:
+            st.markdown(f"- **{template.name}** - `{template.symbol}` - `{template.timeframe}`")
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    bot_id = st.selectbox(
-        "Bot selectionne",
-        options=[bot.id for bot in bots],
-        format_func=lambda bid: next(bot.name for bot in bots if bot.id == bid),
-        disabled=gate.actions_disabled,
+    template_id = st.selectbox(
+        "Bot preconfigure",
+        options=[template.id for template in templates],
+        format_func=lambda tid: next(template.name for template in templates if template.id == tid),
     )
-    selected_bot = next(bot for bot in bots if bot.id == bot_id)
 
     try:
-        config = config_service.get_config(bot_id)
+        template = service.get_template(template_id)
     except ServiceError as exc:
         show_feedback("error", str(exc))
         return
 
-    info_col1, info_col2, info_col3 = st.columns(3)
-    with info_col1:
-        render_status_badge("Statut actuel", selected_bot.status.value)
-    with info_col2:
-        st.metric("Version config", config.version)
-    with info_col3:
-        st.metric("Date modif", format_datetime(config.updated_at))
+    already_selected = service.is_selected(template_id)
+    _render_template_details(template, already_selected)
 
-    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-    with st.form("bot_config_form", clear_on_submit=False):
-        strategy = st.selectbox(
-            "Strategie",
-            options=["Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"],
-            index=max(
-                0,
-                (
-                    ["Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"].index(
-                        config.strategy
-                    )
-                    if config.strategy
-                    in {"Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"}
-                    else 0
-                ),
-            ),
-            disabled=gate.actions_disabled,
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            budget_usdt = st.number_input(
-                "Budget USDT",
-                min_value=0.0,
-                value=float(config.budget_usdt),
-                step=100.0,
-                disabled=gate.actions_disabled,
-            )
-            max_open_positions = st.number_input(
-                "Max positions ouvertes",
-                min_value=1,
-                value=int(config.max_open_positions),
-                step=1,
-                disabled=gate.actions_disabled,
-            )
-            risk_per_trade = st.number_input(
-                "Risque / trade (%)",
-                min_value=0.1,
-                max_value=10.0,
-                value=float(config.risk_per_trade_pct),
-                step=0.1,
-                disabled=gate.actions_disabled,
-            )
-        with c2:
-            take_profit = st.number_input(
-                "Take profit (%)",
-                min_value=0.1,
-                value=float(config.take_profit_pct),
-                step=0.1,
-                disabled=gate.actions_disabled,
-            )
-            stop_loss = st.number_input(
-                "Stop loss (%)",
-                min_value=0.1,
-                value=float(config.stop_loss_pct),
-                step=0.1,
-                disabled=gate.actions_disabled,
-            )
-            cooldown = st.number_input(
-                "Cooldown (secondes)",
-                min_value=0,
-                value=int(config.cooldown_seconds),
-                step=10,
-                disabled=gate.actions_disabled,
-            )
-        validate_clicked = compat_form_submit_button(
-            "Valider",
-            width="stretch",
-            disabled=gate.actions_disabled,
-        )
-        save_clicked = compat_form_submit_button(
-            "Sauvegarder",
-            type="primary",
-            width="stretch",
-            disabled=gate.actions_disabled,
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    update = BotConfigUpdate(
-        strategy=strategy,
-        budget_usdt=float(budget_usdt),
-        max_open_positions=int(max_open_positions),
-        risk_per_trade_pct=float(risk_per_trade),
-        take_profit_pct=float(take_profit),
-        stop_loss_pct=float(stop_loss),
-        cooldown_seconds=int(cooldown),
-    )
-
-    if validate_clicked:
-        errors = config_service.validate(update)
-        if errors:
-            show_feedback("error", " | ".join(errors))
-        else:
-            show_feedback("success", "Validation OK. Vous pouvez sauvegarder.")
-
-    if save_clicked:
-        ok, message, new_config = config_service.save(bot_id, update)
+    if already_selected:
+        show_feedback("info", "Ce bot est deja ajoute a vos instances.")
+    elif compat_button("Choisir ce bot", type="primary", width="stretch"):
+        ok, message, _selection = service.select_template(template_id)
         show_feedback("success" if ok else "error", message)
-        if ok and new_config is not None:
-            st.caption(
-                f"Nouvelle version: {new_config.version} - date: {format_datetime(new_config.updated_at)}"
-            )
+        if ok:
             st.rerun()
+
+    selections = service.list_user_selections()
+    if selections:
+        st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+        render_section_title(
+            "Mes bots selectionnes", "Instances creees depuis des templates verrouilles."
+        )
+        for selection in selections:
+            snapshot = selection.config_snapshot
+            st.markdown(
+                f"- **{snapshot.get('name')}** - `{snapshot.get('symbol')}` - "
+                f"`{snapshot.get('timeframe')}` - {selection.status.value}"
+            )
 
 
 if __name__ == "__main__":

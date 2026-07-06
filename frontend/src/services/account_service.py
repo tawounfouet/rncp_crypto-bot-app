@@ -9,6 +9,7 @@ from mocks.db import MockStore
 from schemas.account import AccountProfile, BinanceCredentialInput, BinanceCredentialStatus
 from services.auth_api_client import ApiResponse, AuthApiClient
 from services.base import ServiceError, raise_if_forced_error, simulate_latency
+from services.runtime_mode import allow_mock_fallback, backend_required_message
 from state.session import get_access_token, get_refresh_token, set_auth_tokens
 from utils.formatters import mask_secret
 from utils.validators import validate_email, validate_required
@@ -81,6 +82,8 @@ class AccountService:
             self._set_local_binance_configured(status.configured)
             return status
 
+        if not allow_mock_fallback():
+            raise ServiceError(backend_required_message("le statut Binance"))
         return self._get_binance_status_mock()
 
     def _get_binance_status_mock(self) -> BinanceCredentialStatus:
@@ -124,6 +127,8 @@ class AccountService:
             self._set_local_binance_configured(status.configured)
             return True, "Cles Binance chiffrees et enregistrees en base."
 
+        if not allow_mock_fallback():
+            raise ServiceError(backend_required_message("l'enregistrement Binance"))
         return self._save_binance_credentials_mock(payload)
 
     def _save_binance_credentials_mock(self, payload: BinanceCredentialInput) -> tuple[bool, str]:
@@ -133,6 +138,8 @@ class AccountService:
             "account.binance.save",
             "Enregistrement des cles impossible (mock).",
         )
+        if not allow_mock_fallback():
+            raise ServiceError(backend_required_message("la suppression Binance"))
         user = self._current_user()
 
         if payload.password_confirmation != user.password:
@@ -159,6 +166,25 @@ class AccountService:
         self.store.credential_updated_at[user.email.lower()] = datetime.now(UTC)
         user.binance_configured = False
         return True, "Cles Binance supprimees."
+
+    def verify_binance_credentials(self) -> tuple[bool, str]:
+        access_token = get_access_token()
+        if access_token:
+            response = self._request_with_auth_refresh(
+                lambda token: self.client.verify_exchange_credentials(token)
+            )
+            if not response.success:
+                return False, self._extract_error_message(response)
+            status = self._status_from_backend(response.data)
+            self._set_local_binance_configured(status.configured)
+            return True, "Permissions Binance Testnet verifiees."
+
+        if not allow_mock_fallback():
+            raise ServiceError(backend_required_message("la verification Binance"))
+        status = self._get_binance_status_mock()
+        if not status.configured:
+            return False, "Aucune cle Binance Testnet configuree."
+        return True, "Permissions Binance Testnet simulees en mock."
 
     def _request_with_auth_refresh(
         self,
@@ -195,6 +221,8 @@ class AccountService:
             updated_at=self._parse_datetime(payload.get("updated_at")),
             api_key_masked=str(payload.get("api_key_masked") or ""),
             api_secret_masked="",
+            permissions_checked=bool(payload.get("permissions_checked")),
+            last_verified_at=self._parse_datetime(payload.get("last_verified_at")),
         )
 
     def _set_local_binance_configured(self, configured: bool) -> None:

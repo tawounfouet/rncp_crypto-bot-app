@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HealthResponse(BaseModel):
@@ -37,3 +39,24 @@ class SignalResponse(BaseModel):
     generated_at: str
     latency_ms: float
     warnings: list[str]
+
+
+class BotModelPredictionRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_name: str = Field(..., min_length=1)
+    model_version: str | None = Field(default=None, min_length=1)
+    features: dict[str, float]
+
+
+class BotModelPredictionResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_source: Literal["mlflow"]
+    model_name: str
+    model_version: str
+    signal: Literal["BUY", "SELL", "HOLD"]
+    confidence: float
+    probabilities: dict[str, float]
+    features: dict[str, float]
+    generated_at: str

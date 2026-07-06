@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import requests
-from auth.models import UserSettings
+from auth.models import UserExchangeCredential, UserSettings
 from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
 
@@ -53,6 +53,18 @@ class BinanceTestnetService:
 
     def ticker(self, symbol: str) -> dict[str, Any]:
         return self._public_request("GET", "/v3/ticker/24hr", {"symbol": self._symbol(symbol)})
+
+    def klines(self, symbol: str, interval: str, *, limit: int = 120) -> list[list[Any]]:
+        payload = self._public_request(
+            "GET",
+            "/v3/klines",
+            {
+                "symbol": self._symbol(symbol),
+                "interval": interval,
+                "limit": max(10, min(limit, 1000)),
+            },
+        )
+        return payload if isinstance(payload, list) else []
 
     def symbol_info(self, symbol: str) -> dict[str, Any]:
         payload = self._public_request("GET", "/v3/exchangeInfo", {"symbol": self._symbol(symbol)})
@@ -182,6 +194,23 @@ class BinanceTestnetService:
 
     def _credentials_for_user(self, user_id: str) -> tuple[str, str]:
         with get_db_session() as session:
+            credential = (
+                session.query(UserExchangeCredential)
+                .filter(
+                    UserExchangeCredential.user_id == user_id,
+                    UserExchangeCredential.exchange == "binance",
+                    UserExchangeCredential.environment == "testnet",
+                    UserExchangeCredential.is_active.is_(True),
+                )
+                .order_by(UserExchangeCredential.updated_at.desc())
+                .first()
+            )
+            if credential:
+                api_key = credential.get_api_key()
+                api_secret = credential.get_api_secret()
+                if api_key and api_secret:
+                    return api_key, api_secret
+
             settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if not settings:
                 raise HTTPException(

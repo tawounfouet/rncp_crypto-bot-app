@@ -9,6 +9,7 @@ Fixtures centralisees :
 """
 
 import sys
+import os
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -18,6 +19,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from shared.models.base import Base
+
+os.environ.setdefault("ALLOW_INSECURE_CRYPTO_FALLBACK", "1")
 
 # Ajouter le repertoire backend au PYTHONPATH
 backend_dir = Path(__file__).resolve().parent.parent.parent
@@ -79,6 +82,7 @@ def db_engine():
 
     # Importer tous les models pour les enregistrer dans Base.metadata
     import auth.models  # noqa: F401
+    import bots.models  # noqa: F401
     import market.models  # noqa: F401
     import strategy.models  # noqa: F401
     import trading.models  # noqa: F401
@@ -132,4 +136,5 @@ def patch_db_session(db_session):
 
     with patch("auth.user_service.get_db_session", _get_test_session):
         with patch("auth.service.get_db_session", _get_test_session):
-            yield db_session
+            with patch("bots.service.get_db_session", _get_test_session):
+                yield db_session

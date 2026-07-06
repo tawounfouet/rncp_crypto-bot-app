@@ -55,7 +55,7 @@ PAGES: dict[str, NavPage] = {
     ),
     "bot_config": NavPage(
         key="bot_config",
-        label="Parametrage Bot Spot",
+        label="Catalogue Bots Spot",
         path="pages/06_Parametrage_Bot_Spot.py",
         requires_auth=True,
         show_when_authenticated=True,

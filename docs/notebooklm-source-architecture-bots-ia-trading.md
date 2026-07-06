@@ -8,9 +8,7 @@ Le sujet est l'architecture cible d'une application de bots de trading crypto ou
 
 - creer un compte applicatif ;
 - connecter ses propres API keys Binance Spot Testnet ;
-- choisir un bot compose d'un modele IA et d'une strategie ;
-- configurer une paire de trading, par exemple BTCUSDT ;
-- definir des parametres de risque ;
+- choisir un bot cle en main compose d'un modele IA, d'une strategie et d'une configuration complete ;
 - laisser le backend executer les decisions du bot sur son compte Binance Testnet.
 
 Le principe central est simple :
@@ -26,13 +24,30 @@ L'application ne doit jamais utiliser une cle Binance globale pour trader au nom
 
 ## Vision produit
 
-L'application doit permettre a un utilisateur de selectionner un bot pret a l'emploi, de le configurer, puis de le faire fonctionner sur Binance Spot Testnet.
+L'application doit permettre a un utilisateur de selectionner un bot pret a l'emploi, puis de le faire fonctionner sur Binance Spot Testnet.
+
+Un point produit est volontairement strict : l'utilisateur ne parametre pas le bot apres selection.
+Il choisit le bot dans son entierete. La strategie, le modele IA, la paire, le timeframe, les signaux,
+les limites de risque, les tailles d'ordre et les parametres d'execution sont deja definis dans le
+bot template par l'equipe produit/quant.
 
 Un bot n'est pas seulement une strategie. Dans l'architecture cible, un bot est compose de trois blocs :
 
 ```text
 Bot = modele IA + strategie de trading + parametres d'execution
 ```
+
+### Etat officiel V1 du moteur IA
+
+La V1 de `crypto-bot-app` n'appelle pas `crypto-bot-ml-api` depuis le worker de trading.
+Le worker backend utilise un modele deterministe local dans `backend/src/bots/ai.py` :
+
+- `regime_classifier_v1` filtre les signaux RSI selon regime RSI et momentum ;
+- `trend_classifier_v1` filtre les signaux de tendance selon l'ecart de moyennes mobiles.
+
+La ML API reste disponible comme service de signaux et d'experimentation MLOps, mais elle n'est pas encore
+le moteur de decision des bots live Testnet. Un raccordement futur devra remplacer explicitement cette
+couche deterministe et journaliser la source `crypto-bot-ml-api` dans `model_output`.
 
 Exemple :
 
@@ -47,6 +62,10 @@ Bot IA RSI BTCUSDT
 - take profit : 4 %
 - auto trade : active
 ```
+
+L'utilisateur ne peut pas transformer ce bot en ETHUSDT, modifier le RSI, changer le timeframe,
+augmenter le risque ou remplacer le signal. Pour obtenir un autre comportement, il choisit un autre
+bot template publie dans l'application.
 
 ## Notions importantes
 
@@ -86,10 +105,12 @@ bot_templates
 - description
 - model_type
 - strategy_type
-- default_params
-- default_risk_limits
-- supported_symbols
-- supported_timeframes
+- symbol
+- timeframe
+- signal_source
+- execution_params
+- risk_limits
+- order_policy
 - status
 ```
 
@@ -102,9 +123,11 @@ Bot template :
 Contenu :
 - modele IA : classification regime de marche
 - strategie : RSI mean reversion
-- symboles supportes : BTCUSDT, ETHUSDT
-- timeframe supporte : 1h, 4h
-- parametres par defaut : RSI 14, oversold 30, overbought 70
+- symbole fixe : BTCUSDT
+- timeframe fixe : 1h
+- signal_source : regime_model_v1 + rsi_reversal
+- parametres fixes : RSI 14, oversold 30, overbought 70
+- risk_limits fixes : max 1 % par trade, stop loss 2 %, take profit 4 %
 ```
 
 ### Bot instance
@@ -116,8 +139,6 @@ Elle relie :
 - un utilisateur ;
 - un bot template ;
 - des cles Binance Testnet ;
-- une paire de trading ;
-- des parametres personnalises ;
 - un etat d'execution.
 
 ```text
@@ -126,13 +147,10 @@ user_bot_instances
 - user_id
 - bot_template_id
 - exchange_credential_id
-- symbol
-- timeframe
 - mode
 - status
 - auto_trade_enabled
-- params
-- risk_limits
+- config_snapshot
 - created_at
 - updated_at
 ```
@@ -144,11 +162,14 @@ Instance utilisateur :
 - user_id : utilisateur A
 - bot_template_id : AI RSI Mean Reversion
 - exchange_credential_id : cles Binance Testnet de l'utilisateur A
-- symbol : BTCUSDT
-- timeframe : 1h
+- config_snapshot : copie verrouillee du template choisi
 - auto_trade_enabled : true
 - status : active
 ```
+
+`config_snapshot` est une copie technique de la configuration complete au moment de la creation.
+Elle permet de conserver l'historique exact du bot choisi meme si le template est versionne plus tard.
+Elle n'est pas modifiable par l'utilisateur.
 
 ## Architecture recommandee
 
@@ -170,7 +191,6 @@ Le frontend permet a l'utilisateur de :
 - se connecter ;
 - ajouter ses cles Binance Testnet ;
 - choisir un bot ;
-- configurer une paire ;
 - activer ou mettre en pause un bot ;
 - consulter les decisions, ordres, trades, erreurs et performances.
 
@@ -189,7 +209,7 @@ Le backend gere :
 - le chiffrement et dechiffrement des cles Binance ;
 - la creation des bot instances ;
 - les validations de securite ;
-- les endpoints pour demarrer, arreter ou configurer un bot ;
+- les endpoints pour demarrer, mettre en pause ou arreter un bot ;
 - la lecture des resultats et historiques.
 
 Le backend est la seule couche autorisee a dechiffrer temporairement l'API secret en memoire.
@@ -292,17 +312,20 @@ bot_templates
 - description
 - model_type
 - strategy_type
-- default_params
-- default_risk_limits
-- supported_symbols
-- supported_timeframes
+- symbol
+- timeframe
+- signal_source
+- execution_params
+- risk_limits
+- order_policy
 - version
 - status
 - created_at
 - updated_at
 ```
 
-Un bot template ne contient aucune information utilisateur.
+Un bot template ne contient aucune information utilisateur et ne contient pas de champs editables par
+l'utilisateur final.
 
 ### user_bot_instances
 
@@ -314,13 +337,10 @@ user_bot_instances
 - user_id
 - bot_template_id
 - exchange_credential_id
-- symbol
-- timeframe
 - mode
 - status
 - auto_trade_enabled
-- params
-- risk_limits
+- config_snapshot
 - created_at
 - updated_at
 ```
@@ -330,7 +350,7 @@ Cette table est centrale.
 Elle repond a la question :
 
 ```text
-Quel utilisateur utilise quel bot, sur quelle paire, avec quelles cles, et avec quels parametres ?
+Quel utilisateur utilise quel bot preconfigure, avec quelles cles, et dans quel etat d'execution ?
 ```
 
 ### bot_runs
@@ -488,14 +508,18 @@ Exemple :
 AI RSI Mean Reversion
 ```
 
-Il configure :
+Il consulte la configuration complete du bot :
 
 - paire : BTCUSDT ;
 - timeframe : 1h ;
 - montant maximum par trade ;
 - stop loss ;
 - take profit ;
-- activation ou non de l'auto-trading.
+- signal IA et strategie ;
+- mode d'execution.
+
+Il ne peut pas modifier ces valeurs. Il peut seulement choisir ce bot, le demarrer, le mettre en pause
+ou l'arreter.
 
 ### Etape 5 - Creation de l'instance
 
@@ -507,9 +531,7 @@ Cette ligne relie :
 user_id
 bot_template_id
 exchange_credential_id
-symbol
-params
-risk_limits
+config_snapshot
 ```
 
 ### Etape 6 - Execution par worker
@@ -649,7 +671,7 @@ Le dashboard final doit montrer :
 - paire tradee ;
 - modele IA utilise ;
 - strategie utilisee ;
-- parametres ;
+- parametres verrouilles du template ;
 - dernier signal ;
 - derniere decision ;
 - ordres ouverts ;
@@ -686,6 +708,7 @@ Utilisateur A lance le bot "AI RSI Mean Reversion" sur BTCUSDT.
 ```text
 POST /users/me/exchange-credentials
 GET /users/me/exchange-credentials
+POST /users/me/exchange-credentials/{id}/verify
 DELETE /users/me/exchange-credentials/{id}
 
 GET /bot-templates
@@ -694,7 +717,6 @@ GET /bot-templates/{id}
 POST /user-bots
 GET /user-bots
 GET /user-bots/{id}
-PATCH /user-bots/{id}
 POST /user-bots/{id}/start
 POST /user-bots/{id}/pause
 POST /user-bots/{id}/stop
@@ -719,8 +741,8 @@ GET /user-bots/{id}/performance
 
 - table `bot_templates` ;
 - table `user_bot_instances` ;
-- UI de selection d'un bot ;
-- UI de configuration d'une paire ;
+- UI de selection d'un bot preconfigure ;
+- affichage en lecture seule de la configuration complete du bot ;
 - activation pause stop.
 
 ### Phase 3 - Worker d'execution

@@ -51,7 +51,7 @@ def main() -> None:
     store, user = setup_page(title="Portefeuille Spot", icon="💼", page_key="portfolio")
     render_page_header(
         "Portefeuille Spot",
-        "Vue temps reel mockee de vos actifs Spot, ordres ouverts et derniers trades.",
+        "Vue de vos actifs Spot Binance Testnet, ordres ouverts et derniers trades.",
     )
 
     gate = evaluate_binance_prerequisite("portfolio", user)
@@ -136,7 +136,7 @@ def main() -> None:
             render_dataframe(filtered, key="table_balances", height=360)
 
     st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
-    render_section_title("Ordres ouverts", "Action d'annulation mockee.")
+    render_section_title("Ordres ouverts", "Annulation envoyee a Binance Spot Testnet.")
     if orders_df.empty:
         show_feedback("info", "Aucun ordre ouvert.")
     else:

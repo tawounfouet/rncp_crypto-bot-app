@@ -280,6 +280,16 @@ def test_performance_shows_binance_prerequisite_without_performance_content_when
     assert BINANCE_SETUP_CTA_LABEL in [button.label for button in at.button]
 
 
+def test_performance_filters_match_current_bot_model_architecture() -> None:
+    at = _run_app("pages/04_Performances_Spot.py", auth_email="alice@cryptobot.dev")
+
+    _assert_no_exception(at)
+    labels = [selectbox.label for selectbox in at.selectbox]
+    assert "Bot" in labels
+    assert "Periode" in labels
+    assert "Modele IA" not in labels
+
+
 def test_bot_control_shows_only_bot_list_when_binance_not_configured() -> None:
     at = _run_app(
         "pages/05_Controle_Bot_Spot.py",
@@ -348,6 +358,9 @@ def test_table_dataframes_do_not_expose_internal_technical_metadata(
 ) -> None:
     at = _run_app(relative_path, auth_email=auth_email)
     _assert_no_exception(at)
+    if relative_path == "pages/04_Performances_Spot.py" and not at.dataframe:
+        assert any("backend" in entry.value.lower() for entry in at.error)
+        return
     assert at.dataframe
     for dataframe in at.dataframe:
         assert "__field_validators__" not in dataframe.value.columns

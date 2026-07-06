@@ -21,7 +21,7 @@ def main() -> None:
     store, _ = setup_page(title="Admin", icon="🛡️", page_key="admin")
     render_page_header(
         "Administration",
-        "Gestion des utilisateurs mockes: statut, role, dernier login et details.",
+        "Gestion des utilisateurs backend: statut, role, dernier login et details.",
     )
 
     service = AdminService(store)
@@ -32,7 +32,7 @@ def main() -> None:
         return
 
     if not rows:
-        show_feedback("warning", "Aucun utilisateur en base mock.")
+        show_feedback("warning", "Aucun utilisateur retourne par le backend.")
         return
 
     users_df = models_to_dataframe(rows)
@@ -47,6 +47,8 @@ def main() -> None:
             "last_name",
         ]
     ]
+    users_df["role"] = users_df["role"].apply(lambda value: getattr(value, "value", value))
+    users_df["status"] = users_df["status"].apply(lambda value: getattr(value, "value", value))
     users_df["last_login"] = users_df["last_login"].apply(format_datetime)
     users_df["binance_configured"] = users_df["binance_configured"].apply(bool_to_label)
     users_df = users_df.rename(columns={"binance_configured": "Binance configuré"})

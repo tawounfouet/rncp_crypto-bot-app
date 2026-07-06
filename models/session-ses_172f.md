@@ -1674,4 +1674,3 @@ bf97b18 chore: add project tooling and configuration
 J'ai aussi ajouté `mlflow.db*` au `.gitignore` — ces fichiers de base SQLite ne doivent pas versionnés. Il ne reste plus qu'à faire `git push` si tu veux publier.
 
 ---
-

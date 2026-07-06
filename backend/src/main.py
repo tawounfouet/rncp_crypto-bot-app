@@ -5,8 +5,10 @@ This is the main application file that configures and starts the FastAPI server
 with all the necessary middleware, routes, and database connections.
 """
 
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+import os
+from contextlib import asynccontextmanager, suppress
 
 import uvicorn
 from fastapi import FastAPI, Request, status
@@ -35,6 +37,9 @@ async def lifespan(app: FastAPI):
 
     Handles startup and shutdown events for the FastAPI application.
     """
+    bot_worker_task: asyncio.Task | None = None
+    bot_worker_stop_event: asyncio.Event | None = None
+
     # Startup
     logger.info("🚀 Starting Crypto Trading Bot API...")
 
@@ -51,6 +56,37 @@ async def lifespan(app: FastAPI):
         else:
             logger.error("❌ Failed to initialize database")
 
+        from bots.service import BotService
+
+        migrate_instances = os.getenv("BOT_TEMPLATE_AUTO_MIGRATE", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        sync_result = BotService().sync_builtin_templates(migrate_instances=migrate_instances)
+        logger.info("Bot templates synced: %s", sync_result)
+
+        if settings.ENABLE_BACKGROUND_TASKS:
+            from bots.worker import BotWorker
+
+            bot_worker_stop_event = asyncio.Event()
+            bot_worker_task = asyncio.create_task(
+                BotWorker(worker_id="api-background-worker").run_forever(
+                    interval_seconds=settings.BOT_WORKER_INTERVAL_SECONDS,
+                    limit=settings.BOT_WORKER_LIMIT,
+                    stop_event=bot_worker_stop_event,
+                ),
+                name="api-background-bot-worker",
+            )
+            app.state.bot_worker_task = bot_worker_task
+            app.state.bot_worker_stop_event = bot_worker_stop_event
+            logger.info(
+                "Bot worker started with interval=%ss limit=%s",
+                settings.BOT_WORKER_INTERVAL_SECONDS,
+                settings.BOT_WORKER_LIMIT,
+            )
+
     except Exception as e:
         logger.error(f"💥 Startup error: {e}")
         raise
@@ -60,6 +96,15 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    if bot_worker_task and bot_worker_stop_event:
+        bot_worker_stop_event.set()
+        try:
+            await asyncio.wait_for(bot_worker_task, timeout=5)
+        except TimeoutError:
+            bot_worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await bot_worker_task
+        logger.info("Bot worker stopped")
     logger.info("🛑 Shutting down Crypto Trading Bot API...")
     logger.info("👋 Application shutdown completed")
 
@@ -223,6 +268,8 @@ async def api_info():
             "detailed_health": "/health/detailed",
             "auth": f"{settings.API_PREFIX}/auth",
             "users": f"{settings.API_PREFIX}/users",
+            "bot_templates": f"{settings.API_PREFIX}/bot-templates",
+            "user_bots": f"{settings.API_PREFIX}/user-bots",
             "strategies": f"{settings.API_PREFIX}/strategies",
             "trading": f"{settings.API_PREFIX}/trading",
             "market": f"{settings.API_PREFIX}/market",
@@ -233,6 +280,7 @@ async def api_info():
 # Router includes (after app configuration)
 from auth.router import router as auth_router  # noqa: E402
 from auth.users_router import router as users_router  # noqa: E402
+from bots.router import router as bots_router  # noqa: E402
 from market.binance_testnet_router import router as binance_testnet_router  # noqa: E402
 from market.router import router as market_router  # noqa: E402
 from strategy.router import router as strategies_router  # noqa: E402
@@ -241,6 +289,7 @@ from trading.router import router as trading_router  # noqa: E402
 # Include authentication and user management routers
 app.include_router(auth_router, prefix=settings.API_PREFIX)
 app.include_router(users_router, prefix=settings.API_PREFIX)
+app.include_router(bots_router, prefix=settings.API_PREFIX)
 
 # Include strategy management router
 app.include_router(strategies_router, prefix=settings.API_PREFIX)

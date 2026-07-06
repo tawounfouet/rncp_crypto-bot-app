@@ -11,8 +11,14 @@ from shared.database.connection import get_db_session
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from auth.models import User, UserSettings
-from auth.schemas import BinanceCredentialsStatus, UserCreate, UserSettingsUpdate, UserUpdate
+from auth.models import User, UserExchangeCredential, UserSettings
+from auth.schemas import (
+    BinanceCredentialsStatus,
+    ExchangeCredentialResponse,
+    UserCreate,
+    UserSettingsUpdate,
+    UserUpdate,
+)
 from auth.service import auth_service
 
 # Constants
@@ -46,6 +52,50 @@ class UserService:
             settings
             and settings.api_keys
             and (BINANCE_EXCHANGE in settings.api_keys or LEGACY_BINANCE_EXCHANGE in settings.api_keys)
+        )
+
+    @staticmethod
+    def _active_exchange_credential(session: Session, user_id: str) -> UserExchangeCredential | None:
+        return (
+            session.query(UserExchangeCredential)
+            .filter(
+                UserExchangeCredential.user_id == user_id,
+                UserExchangeCredential.exchange == "binance",
+                UserExchangeCredential.environment == "testnet",
+                UserExchangeCredential.is_active.is_(True),
+            )
+            .order_by(UserExchangeCredential.updated_at.desc())
+            .first()
+        )
+
+    @staticmethod
+    def _active_exchange_credential_by_id_or_alias(
+        session: Session,
+        user_id: str,
+        credential_id: str,
+    ) -> UserExchangeCredential | None:
+        if credential_id in {BINANCE_EXCHANGE, LEGACY_BINANCE_EXCHANGE}:
+            return UserService._active_exchange_credential(session, user_id)
+        return (
+            session.query(UserExchangeCredential)
+            .filter(
+                UserExchangeCredential.id == credential_id,
+                UserExchangeCredential.user_id == user_id,
+                UserExchangeCredential.is_active.is_(True),
+            )
+            .first()
+        )
+
+    def _credential_to_response(self, credential: UserExchangeCredential) -> ExchangeCredentialResponse:
+        return ExchangeCredentialResponse(
+            id=credential.id,
+            exchange=credential.exchange,
+            environment=credential.environment,
+            configured=credential.is_active,
+            updated_at=credential.updated_at,
+            api_key_masked=self._mask_secret(credential.get_api_key() or ""),
+            permissions_checked=credential.permissions_checked,
+            last_verified_at=credential.last_verified_at,
         )
 
     def _create_settings(self, user_id: str, session: Session) -> UserSettings:
@@ -127,7 +177,11 @@ class UserService:
     def get_user_by_id(self, user_id: str) -> User | None:
         """Get user by ID."""
         with get_db_session() as session:
-            return session.query(User).filter(User.id == user_id).first()
+            user = session.query(User).filter(User.id == user_id).first()
+            if user:
+                self._prepare_user_response(session, user)
+                session.expunge(user)
+            return user
 
     def get_user_by_username(self, username: str) -> User | None:
         """Get user by username."""
@@ -205,7 +259,11 @@ class UserService:
                 query = query.filter(User.is_active == is_active)
             if is_admin is not None:
                 query = query.filter(User.is_admin == is_admin)
-            return query.offset(skip).limit(limit).all()
+            users = query.offset(skip).limit(limit).all()
+            for user in users:
+                self._prepare_user_response(session, user)
+                session.expunge(user)
+            return users
 
     def get_user_settings(self, user_id: str) -> dict | None:
         """Get user settings."""
@@ -298,6 +356,16 @@ class UserService:
     def get_binance_credentials_status(self, user_id: str) -> BinanceCredentialsStatus:
         """Return a safe Binance credentials status for the user."""
         with get_db_session() as session:
+            credential = self._active_exchange_credential(session, user_id)
+            if credential:
+                return BinanceCredentialsStatus(
+                    configured=True,
+                    updated_at=credential.updated_at,
+                    api_key_masked=self._mask_secret(credential.get_api_key() or ""),
+                    permissions_checked=credential.permissions_checked,
+                    last_verified_at=credential.last_verified_at,
+                )
+
             settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if not self._has_binance_credentials(settings):
                 return BinanceCredentialsStatus(configured=False)
@@ -334,6 +402,22 @@ class UserService:
                 settings = self._create_settings(user_id, session)
 
             try:
+                credential = self._active_exchange_credential(session, user_id)
+                if not credential:
+                    credential = UserExchangeCredential(
+                        user_id=user_id,
+                        exchange="binance",
+                        environment="testnet",
+                        label="Binance Spot Testnet principal",
+                        is_active=True,
+                        permissions_checked=False,
+                    )
+                    session.add(credential)
+                credential.set_credentials(api_key, api_secret)
+                credential.is_active = True
+                credential.permissions_checked = False
+                credential.last_verified_at = None
+                credential.updated_at = datetime.now(UTC)
                 settings.set_api_credentials(BINANCE_EXCHANGE, api_key, api_secret)
                 settings.remove_api_credentials(LEGACY_BINANCE_EXCHANGE)
             except (RuntimeError, ValueError) as exc:
@@ -348,11 +432,27 @@ class UserService:
                 configured=True,
                 updated_at=settings.updated_at,
                 api_key_masked=self._mask_secret(api_key),
+                permissions_checked=False,
+                last_verified_at=None,
             )
 
     def delete_binance_credentials(self, user_id: str) -> BinanceCredentialsStatus:
         """Remove stored Binance credentials for the user."""
         with get_db_session() as session:
+            credentials = (
+                session.query(UserExchangeCredential)
+                .filter(
+                    UserExchangeCredential.user_id == user_id,
+                    UserExchangeCredential.exchange == "binance",
+                    UserExchangeCredential.environment == "testnet",
+                    UserExchangeCredential.is_active.is_(True),
+                )
+                .all()
+            )
+            for credential in credentials:
+                credential.is_active = False
+                credential.updated_at = datetime.now(UTC)
+
             settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if settings:
                 settings.remove_api_credentials(BINANCE_EXCHANGE)
@@ -360,6 +460,72 @@ class UserService:
                 settings.updated_at = datetime.now(UTC)
                 session.flush()
             return BinanceCredentialsStatus(configured=False)
+
+    def list_exchange_credentials(self, user_id: str) -> list[ExchangeCredentialResponse]:
+        """List active safe exchange credential descriptors for a user."""
+        with get_db_session() as session:
+            credentials = (
+                session.query(UserExchangeCredential)
+                .filter(
+                    UserExchangeCredential.user_id == user_id,
+                    UserExchangeCredential.is_active.is_(True),
+                )
+                .order_by(UserExchangeCredential.updated_at.desc())
+                .all()
+            )
+            return [self._credential_to_response(credential) for credential in credentials]
+
+    def get_exchange_credential(self, user_id: str, credential_id: str) -> UserExchangeCredential | None:
+        """Return an active exchange credential owned by a user."""
+        with get_db_session() as session:
+            credential = self._active_exchange_credential_by_id_or_alias(session, user_id, credential_id)
+            if credential:
+                session.expunge(credential)
+            return credential
+
+    def verify_exchange_credential(
+        self,
+        user_id: str,
+        credential_id: str,
+        *,
+        binance_service=None,
+    ) -> ExchangeCredentialResponse:
+        """Verify active Binance Spot Testnet credentials against Binance account permissions."""
+        with get_db_session() as session:
+            credential = self._active_exchange_credential_by_id_or_alias(session, user_id, credential_id)
+            if not credential:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exchange credential not found")
+            if credential.exchange != "binance" or credential.environment != "testnet":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Only Binance Spot Testnet credentials can be verified.",
+                )
+
+        if binance_service is None:
+            from market.binance_testnet_service import BinanceTestnetService
+
+            binance_service = BinanceTestnetService()
+
+        account_payload = binance_service.account(user_id)
+        can_trade = bool(account_payload.get("canTrade"))
+        verified_at = datetime.now(UTC)
+
+        with get_db_session() as session:
+            credential = self._active_exchange_credential_by_id_or_alias(session, user_id, credential_id)
+            if not credential:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exchange credential not found")
+            credential.permissions_checked = can_trade
+            credential.last_verified_at = verified_at
+            credential.updated_at = verified_at
+            session.flush()
+            response = self._credential_to_response(credential)
+
+        if not can_trade:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Binance Testnet credentials are valid but trading permission is disabled.",
+            )
+        return response
 
     # Admin operations
     def activate_user(self, user_id: str) -> bool:
@@ -401,6 +567,31 @@ class UserService:
 
             user.is_admin = False
             return True
+
+    def _prepare_user_response(self, session: Session, user: User) -> None:
+        """Load response fields and attach safe computed metadata before session close."""
+        user.binance_configured = self._binance_configured_for_user(session, user.id)
+        _ = user.id, user.email, user.username
+        _ = user.first_name, user.last_name
+        _ = user.is_active, user.is_admin
+        _ = user.last_active_at, user.created_at, user.updated_at
+
+    def _binance_configured_for_user(self, session: Session, user_id: str) -> bool:
+        credential_exists = (
+            session.query(UserExchangeCredential.id)
+            .filter(
+                UserExchangeCredential.user_id == user_id,
+                UserExchangeCredential.exchange == "binance",
+                UserExchangeCredential.environment == "testnet",
+                UserExchangeCredential.is_active.is_(True),
+            )
+            .first()
+            is not None
+        )
+        if credential_exists:
+            return True
+        settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+        return self._has_binance_credentials(settings)
 
 
 # Global user service instance

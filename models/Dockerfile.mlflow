@@ -1,0 +1,31 @@
+# Dockerfile dedie a l'interface MLflow.
+# MLflow n'est pas encore compatible avec Python 3.14 dans ce projet.
+
+ARG MLFLOW_PYTHON_VERSION=3.11
+FROM python:${MLFLOW_PYTHON_VERSION}-slim
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash app
+
+WORKDIR /app
+COPY --chown=app:app requirements-mlflow.txt .
+RUN pip install --upgrade pip && \
+    pip install -r requirements-mlflow.txt
+
+RUN mkdir -p artifacts/mlflow && \
+    chown -R app:app /app
+
+USER app
+EXPOSE 5001
+
+CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5001"]

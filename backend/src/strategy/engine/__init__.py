@@ -21,9 +21,6 @@ from .registry import (
     registry,
 )
 
-# Auto-discover and register strategies
-registry.discover_strategies("src.backend.strategies.implementations")
-
 __all__ = [
     "BaseStrategy",
     "BollingerBandsStrategy",

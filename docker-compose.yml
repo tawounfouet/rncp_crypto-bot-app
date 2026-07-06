@@ -156,6 +156,8 @@ services:
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
       - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
+      - ML_API_URL=http://crypto-bot-ml-api:8010
+      - BOT_TEMPLATE_AUTO_MIGRATE=1
       - ENVIRONMENT=development
       - DEBUG=true
     depends_on:
@@ -189,6 +191,7 @@ services:
       - API_URL=http://crypto-bot-backend:8009
       - ENVIRONMENT=development
       - APP_VERSION=${APP_VERSION:-dev}
+      - DISABLE_MOCK_FALLBACK=1
     depends_on:
       crypto-bot-backend:
         condition: service_healthy
@@ -250,7 +253,7 @@ services:
       context: ./models
       dockerfile: Dockerfile
       args:
-        PYTHON_VERSION: ${PYTHON_VERSION}
+        PYTHON_VERSION: ${MLFLOW_PYTHON_VERSION:-3.11}
     container_name: crypto-bot-ml-api
     restart: always
     ports:
@@ -259,17 +262,24 @@ services:
       - ./data:/app/data
       - ./models/artifacts:/app/artifacts
       - ./models/logs:/app/logs
+      - ./models/src:/app/src
+      - ./models/config.yaml:/app/config.yaml
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
       - BINANCE_API_KEY=${BINANCE_API_KEY}
       - BINANCE_API_SECRET=${BINANCE_API_SECRET}
       - MLFLOW_TRACKING_URI=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+      - MLFLOW_ARTIFACT_ROOT=/app/artifacts/mlflow
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
+    command: >
+      /bin/sh -c "python -m src.mlops.bootstrap_dev_artifacts --config config.yaml &&
+      python -m src.mlops.bootstrap_bot_models --config config.yaml &&
+      python -m src.main --config config.yaml api --host 0.0.0.0 --port 8010"
     networks:
       - dev-network
 
@@ -277,16 +287,21 @@ services:
   mlflow-ui:
     build:
       context: ./models
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.mlflow
       args:
-        PYTHON_VERSION: ${PYTHON_VERSION}
+        MLFLOW_PYTHON_VERSION: ${MLFLOW_PYTHON_VERSION:-3.11}
     container_name: mlflow-ui
     restart: always
     ports:
       - "5001:5001"
     volumes:
       - ./models/artifacts:/app/artifacts
-    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001
+    command: >
+      mlflow server
+      --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+      --default-artifact-root /app/artifacts/mlflow
+      --host 0.0.0.0
+      --port 5001
     depends_on:
       postgres:
         condition: service_healthy

@@ -10,6 +10,7 @@ from auth.models import User as UserModel
 from auth.schemas import (
     BinanceCredentialsStatus,
     BinanceCredentialsUpdate,
+    ExchangeCredentialResponse,
     UserResponse,
     UserSettingsUpdate,
     UserUpdate,
@@ -18,6 +19,8 @@ from auth.user_service import user_service
 
 # Define a constant for the error message
 USER_NOT_FOUND_MSG = "User not found"
+TESTNET_EXCHANGE_CREDENTIAL_ID = "binance_spot_testnet"
+LEGACY_EXCHANGE_CREDENTIAL_ID = "binance"
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -216,6 +219,74 @@ async def delete_binance_credentials(
         ) from None
 
 
+def _exchange_credential_response(status_payload: BinanceCredentialsStatus) -> ExchangeCredentialResponse:
+    return ExchangeCredentialResponse(
+        id=TESTNET_EXCHANGE_CREDENTIAL_ID,
+        exchange="binance",
+        environment="testnet",
+        configured=status_payload.configured,
+        updated_at=status_payload.updated_at,
+        api_key_masked=status_payload.api_key_masked,
+        permissions_checked=status_payload.permissions_checked,
+        last_verified_at=status_payload.last_verified_at,
+    )
+
+
+@router.get("/me/exchange-credentials", response_model=list[ExchangeCredentialResponse])
+async def list_exchange_credentials(
+    current_user: UserModel = Depends(get_current_user),
+) -> list[ExchangeCredentialResponse]:
+    """List configured exchange credentials. Only Binance Spot Testnet is supported."""
+    credentials = user_service.list_exchange_credentials(current_user.id)
+    if credentials:
+        return credentials
+    credential_status = user_service.get_binance_credentials_status(current_user.id)
+    return [_exchange_credential_response(credential_status)] if credential_status.configured else []
+
+
+@router.post("/me/exchange-credentials", response_model=ExchangeCredentialResponse)
+async def save_exchange_credentials(
+    credentials: BinanceCredentialsUpdate,
+    current_user: UserModel = Depends(get_current_user),
+) -> ExchangeCredentialResponse:
+    """Save Binance Spot Testnet credentials using the architecture target route name."""
+    credential_status = user_service.save_binance_credentials(
+        current_user.id,
+        api_key=credentials.api_key,
+        api_secret=credentials.api_secret,
+        password_confirmation=credentials.password_confirmation,
+    )
+    credentials = user_service.list_exchange_credentials(current_user.id)
+    return credentials[0] if credentials else _exchange_credential_response(credential_status)
+
+
+@router.delete("/me/exchange-credentials/{credential_id}", response_model=ExchangeCredentialResponse)
+async def delete_exchange_credential(
+    credential_id: str,
+    current_user: UserModel = Depends(get_current_user),
+) -> ExchangeCredentialResponse:
+    """Delete Binance Spot Testnet credentials by credential id."""
+    if credential_id not in {TESTNET_EXCHANGE_CREDENTIAL_ID, LEGACY_EXCHANGE_CREDENTIAL_ID}:
+        credential = user_service.get_exchange_credential(current_user.id, credential_id)
+        if credential is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exchange credential not found")
+    credential_status = user_service.delete_binance_credentials(current_user.id)
+    return _exchange_credential_response(credential_status)
+
+
+@router.post("/me/exchange-credentials/{credential_id}/verify", response_model=ExchangeCredentialResponse)
+async def verify_exchange_credential(
+    credential_id: str,
+    current_user: UserModel = Depends(get_current_user),
+) -> ExchangeCredentialResponse:
+    """Verify Binance Spot Testnet credentials and store the permission-check status."""
+    if credential_id not in {TESTNET_EXCHANGE_CREDENTIAL_ID, LEGACY_EXCHANGE_CREDENTIAL_ID}:
+        credential = user_service.get_exchange_credential(current_user.id, credential_id)
+        if credential is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exchange credential not found")
+    return user_service.verify_exchange_credential(current_user.id, credential_id)
+
+
 # Admin-only endpoints
 @router.get("/", response_model=list[UserResponse])
 async def list_users(
@@ -404,4 +475,58 @@ async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_c
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to deactivate user: {e!s}",
+        ) from None
+
+
+@router.post("/{user_id}/make-admin")
+async def make_user_admin(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> dict:
+    """Grant admin privileges to a user (admin only)."""
+    try:
+        user = user_service.get_user_by_id(user_id)
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
+
+        if user.is_admin:
+            return {"message": "User is already admin"}
+
+        user_service.make_admin(user_id)
+        return {"message": f"User {user_id} successfully promoted to admin"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to promote user: {e!s}",
+        ) from None
+
+
+@router.post("/{user_id}/remove-admin")
+async def remove_user_admin(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> dict:
+    """Remove admin privileges from a user (admin only)."""
+    try:
+        user = user_service.get_user_by_id(user_id)
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
+
+        if user_id == current_admin.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove your own admin role",
+            )
+
+        if not user.is_admin:
+            return {"message": "User is already non-admin"}
+
+        user_service.remove_admin(user_id)
+        return {"message": f"Admin privileges removed from user {user_id}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove admin role: {e!s}",
         ) from None

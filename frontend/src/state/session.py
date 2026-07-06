@@ -196,15 +196,20 @@ def _clear_user_sync_metadata() -> None:
 
 
 def _parse_datetime(value: Any, fallback: datetime | None = None) -> datetime:
+    parsed: datetime | None = None
     if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
+        parsed = value
+    elif isinstance(value, str):
         normalized = value.replace("Z", "+00:00")
         try:
-            return datetime.fromisoformat(normalized)
+            parsed = datetime.fromisoformat(normalized)
         except ValueError:
             pass
-    return fallback or datetime.now(UTC)
+    if parsed is None:
+        parsed = fallback or datetime.now(UTC)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _resolve_first_name(

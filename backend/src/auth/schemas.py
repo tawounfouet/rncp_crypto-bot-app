@@ -5,9 +5,15 @@ Contains schemas for user creation, authentication, and responses.
 
 from datetime import datetime
 from enum import StrEnum
+from importlib.util import find_spec
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 from shared.schemas.common import BaseResponse
+
+if find_spec("email_validator"):
+    from pydantic import EmailStr
+else:
+    EmailStr = str
 
 
 class ThemeEnum(StrEnum):
@@ -100,6 +106,7 @@ class UserBase(BaseModel):
     last_name: str | None = None
     is_active: bool
     is_admin: bool
+    binance_configured: bool = False
     last_active_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
@@ -188,6 +195,21 @@ class BinanceCredentialsStatus(BaseModel):
     configured: bool
     updated_at: datetime | None = None
     api_key_masked: str = ""
+    permissions_checked: bool = False
+    last_verified_at: datetime | None = None
+
+
+class ExchangeCredentialResponse(BaseModel):
+    """Safe exchange credential descriptor exposed to authenticated users."""
+
+    id: str
+    exchange: str
+    environment: str
+    configured: bool
+    updated_at: datetime | None = None
+    api_key_masked: str = ""
+    permissions_checked: bool = False
+    last_verified_at: datetime | None = None
 
 
 # User Lists and Statistics

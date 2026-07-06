@@ -5,7 +5,6 @@ import streamlit as st
 from mocks.db import create_mock_store
 from schemas.account import AccountProfile
 from schemas.auth import LoginRequest, RegisterRequest
-from schemas.bot import BotConfigUpdate
 from schemas.common import UserRole
 from services.account_service import AccountService
 from services.admin_service import AdminService
@@ -13,6 +12,7 @@ from services.auth_api_client import ApiResponse
 from services.auth_service import AuthService
 from services.bot_config_service import BotConfigService
 from services.bot_control_service import BotControlService
+from state.session import set_auth_tokens
 from utils.constants import ACTION_START
 
 
@@ -137,24 +137,17 @@ def test_end_to_end_auth_and_mock_pages_journey() -> None:
     assert ok is True
     assert store.current_user_email == "nina2@cryptobot.dev"
 
+    set_auth_tokens(None, None)
     bot_control = BotControlService(store)
     action_result = bot_control.apply_action("bot_sol_trend", ACTION_START)
     assert action_result.success is True
 
     bot_config = BotConfigService(store)
-    save_result = bot_config.save(
-        "bot_sol_trend",
-        BotConfigUpdate(
-            strategy="Trend Following",
-            budget_usdt=2500,
-            max_open_positions=3,
-            risk_per_trade_pct=1.1,
-            take_profit_pct=5.8,
-            stop_loss_pct=2.2,
-            cooldown_seconds=180,
-        ),
-    )
-    assert save_result[0] is True
+    template = bot_config.list_templates()[0]
+    select_result = bot_config.select_template(template.id)
+    assert select_result[0] is True
+    assert select_result[2] is not None
+    assert select_result[2].config_snapshot["symbol"] == template.symbol
 
     store.current_user_email = "admin@cryptobot.dev"
     store.users["nina2@cryptobot.dev"].role = UserRole.USER

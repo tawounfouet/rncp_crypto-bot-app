@@ -1,41 +1,46 @@
 from __future__ import annotations
 
-from schemas.bot import BotConfigUpdate
 from services.bot_config_service import BotConfigService
 
 
-def test_bot_config_validate_errors(store) -> None:
+def test_bot_catalog_lists_locked_templates(store) -> None:
     service = BotConfigService(store)
-    errors = service.validate(
-        BotConfigUpdate(
-            strategy="Breakout",
-            budget_usdt=-1.0,
-            max_open_positions=0,
-            risk_per_trade_pct=99.0,
-            take_profit_pct=0.0,
-            stop_loss_pct=0.0,
-            cooldown_seconds=-3,
-        )
-    )
-    assert len(errors) >= 3
+    templates = service.list_templates()
+
+    assert templates
+    template = templates[0]
+    assert template.symbol
+    assert template.timeframe
+    assert template.execution_params
+    assert template.risk_limits
+    assert template.order_policy
 
 
-def test_bot_config_save_increments_version(store) -> None:
+def test_select_template_creates_locked_user_selection(store) -> None:
     store.current_user_email = "alice@cryptobot.dev"
     service = BotConfigService(store)
-    previous = store.bot_configs["bot_btc_scalp"].version
-    ok, _, config = service.save(
-        "bot_btc_scalp",
-        BotConfigUpdate(
-            strategy="Mean Reversion",
-            budget_usdt=8000.0,
-            max_open_positions=4,
-            risk_per_trade_pct=1.5,
-            take_profit_pct=3.0,
-            stop_loss_pct=1.8,
-            cooldown_seconds=90,
-        ),
-    )
+    template = service.list_templates()[0]
+
+    ok, message, selection = service.select_template(template.id)
+
     assert ok is True
-    assert config is not None
-    assert config.version == previous + 1
+    assert "verrouillee" in message
+    assert selection is not None
+    assert selection.template_id == template.id
+    assert selection.config_snapshot["symbol"] == template.symbol
+    assert selection.config_snapshot["timeframe"] == template.timeframe
+    assert selection.config_snapshot["risk_limits"] == template.risk_limits
+
+
+def test_select_template_rejects_duplicate_selection(store) -> None:
+    store.current_user_email = "alice@cryptobot.dev"
+    service = BotConfigService(store)
+    template = service.list_templates()[0]
+
+    first_ok, _, _ = service.select_template(template.id)
+    second_ok, second_message, second_selection = service.select_template(template.id)
+
+    assert first_ok is True
+    assert second_ok is False
+    assert "deja selectionne" in second_message
+    assert second_selection is None

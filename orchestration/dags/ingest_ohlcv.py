@@ -85,7 +85,7 @@ def _make_load_callable(symbol: str, interval: str):
         object_key = ti.xcom_pull(task_ids=f"collect_{symbol}_{interval}")
         if not object_key:
             raise ValueError(f"Aucune clé d'objet MinIO trouvée pour la tâche collect_{symbol}_{interval}")
-        
+
         logger.info("Démarrage du chargement PostgreSQL pour symbol=%s, object_key=%s", symbol, object_key)
         run_loading(object_key=object_key)
         logger.info("Chargement complet pour symbol=%s, object_key=%s", symbol, object_key)
@@ -127,11 +127,10 @@ with DAG(
             task_id=f"collect_{symbol}_{INTERVAL}",
             python_callable=_make_collect_callable(symbol, INTERVAL, LIMIT),
         )
-        
+
         load_task = PythonOperator(
             task_id=f"load_{symbol}_{INTERVAL}",
             python_callable=_make_load_callable(symbol, INTERVAL),
         )
-        
-        collect_task >> load_task
 
+        collect_task >> load_task

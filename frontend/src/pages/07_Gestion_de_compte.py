@@ -50,6 +50,16 @@ def _render_binance_status_card(credential_status: BinanceCredentialStatus) -> N
         if credential_status.configured
         else "API secret: `non configure`"
     )
+    st.write(
+        "Permissions Testnet: `verifiees`"
+        if credential_status.permissions_checked
+        else "Permissions Testnet: `non verifiees`"
+    )
+    st.caption(
+        f"Derniere verification: {format_datetime(credential_status.last_verified_at)}"
+        if credential_status.last_verified_at
+        else "Aucune verification Testnet enregistree"
+    )
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -82,6 +92,15 @@ def _render_binance_credentials_delete(service: AccountService) -> None:
     render_section_title("Suppression des credentials Binance Testnet")
     if st.button("Supprimer les cles Binance Testnet", type="secondary"):
         ok, message = service.delete_binance_credentials()
+        show_feedback("success" if ok else "error", message)
+        if ok:
+            st.rerun()
+
+
+def _render_binance_credentials_verify(service: AccountService) -> None:
+    render_section_title("Verification Binance Testnet")
+    if st.button("Verifier les permissions Testnet", type="secondary"):
+        ok, message = service.verify_binance_credentials()
         show_feedback("success" if ok else "error", message)
         if ok:
             st.rerun()
@@ -121,6 +140,8 @@ def main() -> None:
         _render_binance_status_card(credential_status)
 
     if credential_status.configured:
+        st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+        _render_binance_credentials_verify(service)
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
         _render_binance_credentials_form(service, "Mettre a jour les credentials Binance Testnet")
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
