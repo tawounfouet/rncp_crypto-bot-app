@@ -571,7 +571,7 @@ update:manifests:
       if [ -n "$CI_COMMIT_TAG" ]; then
         # --- PRODUCTION : tag versionne + annotation ---
         VERSION="${CI_COMMIT_TAG}"
-        OVERLAY="overlays/prod/kustomization.yaml"
+        OVERLAY="overlays/production/kustomization.yaml"
 
         sed -i "s|crypto-bot-app/backend:[a-zA-Z0-9._-]*|crypto-bot-app/backend:${VERSION}|g" "${OVERLAY}"
         sed -i "s|crypto-bot-app/frontend:[a-zA-Z0-9._-]*|crypto-bot-app/frontend:${VERSION}|g" "${OVERLAY}"
