@@ -7,7 +7,8 @@ from .base import normalize_ohlcv
 logger = logging.getLogger(__name__)
 
 # id app -> id ccxt (quand ils diffèrent)
-_CCXT_IDS = {
+# Partage avec backend/src/market/clients/ccxt_client.py (execution) : meme mapping des deux cotes.
+CCXT_IDS = {
     "binance": "binance",
     "binance_us": "binanceus",
     "kraken": "kraken",
@@ -40,7 +41,7 @@ class CcxtDriver:
 
     def __init__(self, exchange: str):
         self.source = exchange
-        self._ccxt_id = _CCXT_IDS.get(exchange, exchange)
+        self._ccxt_id = CCXT_IDS.get(exchange, exchange)
         self._client = None  # instancié paresseusement
 
     def _get_client(self):
