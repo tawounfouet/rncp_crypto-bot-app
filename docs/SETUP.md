@@ -46,10 +46,17 @@ fallback sur la VM AWS DataScientest.
 - Git >= 2.13
 - Docker >= 20.10
 - Docker Compose >= 2.0
-- Python 3.14 (pour le venv local)
+- Python 3.14.x (aligne sur `PYTHON_CI_IMAGE=python:3.14.3-slim` dans `versions.env` —
+  c'est l'image utilisee par la CI pour lint et tests, garder son venv local sur la
+  meme version mineure evite les ecarts "ca passe chez moi / ca casse en CI")
 - pre-commit (pour les hooks)
 - kubectl (pour le deploiement K8s dev)
 - kubeseal (pour la gestion des secrets K8s)
+
+> **Windows** : tout ce guide fonctionne aussi bien en PowerShell qu'en Git Bash / WSL2.
+> Les seules differences sont l'emplacement des executables dans le venv
+> (`.venv/bin/...` sous Linux/macOS/WSL vs `.venv/Scripts/...` sous PowerShell natif)
+> et la syntaxe d'activation — chaque commande ci-dessous donne les deux variantes.
 
 ## Installation
 
@@ -96,25 +103,62 @@ streamlit + fastapi cohabitent sans conflit). Cela evite de jongler avec deux
 venvs en dev local. En prod, l'isolation est garantie par les images Docker
 separees (backend / frontend), pas besoin de la dupliquer ici.
 
+La creation et l'installation des dependances sont identiques partout ; seul le
+**chemin des executables** dans le venv change selon l'OS :
+
+| OS | Chemin Python du venv |
+|----|------------------------|
+| Linux / macOS / WSL2 | `.venv/bin/python` |
+| Windows (PowerShell / cmd) | `.venv\Scripts\python.exe` |
+| Windows (Git Bash) | `.venv/Scripts/python.exe` |
+
+**Linux / macOS / WSL2 :**
+
 ```bash
 python3.14 -m venv .venv
 
 # Deps backend (FastAPI, SQLAlchemy, PyJWT, pytest, ruff, ...)
-.venv/bin/pip install -r backend/requirements-dev.txt
+.venv/bin/python -m pip install -r backend/requirements-dev.txt
 
 # Deps frontend (Streamlit, Plotly, Pandas, Pydantic v2)
-.venv/bin/pip install -r frontend/requirements.txt
+.venv/bin/python -m pip install -r frontend/requirements.txt
 ```
 
-> Si `uv` est installe, prefere `uv pip install --python .venv/bin/python -r ...`
-> (10x plus rapide, resolution deterministe).
+**Windows (PowerShell) :**
+
+```powershell
+py -3.14 -m venv .venv
+
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r frontend\requirements.txt
+```
+
+**Windows (Git Bash) :**
+
+```bash
+py -3.14 -m venv .venv
+
+.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
+.venv/Scripts/python.exe -m pip install -r frontend/requirements.txt
+```
+
+> Si `uv` est installe, prefere `uv pip install --python <chemin-python-ci-dessus> -r ...`
+> (10x plus rapide, resolution deterministe) — le chemin du Python cible depend de
+> l'OS comme indique dans le tableau ci-dessus.
 
 `pytest` et `ruff` sont fournis par `backend/requirements-dev.txt` ; ils
 servent aussi aux tests / lint du frontend (pas besoin d'un install dev separe
-cote frontend).
+cote frontend). Ce sont les memes fichiers `requirements-dev.txt` /
+`requirements.txt` qu'installe la CI (job `.python_job` / `lint:python` dans
+`.gitlab-ci.yml`, sur l'image `$PYTHON_CI_IMAGE`) : un venv local cree avec cette
+procedure a donc les memes versions que celles qui font foi en CI.
 
 Le `.venv` est utilise par `make lint`, `make test`, `make test-backend`,
-`make test-frontend` et le hook pre-commit `run-tests-if-needed.sh`.
+`make test-frontend` et le hook pre-commit `run-tests-if-needed.sh`. Ces trois
+outils **detectent automatiquement** le bon chemin d'executable Python
+(`.venv/bin/python` ou `.venv/Scripts/python.exe`) — vous n'avez jamais besoin
+d'adapter une commande `make` selon votre OS, seule la creation initiale du venv
+ci-dessus differe.
 
 ### 4. Installer les hooks pre-commit
 
@@ -169,20 +213,22 @@ make test-backend
 make test-frontend
 ```
 
-Equivalents manuels :
+Equivalents manuels (remplacer `<python-venv>` par le chemin du tableau de
+l'etape 3 : `.venv/bin/python` sous Linux/macOS/WSL2, `.venv\Scripts\python.exe`
+ou `.venv/Scripts/python.exe` sous Windows) :
 
 ```bash
 # Backend
-PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+PYTHONPATH=backend/src <python-venv> -m pytest backend/src/tests -v
 
-# Frontend (depuis frontend/ pour respecter pythonpath du pyproject.toml de Ben)
-cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
+# Frontend (depuis frontend/ pour respecter le pythonpath de frontend/pyproject.toml)
+cd frontend && ../<python-venv> -m pytest tests -q
 ```
 
-> **Note** : le `cache_dir` est override car le `frontend/pyproject.toml` definit
-> `%TEMP%/crypto-bot-app-pytest-cache` (style Windows), qui creerait un dossier
-> litteral `%TEMP%/` sur Linux. A nettoyer dans le pyproject.toml de Ben quand
-> on aura un moment.
+> `make test-backend`/`make test-frontend` et `run-tests-if-needed.sh` font deja
+> cette resolution de chemin automatiquement (variable `VENV_PYTHON` dans le
+> `Makefile`) : preferer `make` au quotidien, ces commandes manuelles servent
+> surtout au debug.
 
 ### Lancer le linting
 
@@ -388,9 +434,45 @@ Le service `createbuckets` est sous le profile `tools` dans tous les environneme
 
 ```bash
 # Le PYTHONPATH est gere automatiquement par make test
-# Pour lancer pytest manuellement :
-PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+# Pour lancer pytest manuellement (remplacer <python-venv> selon l'OS, cf. etape 3) :
+PYTHONPATH=backend/src <python-venv> -m pytest backend/src/tests -v
 ```
+
+### Windows : `PytestCacheWarning` / `[WinError 267] Nom de repertoire non valide`
+
+Symptome (frontend, tests lances depuis un dossier synchronise type OneDrive, ou
+un chemin de projet tres long/imbrique) :
+
+```
+PytestCacheWarning: could not create cache path ... .pytest_cache\v\cache\nodeids:
+[WinError 267] Nom de répertoire non valide: '...\pytest-cache-files-...\.gitignore'
+```
+
+Cause : pytest cree et nettoie des dossiers temporaires `pytest-cache-files-*`
+dans `.pytest_cache/` a la racine du projet frontend ; certains environnements
+Windows (synchronisation OneDrive active sur le dossier, chemin trop long,
+antivirus qui verrouille un fichier pendant le cleanup) empechent cette
+creation/suppression. Ce n'est pas un bug general de Windows — la plupart des
+setups Windows n'y sont jamais confrontes — donc **pas de contournement dans la
+config partagee** (`frontend/pyproject.toml`) : un `cache_dir` en dur type
+`%TEMP%/...` y a deja ete tente et cassait les tests sous Linux/macOS (pytest
+n'expanse `%VAR%` que via `ntpath.expandvars`, pas sous POSIX — le dossier
+`%TEMP%` etait alors cree littéralement).
+
+Corrections locales, a essayer dans l'ordre :
+1. Sortir le clone du dossier synchronise OneDrive (ou mettre le dossier du
+   projet en exclusion de synchronisation).
+2. Raccourcir le chemin du projet (eviter les repertoires trop imbriques).
+3. Si le probleme persiste, rediriger le cache pytest **localement** en creant
+   `frontend/pytest.ini` (prioritaire sur `pyproject.toml`, donc pas besoin de
+   modifier ce dernier) avec un chemin Windows absolu explicite, sans variable
+   `%...%` :
+   ```ini
+   [pytest]
+   cache_dir = C:/Users/<vous>/AppData/Local/Temp/crypto-bot-app-pytest-cache
+   ```
+   **Ne pas commiter ce fichier** — c'est un reglage propre a votre poste,
+   pas a la config partagee de l'equipe.
 
 ### Les containers ne demarrent pas (Docker Compose local)
 

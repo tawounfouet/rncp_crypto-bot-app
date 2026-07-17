@@ -11,12 +11,20 @@ set -euo pipefail
 REPORT_TXT="ci/test-results/test_report.txt"
 REPORT_XML="ci/test-results/report.xml"
 
-# Verifier que le venv existe
-if [ ! -f ".venv/bin/python" ]; then
+# Verifier que le venv existe (Linux/macOS/WSL2 : .venv/bin/python, Windows : .venv/Scripts/python.exe)
+if [ -f ".venv/bin/python" ]; then
+    VENV_PYTHON=".venv/bin/python"
+elif [ -f ".venv/Scripts/python.exe" ]; then
+    VENV_PYTHON=".venv/Scripts/python.exe"
+else
     echo "ERREUR: venv introuvable (.venv). Creez-le avec :"
-    echo "  python3.11 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt"
+    echo "  Linux/macOS/WSL2  : python3.14 -m venv .venv && .venv/bin/python -m pip install -r backend/requirements-dev.txt"
+    echo "  Windows PowerShell: py -3.14 -m venv .venv && .\\.venv\\Scripts\\python.exe -m pip install -r backend\\requirements-dev.txt"
+    echo "  Windows Git Bash  : py -3.14 -m venv .venv && .venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt"
     exit 1
 fi
+
+echo "Venv detecte : $VENV_PYTHON"
 
 # Verifier si des fichiers applicatifs sont stages
 STAGED_APP_FILES=$(git diff --cached --name-only --diff-filter=ACMR \
