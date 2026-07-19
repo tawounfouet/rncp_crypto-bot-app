@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from auth.models import UserSettings
 
 
-def from_user_settings(settings: "UserSettings", exchange: str) -> ExchangeClient:
+def from_user_settings(settings: UserSettings, exchange: str) -> ExchangeClient:
     """Cree le client d'execution d'un exchange a partir des cles API enregistrees.
 
     Args:

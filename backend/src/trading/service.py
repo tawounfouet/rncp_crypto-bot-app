@@ -517,7 +517,9 @@ class TradingService:
             total_usd_value=total_usd.quantize(Decimal("0.01")),
             last_updated=datetime.now(UTC),
         )
-        logger.info("%s portfolio user=%s: %d assets, total=$%.2f", target_exchange, user_id, len(balances), float(total_usd))
+        logger.info(
+            "%s portfolio user=%s: %d assets, total=$%.2f", target_exchange, user_id, len(balances), float(total_usd)
+        )
         return PortfolioResponse(
             success=True, message=f"Portefeuille récupéré depuis {target_exchange}", portfolio=portfolio
         )

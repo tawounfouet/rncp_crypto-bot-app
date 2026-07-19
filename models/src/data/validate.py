@@ -18,11 +18,11 @@ def validate_ohlcv(
 ) -> tuple[pd.DataFrame, ValidationReport]:
     """Validate and clean OHLCV data."""
     initial_len = len(df)
-    
+
     # Remove duplicates
     cleaned_df = df.drop_duplicates().reset_index(drop=True)
-    
+
     duplicates_removed = initial_len - len(cleaned_df)
     report = ValidationReport(duplicates_removed=duplicates_removed)
-    
+
     return cleaned_df, report

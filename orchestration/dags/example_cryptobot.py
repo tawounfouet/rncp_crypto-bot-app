@@ -16,7 +16,7 @@ default_args = {
 
 def _ping_backend():
     url = "http://crypto-bot-backend:8009/health"
-    response = requests.get(url)
+    response = requests.get(url, timeout=10)
     if response.status_code == 200:
         logging.info("Backend is healthy")
     else:
