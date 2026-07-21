@@ -58,8 +58,8 @@ cp .env.example .env
 ### Venv Python (lint + tests)
 
 ```bash
-# Creer le venv a la racine du projet (Python 3.14 requis)
-python3.14 -m venv .venv
+# Creer le venv a la racine du projet (Python 3.11 requis)
+python3.11 -m venv .venv
 
 # Activer le venv
 source .venv/bin/activate
