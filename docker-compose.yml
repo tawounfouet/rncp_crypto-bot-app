@@ -187,6 +187,7 @@ services:
       - "8501:8501"
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/assets:/app/assets
     environment:
       - API_URL=http://crypto-bot-backend:8009
       - ENVIRONMENT=development

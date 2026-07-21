@@ -36,6 +36,10 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# Sauvegardes locales d'assets (non destinees au commit)
+frontend/assets/* copy*.png
+frontend/assets/*_copy.png
+
 # Frontend temporary caches
 pytest-cache-files-*/
 .cacheprobe/
