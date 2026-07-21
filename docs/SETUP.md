@@ -46,7 +46,7 @@ fallback sur la VM AWS DataScientest.
 - Git >= 2.13
 - Docker >= 20.10
 - Docker Compose >= 2.0
-- Python 3.14.x (aligne sur `PYTHON_CI_IMAGE=python:3.14.3-slim` dans `versions.env` —
+- Python 3.11.x (aligne sur `PYTHON_CI_IMAGE=python:3.11.15-slim` dans `versions.env` —
   c'est l'image utilisee par la CI pour lint et tests, garder son venv local sur la
   meme version mineure evite les ecarts "ca passe chez moi / ca casse en CI")
 - pre-commit (pour les hooks)
@@ -87,9 +87,9 @@ POSTGRES_PWD=your_password
 MINIO_USER_ADMIN=minioadmin
 MINIO_PWD_ADMIN=your_minio_password
 
-# Chiffrement des cles API Binance en BDD
+# Chiffrement des cles API exchange (Binance, Kraken, ...) en BDD
 # Generer avec : python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
-BINANCE_ENC_KEY=your_base64_encoded_32_byte_key
+EXCHANGE_ENC_KEY=your_base64_encoded_32_byte_key
 
 # API Binance (optionnel pour dev)
 BINANCE_API_KEY=
@@ -98,7 +98,7 @@ BINANCE_API_SECRET=
 
 ### 3. Creer le venv local (tests + lint)
 
-Le `.venv` racine est **partage entre backend et frontend** (un seul Python 3.14,
+Le `.venv` racine est **partage entre backend et frontend** (un seul Python 3.11,
 streamlit + fastapi cohabitent sans conflit). Cela evite de jongler avec deux
 venvs en dev local. En prod, l'isolation est garantie par les images Docker
 separees (backend / frontend), pas besoin de la dupliquer ici.
@@ -115,7 +115,7 @@ La creation et l'installation des dependances sont identiques partout ; seul le
 **Linux / macOS / WSL2 :**
 
 ```bash
-python3.14 -m venv .venv
+python3.11 -m venv .venv
 
 # Deps backend (FastAPI, SQLAlchemy, PyJWT, pytest, ruff, ...)
 .venv/bin/python -m pip install -r backend/requirements-dev.txt
@@ -127,7 +127,7 @@ python3.14 -m venv .venv
 **Windows (PowerShell) :**
 
 ```powershell
-py -3.14 -m venv .venv
+py -3.11 -m venv .venv
 
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
 .\.venv\Scripts\python.exe -m pip install -r frontend\requirements.txt
@@ -136,7 +136,7 @@ py -3.14 -m venv .venv
 **Windows (Git Bash) :**
 
 ```bash
-py -3.14 -m venv .venv
+py -3.11 -m venv .venv
 
 .venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
 .venv/Scripts/python.exe -m pip install -r frontend/requirements.txt
