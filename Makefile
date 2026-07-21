@@ -139,6 +139,16 @@ test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
 test-models: ## Lancer les tests unitaires des models (backend/src/models)
 	PYTHONPATH=. $(VENV_PYTHON) -m pytest models/tests -q -o cache_dir=/tmp/models-pytest-cache
 
+ci-test: ## Rejouer localement le job CI test:integration (build image test + tests contre un vrai Postgres)
+	docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --target test -f backend/Dockerfile -t crypto-bot-backend:ci-test-local .
+	IMAGE_TAG=crypto-bot-backend:ci-test-local docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
+		--abort-on-container-exit --exit-code-from test-runner; \
+	STATUS=$$?; \
+	mkdir -p ci/test-results; \
+	docker cp "$$(docker compose -f ci/docker-compose.test.yml ps -q test-runner)":/tmp/test-results/. ci/test-results/ 2>/dev/null || true; \
+	docker compose -f ci/docker-compose.test.yml down -v 2>/dev/null || true; \
+	exit $$STATUS
+
 lint: ## Lancer ruff check + format
 	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ --output-format=concise
 	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/
