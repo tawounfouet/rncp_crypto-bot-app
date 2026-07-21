@@ -95,7 +95,7 @@ async def insert_historical_data(
         insert_service = MarketDataInsertService(db)
 
         # Validate symbol
-        is_valid = insert_service.validate_symbol(request.symbol)
+        is_valid = insert_service.validate_symbol(request.exchange, request.symbol)
         if not is_valid:
             raise ValidationError(f"Invalid trading symbol: {request.symbol}")
 
@@ -107,12 +107,15 @@ async def insert_historical_data(
             raise ValidationError("start_time must be before end_time")
 
         # Check existing data count
-        existing_count = insert_service.get_data_count(request.symbol, request.interval, request.start_time, end_time)
+        existing_count = insert_service.get_data_count(
+            request.symbol, request.interval, request.start_time, end_time, exchange=request.exchange
+        )
 
         logger.info(f"Found {existing_count} existing records for {request.symbol} ({request.interval}) in database")
 
-        # Insert data from Binance
+        # Insert data from the exchange
         result = insert_service.insert_historical_data(
+            exchange=request.exchange,
             symbol=request.symbol,
             interval=request.interval,
             start_time=request.start_time,
@@ -230,6 +233,7 @@ async def get_latest_market_data(
     symbol: str = Path(..., description=SYMBOL_DESCRIPTION),
     interval: str = Query("1h", description="Timeframe (e.g., 1m, 5m, 1h, 1d)"),
     periods: int = Query(100, ge=1, le=1000, description="Number of periods to fetch"),
+    exchange: str = Query("binance", description="Exchange source (e.g., binance, kraken)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MarketDataListResponse:
@@ -239,6 +243,7 @@ async def get_latest_market_data(
     - **symbol**: Trading symbol
     - **interval**: Timeframe
     - **periods**: Number of periods to fetch
+    - **exchange**: Exchange source
     """
     try:
         logger.info(f"User {current_user.username} fetching latest {periods} periods for {symbol} ({interval})")
@@ -247,12 +252,14 @@ async def get_latest_market_data(
         insert_service = MarketDataInsertService(db)
 
         # Validate symbol
-        is_valid = insert_service.validate_symbol(symbol)
+        is_valid = insert_service.validate_symbol(exchange, symbol)
         if not is_valid:
             raise ValidationError(f"Invalid symbol: {symbol}")
 
         # Fetch latest data from PostgreSQL
-        data_records = insert_service.get_latest_data(symbol=symbol, interval=interval, limit=periods)
+        data_records = insert_service.get_latest_data(
+            symbol=symbol, interval=interval, limit=periods, exchange=exchange
+        )
 
         if not data_records:
             logger.warning(f"No data found in database for {symbol} ({interval})")

@@ -13,6 +13,7 @@ from mocks.scenarios import MockScenario
 from schemas.auth import MockUser
 from schemas.common import UserRole, UserStatus
 from theme.manager import ThemeMode, get_store_theme_mode, set_store_theme_mode
+from utils.constants import DEFAULT_EXCHANGE
 
 STORE_KEY = "app_store"
 ACCESS_TOKEN_KEY = "access_token"
@@ -21,8 +22,9 @@ USER_DATA_KEY = "user_data"
 AUTHENTICATED_KEY = "authenticated"
 USER_SYNCED_AT_KEY = "user_synced_at"
 USER_SYNCED_TOKEN_KEY = "user_synced_token"
-BINANCE_CONFIGURED_KEY = "binance_configured"
-BINANCE_SYNCED_KEY = "binance_synced"
+EXCHANGE_CONFIGURED_KEY = "exchange_configured"
+EXCHANGE_SYNCED_KEY = "exchange_synced"
+SELECTED_EXCHANGE_KEY = "selected_exchange"
 
 
 def get_store() -> MockStore:
@@ -107,29 +109,42 @@ def clear_auth_session(store: MockStore | None = None) -> None:
     st.session_state[REFRESH_TOKEN_KEY] = None
     st.session_state[USER_DATA_KEY] = None
     st.session_state[AUTHENTICATED_KEY] = False
-    st.session_state[BINANCE_CONFIGURED_KEY] = False
-    st.session_state[BINANCE_SYNCED_KEY] = False
+    st.session_state[EXCHANGE_CONFIGURED_KEY] = False
+    st.session_state[EXCHANGE_SYNCED_KEY] = False
     _clear_user_sync_metadata()
     active_store = store or get_store()
     active_store.current_user_email = None
 
 
-def get_binance_configured() -> bool:
-    return bool(st.session_state.get(BINANCE_CONFIGURED_KEY, False))
+def get_exchange_configured() -> bool:
+    return bool(st.session_state.get(EXCHANGE_CONFIGURED_KEY, False))
 
 
-def set_binance_configured(configured: bool, store: MockStore | None = None) -> None:
-    st.session_state[BINANCE_CONFIGURED_KEY] = configured
-    st.session_state[BINANCE_SYNCED_KEY] = True
+def set_exchange_configured(configured: bool, store: MockStore | None = None) -> None:
+    st.session_state[EXCHANGE_CONFIGURED_KEY] = configured
+    st.session_state[EXCHANGE_SYNCED_KEY] = True
     active_store = store or get_store()
     if active_store.current_user_email:
         user = active_store.users.get(active_store.current_user_email)
         if user:
-            user.binance_configured = configured
+            user.exchange_configured = configured
 
 
-def is_binance_synced() -> bool:
-    return bool(st.session_state.get(BINANCE_SYNCED_KEY, False))
+def is_exchange_synced() -> bool:
+    return bool(st.session_state.get(EXCHANGE_SYNCED_KEY, False))
+
+
+def get_selected_exchange() -> str:
+    return cast(str, st.session_state.get(SELECTED_EXCHANGE_KEY, DEFAULT_EXCHANGE))
+
+
+def set_selected_exchange(exchange: str) -> None:
+    previous = st.session_state.get(SELECTED_EXCHANGE_KEY, DEFAULT_EXCHANGE)
+    st.session_state[SELECTED_EXCHANGE_KEY] = exchange
+    if previous != exchange:
+        # Le statut de configuration synchronise concerne l'exchange precedent : on
+        # force une resynchro aupres du backend pour l'exchange nouvellement selectionne.
+        st.session_state[EXCHANGE_SYNCED_KEY] = False
 
 
 def has_recent_current_user_sync(access_token: str, *, max_age_seconds: int) -> bool:
@@ -187,7 +202,7 @@ def sync_current_user_from_backend(
             if last_login is not None
             else (existing_user.last_login if existing_user else None)
         ),
-        binance_configured=existing_user.binance_configured if existing_user else False,
+        exchange_configured=existing_user.exchange_configured if existing_user else False,
         failed_login_count=existing_user.failed_login_count if existing_user else 0,
     )
     active_store.current_user_email = email

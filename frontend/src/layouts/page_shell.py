@@ -7,7 +7,7 @@ import streamlit as st
 from components.navigation import render_private_sidebar, render_public_sidebar
 from navigation.rules import can_access
 from services.auth_service import AuthService
-from state.session import get_store, get_theme_mode, is_binance_synced
+from state.session import get_selected_exchange, get_store, get_theme_mode, is_exchange_synced
 from theme.styles import apply_global_styles
 
 
@@ -34,11 +34,11 @@ def setup_page(
             st.stop()
         return store, user
 
-    # Synchronise le statut Binance une seule fois par session
-    if not is_binance_synced():
+    # Synchronise le statut de l'exchange selectionne une seule fois par session
+    if not is_exchange_synced():
         from services.account_service import AccountService
 
-        AccountService(store).get_binance_status()
+        AccountService(store).get_exchange_status(get_selected_exchange())
 
     do_logout = render_private_sidebar(store, user)
     if do_logout:

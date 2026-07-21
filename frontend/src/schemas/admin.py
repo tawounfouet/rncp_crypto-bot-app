@@ -15,10 +15,10 @@ class AdminUserRow(BaseModel):
     last_login: datetime | None = None
     first_name: str
     last_name: str | None = None
-    binance_configured: bool = False
+    exchange_configured: bool = False
 
 
 class AdminUserDetail(AdminUserRow):
     created_at: datetime
-    binance_configured: bool
+    exchange_configured: bool
     failed_login_count: int

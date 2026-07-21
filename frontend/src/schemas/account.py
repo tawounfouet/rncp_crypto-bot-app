@@ -13,12 +13,14 @@ class AccountProfile(BaseModel):
     email: str
 
 
-class BinanceCredentialInput(BaseModel):
+class ExchangeCredentialInput(BaseModel):
+    exchange: str
     api_key: str
     api_secret: str
 
 
-class BinanceCredentialStatus(BaseModel):
+class ExchangeCredentialStatus(BaseModel):
+    exchange: str
     configured: bool
     updated_at: datetime | None = None
     api_key_masked: str = ""

@@ -126,7 +126,7 @@ class JourneyBackendClient(BackendApiClient):
                 "parameters": {"budget_usdt": 2000.0, "max_open_positions": 3, "version": 1},
             },
         }
-        self._binance_configured: dict[str, bool] = {}
+        self._configured_exchanges: dict[str, set[str]] = {}
 
     def _user_by_token(self, token: str) -> dict | None:
         email = self._auth.token_to_email.get(token)
@@ -160,18 +160,18 @@ class JourneyBackendClient(BackendApiClient):
         email = self._auth.token_to_email.get(access_token, "")
         return ApiResponse(
             status_code=200,
-            data={"has_binance_credentials": self._binance_configured.get(email, False)},
+            data={"configured_exchanges": sorted(self._configured_exchanges.get(email, set()))},
         )
 
-    def update_user_settings(self, access_token, *, binance_api_key=None, binance_api_secret=None, **_):
+    def update_user_settings(self, access_token, *, exchange=None, api_key=None, api_secret=None, **_):
         email = self._auth.token_to_email.get(access_token)
         if not email:
             return ApiResponse(status_code=401, data={})
-        if binance_api_key and binance_api_secret:
-            self._binance_configured[email] = True
+        if api_key and api_secret:
+            self._configured_exchanges.setdefault(email, set()).add(exchange or "binance")
         return ApiResponse(
             status_code=200,
-            data={"has_binance_credentials": self._binance_configured.get(email, False)},
+            data={"configured_exchanges": sorted(self._configured_exchanges.get(email, set()))},
         )
 
     def list_users(self, access_token):
