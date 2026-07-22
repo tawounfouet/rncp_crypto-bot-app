@@ -9,6 +9,10 @@
 # Variables requises (GitLab > Crypto-bot-app > Settings > CI/CD > Variables) :
 #   GROUP_PAT_TOKEN : PAT avec scope write_repository sur le groupe dst_crypto
 #   SSH_PRIVATE_KEY, VM_HOST, SSH_USER : pour deploy VM AWS
+#   VM_REGISTRY_USER, VM_REGISTRY_PASSWORD : deploy token (read_registry) pour
+#     que la VM pull les images - distinct des CI_REGISTRY_USER/PASSWORD
+#     predefinis par GitLab (ephemeres, scopes au job CI, ne pas les redefinir
+#     manuellement ici sous peine d'ecraser les credentials de build:docker)
 
 # Controle global : quand creer un pipeline
 workflow:
@@ -450,7 +454,10 @@ deploy:staging:
         export \$(grep -v '^\s*#' versions.env | grep '=' | xargs)
 
         echo "=== Login to registry ==="
-        docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+        # VM_REGISTRY_USER/PASSWORD (deploy token read_registry) : distinct des
+        # CI_REGISTRY_USER/PASSWORD predefinis par GitLab (job-scoped, ephemeres) -
+        # la VM a besoin d'un identifiant qui survit au-dela de la duree du job CI.
+        docker login -u $VM_REGISTRY_USER -p $VM_REGISTRY_PASSWORD $CI_REGISTRY
 
         echo "=== Pulling images from registry ==="
         export IMAGE_TAG=staging
@@ -516,7 +523,8 @@ deploy:production:
         docker exec prod-postgres pg_dump -U postgres crypto_bot_db > /tmp/backup_prod_\$(date +%Y%m%d_%H%M%S).sql 2>/dev/null || true
 
         echo "=== Login to registry ==="
-        docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+        # VM_REGISTRY_USER/PASSWORD (deploy token read_registry), cf. deploy:staging
+        docker login -u $VM_REGISTRY_USER -p $VM_REGISTRY_PASSWORD $CI_REGISTRY
 
         echo "=== Pulling images from registry ==="
         export IMAGE_TAG=$CI_COMMIT_TAG
