@@ -4,7 +4,7 @@ version = "0.1.0"
 
 [tool.ruff]
 line-length = 120
-target-version = "py314"
+target-version = "py311"
 exclude = [".git", ".venv", "venv", "tests", "__pycache__"]
 
 [tool.ruff.lint]

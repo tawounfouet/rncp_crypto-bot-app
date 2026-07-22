@@ -15,3 +15,7 @@ torch>=2.2
 mlflow>=2.10
 psycopg2-binary>=2.9.9
 matplotlib>=3.8
+# Requis par utils/connectors/minio.py (couche partagee montee dans le conteneur ml-api).
+# Ce fichier n'est pas encore genere depuis versions.env (cf. issue #10, uv workspaces) :
+# garder cette version alignee sur MINIO_VERSION dans versions.env en attendant.
+minio==7.2.20

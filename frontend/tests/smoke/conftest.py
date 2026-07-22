@@ -78,8 +78,12 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
     # ── /users/me/settings (GET ou PUT) ──────────────────────────────────────
     if "/users/me/settings" in path:
         _, user = _get_store_user()
-        has_binance = bool(getattr(user, "binance_configured", False)) if user else False
-        return ApiResponse(status_code=200, data={"has_binance_credentials": has_binance})
+        exchange = getattr(user, "exchange", "binance") if user else "binance"
+        configured = bool(getattr(user, "exchange_configured", False)) if user else False
+        return ApiResponse(
+            status_code=200,
+            data={"configured_exchanges": [exchange] if configured else []},
+        )
 
     # ── /users/me (GET ou PUT) ────────────────────────────────────────────────
     if "/users/me" in path:

@@ -88,8 +88,6 @@ class Settings(BaseSettings):
     USE_REDIS: bool = False
 
     # Binance API settings
-    BINANCE_API_KEY: SecretStr | None = None
-    BINANCE_API_SECRET: SecretStr | None = None
     BINANCE_TESTNET: bool = True
     BINANCE_TESTNET_API_KEY: SecretStr | None = None
     BINANCE_TESTNET_API_SECRET: SecretStr | None = None

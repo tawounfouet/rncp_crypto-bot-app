@@ -48,7 +48,8 @@ class MockUser(BaseModel):
     status: UserStatus = Field(default=UserStatus.ENABLED)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_login: datetime | None = None
-    binance_configured: bool = False
+    exchange: str = "binance"
+    exchange_configured: bool = False
     failed_login_count: int = 0
 
     @property

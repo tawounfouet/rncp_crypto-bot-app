@@ -9,7 +9,7 @@ pytest.importorskip("streamlit.testing.v1")
 from streamlit.testing.v1 import AppTest
 
 from mocks.db import create_mock_store
-from utils.constants import BINANCE_SETUP_CTA_LABEL
+from utils.constants import EXCHANGE_SETUP_CTA_LABEL
 
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
@@ -22,7 +22,7 @@ def _run_app(
     relative_path: str,
     auth_email: str | None = None,
     *,
-    binance_configured: bool | None = None,
+    exchange_configured: bool | None = None,
     custom_store=None,
 ) -> AppTest:
     at = AppTest.from_file(str(SRC_DIR / relative_path))
@@ -35,13 +35,13 @@ def _run_app(
     if auth_email:
         store = create_mock_store(disable_latency=True)
         store.current_user_email = auth_email
-        if binance_configured is not None and auth_email in store.users:
-            store.users[auth_email].binance_configured = binance_configured
-            if not binance_configured:
-                store.binance_credentials.pop(auth_email, None)
+        if exchange_configured is not None and auth_email in store.users:
+            store.users[auth_email].exchange_configured = exchange_configured
+            if not exchange_configured:
+                store.exchange_credentials.pop(auth_email, None)
                 store.credential_updated_at.pop(auth_email, None)
-            elif auth_email not in store.binance_credentials:
-                store.binance_credentials[auth_email] = ("AK_RESTORED_1234", "AS_RESTORED_9876")
+            elif auth_email not in store.exchange_credentials:
+                store.exchange_credentials[auth_email] = ("AK_RESTORED_1234", "AS_RESTORED_9876")
                 store.credential_updated_at[auth_email] = datetime.now(UTC)
         at.session_state["app_store"] = store
         # Injecte un token factice pour que les services puissent appeler le backend stub
@@ -253,38 +253,38 @@ def test_light_theme_tables_use_custom_light_table_renderer(
     assert "theme-table-wrapper" in markdown_payload
 
 
-def test_portfolio_shows_binance_prerequisite_without_kpis_when_not_configured() -> None:
+def test_portfolio_shows_exchange_prerequisite_without_kpis_when_not_configured() -> None:
     at = _run_app(
         "pages/03_Portefeuille_Spot.py",
         auth_email="alice@cryptobot.dev",
-        binance_configured=False,
+        exchange_configured=False,
     )
     _assert_no_exception(at)
     markdown_values = [entry.value for entry in at.markdown]
-    assert any("Pré-requis Binance manquant" in value for value in markdown_values)
+    assert any("Pré-requis exchange manquant" in value for value in markdown_values)
     assert not any("Valeur totale" in value for value in markdown_values)
-    assert BINANCE_SETUP_CTA_LABEL in [button.label for button in at.button]
+    assert EXCHANGE_SETUP_CTA_LABEL in [button.label for button in at.button]
 
 
-def test_performance_shows_binance_prerequisite_without_performance_content_when_not_configured() -> None:
+def test_performance_shows_exchange_prerequisite_without_performance_content_when_not_configured() -> None:
     at = _run_app(
         "pages/04_Performances_Spot.py",
         auth_email="alice@cryptobot.dev",
-        binance_configured=False,
+        exchange_configured=False,
     )
     _assert_no_exception(at)
     markdown_values = [entry.value for entry in at.markdown]
-    assert any("Pré-requis Binance manquant" in value for value in markdown_values)
+    assert any("Pré-requis exchange manquant" in value for value in markdown_values)
     assert not any("PnL realise" in value for value in markdown_values)
     assert not any("Equity curve" in value for value in markdown_values)
-    assert BINANCE_SETUP_CTA_LABEL in [button.label for button in at.button]
+    assert EXCHANGE_SETUP_CTA_LABEL in [button.label for button in at.button]
 
 
-def test_bot_control_shows_only_bot_list_when_binance_not_configured() -> None:
+def test_bot_control_shows_only_bot_list_when_exchange_not_configured() -> None:
     at = _run_app(
         "pages/05_Controle_Bot_Spot.py",
         auth_email="alice@cryptobot.dev",
-        binance_configured=False,
+        exchange_configured=False,
     )
     _assert_no_exception(at)
     assert "Bots Spot disponibles" in [subheader.value for subheader in at.subheader]
@@ -292,14 +292,14 @@ def test_bot_control_shows_only_bot_list_when_binance_not_configured() -> None:
     page_markdown = " ".join(entry.value for entry in at.markdown)
     for token in ["RUNNING", "STOPPED", "PAUSED", "ERROR", "Statut:"]:
         assert token not in page_markdown
-    assert BINANCE_SETUP_CTA_LABEL in [button.label for button in at.button]
+    assert EXCHANGE_SETUP_CTA_LABEL in [button.label for button in at.button]
 
 
-def test_bot_config_hides_runtime_metadata_when_binance_not_configured() -> None:
+def test_bot_config_hides_runtime_metadata_when_exchange_not_configured() -> None:
     at = _run_app(
         "pages/06_Parametrage_Bot_Spot.py",
         auth_email="alice@cryptobot.dev",
-        binance_configured=False,
+        exchange_configured=False,
     )
     _assert_no_exception(at)
     assert "Bots Spot disponibles" in [subheader.value for subheader in at.subheader]
@@ -309,28 +309,28 @@ def test_bot_config_hides_runtime_metadata_when_binance_not_configured() -> None
     assert not any(button.label in {"Valider", "Sauvegarder"} for button in at.button)
     markdown_values = " ".join(entry.value for entry in at.markdown)
     assert "Statut actuel" not in markdown_values
-    assert BINANCE_SETUP_CTA_LABEL in [button.label for button in at.button]
+    assert EXCHANGE_SETUP_CTA_LABEL in [button.label for button in at.button]
 
 
-def test_account_prioritizes_binance_setup_when_not_configured() -> None:
+def test_account_prioritizes_exchange_setup_when_not_configured() -> None:
     at = _run_app(
         "pages/07_Gestion_de_compte.py",
         auth_email="alice@cryptobot.dev",
-        binance_configured=False,
+        exchange_configured=False,
     )
     _assert_no_exception(at)
     markdown_values = [entry.value for entry in at.markdown]
-    assert any("prioritaire" in value.lower() and "Binance" in value for value in markdown_values)
+    assert any("prioritaire" in value.lower() for value in markdown_values)
 
 
-def test_admin_page_shows_binance_configured_indicator_column() -> None:
+def test_admin_page_shows_exchange_configured_indicator_column() -> None:
     at = _run_app("pages/08_Admin.py", auth_email="admin@cryptobot.dev")
     _assert_no_exception(at)
     assert at.dataframe
     frame = at.dataframe[0].value
-    binance_columns = [column for column in frame.columns if "Binance" in str(column)]
-    assert binance_columns
-    values = set(frame[binance_columns[0]].tolist())
+    exchange_columns = [column for column in frame.columns if "Exchange" in str(column)]
+    assert exchange_columns
+    values = set(frame[exchange_columns[0]].tolist())
     assert values.issubset({"Oui", "Non"})
 
 
@@ -353,14 +353,14 @@ def test_table_dataframes_do_not_expose_internal_technical_metadata(
         assert "__field_validators__" not in dataframe.value.columns
 
 
-def test_account_page_does_not_show_priority_banner_when_binance_configured() -> None:
-    # alice est configuree Binance par defaut dans le mock store
+def test_account_page_does_not_show_priority_banner_when_exchange_configured() -> None:
+    # alice est configuree sur son exchange par defaut (binance) dans le mock store
     at = _run_app(
         "pages/07_Gestion_de_compte.py",
         auth_email="alice@cryptobot.dev",
-        binance_configured=True,
+        exchange_configured=True,
     )
     _assert_no_exception(at)
     page_markdown = " ".join(entry.value for entry in at.markdown).lower()
-    assert "prioritaire: configurer binance" not in page_markdown
+    assert "prioritaire: configurer" not in page_markdown
     assert "binance: enabled" in page_markdown

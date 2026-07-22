@@ -29,6 +29,13 @@ fastparquet==2026.3.0
 # Binance API
 python-binance==1.0.35
 
+# Multi-exchange (ccxt)
+ccxt==4.5.63
+
+# Machine Learning (inference)
+scikit-learn==1.7.2
+joblib==1.5.3
+
 # Utilities
 python-dotenv==1.2.2
 requests==2.33.1

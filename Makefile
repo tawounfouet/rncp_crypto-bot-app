@@ -12,6 +12,11 @@ export
 
 .DEFAULT_GOAL := help
 
+# Python du venv local : .venv/bin/python (Linux/macOS/WSL2) ou .venv/Scripts/python.exe
+# (Windows). Utilise -m pytest/-m ruff plutot que les executables directs pour rester
+# portable (cf. docs/SETUP.md).
+VENV_PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,$(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,.venv/bin/python))
+
 help: ## Afficher cette aide
 	@echo ""
 	@echo "  Crypto-bot-app — commandes disponibles"
@@ -109,24 +114,48 @@ prod-logs: ## Suivre les logs prod
 # Tests & Lint (venv local)
 # ===========================================================================
 
-test: test-backend test-frontend ## Lancer tous les tests (backend + frontend)
+test: test-backend test-frontend test-utils test-jobs ## Lancer les tests (backend + frontend + utils + jobs)
+# NB: test-models exclu de l'agregat tant que la suite models n'est pas verte (echecs
+#     pre-existants: config/features/utils). Lancable seul via `make test-models`. Voir issue hygiene tests models.
 
 verify: ## Verifier que tous les services installes sont presents et healthy (backend/frontend/airflow/minio/postgres/ml)
 	./scripts/verify.sh $(ARGS)
 
 test-backend: ## Lancer les tests unitaires backend
-	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+	PYTHONPATH=backend/src $(VENV_PYTHON) -m pytest backend/src/tests -v
 
 test-frontend: ## Lancer les tests frontend mock-first
-	cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
+	cd frontend && ../$(VENV_PYTHON) -m pytest tests -q
+
+test-utils: ## Lancer les tests de la couche connecteurs partagee (utils/)
+	PYTHONPATH=. $(VENV_PYTHON) -m pytest utils/tests -q -o cache_dir=/tmp/utils-pytest-cache
+
+test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils)
+	PYTHONPATH=backend/src $(VENV_PYTHON) -m pytest --cov=backend/src --cov=utils --cov-report=term-missing backend/src/tests utils/tests frontend/tests
+
+test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
+	PYTHONPATH=. $(VENV_PYTHON) -m pytest jobs/tests -q -o cache_dir=/tmp/utils-pytest-cache
+
+test-models: ## Lancer les tests unitaires des models (backend/src/models)
+	PYTHONPATH=. $(VENV_PYTHON) -m pytest models/tests -q -o cache_dir=/tmp/models-pytest-cache
+
+ci-test: ## Rejouer localement le job CI test:integration (build image test + tests contre un vrai Postgres)
+	docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --target test -f backend/Dockerfile -t crypto-bot-backend:ci-test-local .
+	IMAGE_TAG=crypto-bot-backend:ci-test-local docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
+		--abort-on-container-exit --exit-code-from test-runner; \
+	STATUS=$$?; \
+	mkdir -p ci/test-results; \
+	docker cp "$$(docker compose -f ci/docker-compose.test.yml ps -q test-runner)":/tmp/test-results/. ci/test-results/ 2>/dev/null || true; \
+	docker compose -f ci/docker-compose.test.yml down -v 2>/dev/null || true; \
+	exit $$STATUS
 
 lint: ## Lancer ruff check + format
-	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise
-	.venv/bin/ruff format --check backend/src/ frontend/src/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ --output-format=concise
+	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/
 
 lint-fix: ## Corriger automatiquement les erreurs ruff
-	.venv/bin/ruff check backend/src/ frontend/src/ --fix
-	.venv/bin/ruff format backend/src/ frontend/src/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ --fix
+	$(VENV_PYTHON) -m ruff format backend/src/ frontend/src/
 
 # ===========================================================================
 # Outils

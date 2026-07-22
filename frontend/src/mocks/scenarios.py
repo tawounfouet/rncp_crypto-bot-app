@@ -8,7 +8,7 @@ from enum import Enum
 class MockScenario(str, Enum):
     USER_NORMAL = "utilisateur_normal"
     USER_ADMIN = "admin"
-    BINANCE_NOT_CONFIGURED = "binance_non_configure"
+    EXCHANGE_NOT_CONFIGURED = "exchange_non_configure"
     PORTFOLIO_EMPTY = "portefeuille_vide"
     PORTFOLIO_RICH = "portefeuille_riche"
     BOT_ERROR = "bot_en_erreur"
@@ -20,7 +20,7 @@ class MockScenario(str, Enum):
 SCENARIO_LABELS: dict[MockScenario, str] = {
     MockScenario.USER_NORMAL: "Utilisateur normal",
     MockScenario.USER_ADMIN: "Admin",
-    MockScenario.BINANCE_NOT_CONFIGURED: "Binance non configure",
+    MockScenario.EXCHANGE_NOT_CONFIGURED: "Exchange non configure",
     MockScenario.PORTFOLIO_EMPTY: "Portefeuille vide",
     MockScenario.PORTFOLIO_RICH: "Portefeuille riche",
     MockScenario.BOT_ERROR: "Bot en erreur",

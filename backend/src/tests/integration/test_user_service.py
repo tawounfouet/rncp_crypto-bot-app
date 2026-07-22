@@ -322,7 +322,7 @@ class TestUserExportData:
         assert data["settings"] is not None
         assert data["settings"]["theme"] == "light"
         assert data["settings"]["risk_profile"] == "moderate"
-        assert data["settings"]["has_binance_credentials"] is False
+        assert data["settings"]["configured_exchanges"] == []
 
     def test_export_nonexistent_user_raises(self, patch_db_session):
         """export_user_data leve 404 pour un user inexistant."""

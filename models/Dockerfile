@@ -1,5 +1,8 @@
 # Dockerfile multi-stage pour le module models (ML)
 # ===============================================
+# Contexte de build = racine du repo (pas ./models) : necessaire pour COPY utils/,
+# le package multi-exchange partage avec backend/jobs/orchestration (cf. issue #10).
+# Invocation : docker build -f models/Dockerfile --target <stage> .
 
 # Stage 1: Builder
 ARG PYTHON_VERSION
@@ -18,7 +21,7 @@ RUN apt-get update && \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY models/requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
@@ -44,7 +47,8 @@ RUN useradd --create-home --shell /bin/bash app
 COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
-COPY --chown=app:app . .
+COPY --chown=app:app models/ .
+COPY --chown=app:app utils/ ./utils
 
 # Création des dossiers locaux requis pour l'écriture locale si non montés
 RUN mkdir -p data logs reports artifacts mlruns && \

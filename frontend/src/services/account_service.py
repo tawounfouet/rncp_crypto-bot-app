@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from mocks.db import MockStore
-from schemas.account import AccountProfile, BinanceCredentialInput, BinanceCredentialStatus
+from schemas.account import AccountProfile, ExchangeCredentialInput, ExchangeCredentialStatus
 from services.api_client import BackendApiClient
 from services.base import ServiceError
-from state.session import get_access_token, set_binance_configured, sync_current_user_from_backend
+from state.session import (
+    get_access_token,
+    get_selected_exchange,
+    set_exchange_configured,
+    sync_current_user_from_backend,
+)
 from utils.validators import validate_email, validate_required
 
 
@@ -71,33 +76,34 @@ class AccountService:
 
         return True, "Profil mis a jour."
 
-    def get_binance_status(self) -> BinanceCredentialStatus:
+    def get_exchange_status(self, exchange: str) -> ExchangeCredentialStatus:
         try:
             token = self._token()
         except ServiceError:
-            return BinanceCredentialStatus(configured=False)
+            return ExchangeCredentialStatus(exchange=exchange, configured=False)
 
         response = self.client.get_user_settings(token)
         if not response.success:
-            return BinanceCredentialStatus(configured=False)
+            return ExchangeCredentialStatus(exchange=exchange, configured=False)
 
         data = response.data or {}
-        # L'endpoint retourne has_binance_credentials=True/False ou api_keys.binance present
-        if "has_binance_credentials" in data:
-            configured = bool(data["has_binance_credentials"])
+        # L'endpoint retourne configured_exchanges=[...] (ou api_keys.{exchange} present)
+        if "configured_exchanges" in data:
+            configured = exchange in (data["configured_exchanges"] or [])
         else:
             api_keys = data.get("api_keys") or {}
-            configured = bool(api_keys.get("binance"))
+            configured = bool(api_keys.get(exchange))
 
-        set_binance_configured(configured, store=self.store)
+        set_exchange_configured(configured, store=self.store)
 
-        return BinanceCredentialStatus(
+        return ExchangeCredentialStatus(
+            exchange=exchange,
             configured=configured,
             api_key_masked="sk_****" if configured else "",
             api_secret_masked="sk_****" if configured else "",
         )
 
-    def save_binance_credentials(self, payload: BinanceCredentialInput) -> tuple[bool, str]:
+    def save_exchange_credentials(self, payload: ExchangeCredentialInput) -> tuple[bool, str]:
         try:
             token = self._token()
         except ServiceError as exc:
@@ -113,11 +119,44 @@ class AccountService:
 
         response = self.client.update_user_settings(
             token,
-            binance_api_key=payload.api_key.strip(),
-            binance_api_secret=payload.api_secret.strip(),
+            exchange=payload.exchange,
+            api_key=payload.api_key.strip(),
+            api_secret=payload.api_secret.strip(),
         )
         if not response.success:
             return False, _extract_error(response)
 
-        set_binance_configured(True, store=self.store)
-        return True, "Cles Binance enregistrees et chiffrees en base."
+        set_exchange_configured(True, store=self.store)
+        return True, "Cles enregistrees et chiffrees en base."
+
+    def list_configured_exchanges(self) -> list[str]:
+        try:
+            token = self._token()
+        except ServiceError:
+            return []
+
+        response = self.client.get_user_settings(token)
+        if not response.success:
+            return []
+
+        data = response.data or {}
+        if "configured_exchanges" in data:
+            return sorted(data["configured_exchanges"] or [])
+        api_keys = data.get("api_keys") or {}
+        return sorted(api_keys.keys())
+
+    def delete_exchange_credentials(self, exchange: str) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
+
+        response = self.client.update_user_settings(
+            token, exchange=exchange, api_key="", api_secret=""
+        )
+        if not response.success:
+            return False, _extract_error(response)
+
+        if exchange == get_selected_exchange():
+            set_exchange_configured(False, store=self.store)
+        return True, "Cles supprimees."

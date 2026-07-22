@@ -37,6 +37,8 @@ x-airflow-common: &airflow-common
     - airflow_logs:/opt/airflow/logs
     - ./orchestration/plugins:/opt/airflow/plugins
     - ./jobs:/opt/airflow/jobs       # jobs batch importés par les DAGs
+    - ./models:/opt/airflow/models   # scripts ML (features, training) — requis par ml_pipeline DAG
+    - ./utils:/opt/airflow/utils     # package transverse partagé
     - ./data:/app/data
   depends_on:
     postgres:
@@ -132,8 +134,8 @@ services:
   # Backend FastAPI
   crypto-bot-backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: crypto-bot-backend
@@ -142,6 +144,7 @@ services:
       - "8009:8009"
     volumes:
       - ./backend/src:/app/src
+      - ./utils:/app/utils
       - ./data:/app/data
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -156,7 +159,7 @@ services:
       - MINIO_BUCKET=crypto-bot-data
       - ENVIRONMENT=development
       - DEBUG=true
-      - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
+      - EXCHANGE_ENC_KEY=${EXCHANGE_ENC_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -184,6 +187,7 @@ services:
       - "8501:8501"
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/assets:/app/assets
     environment:
       - API_URL=http://crypto-bot-backend:8009
       - ENVIRONMENT=development
@@ -246,8 +250,8 @@ services:
   # Service de prédiction ML (FastAPI)
   crypto-bot-ml-api:
     build:
-      context: ./models
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: models/Dockerfile
       args:
         PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: crypto-bot-ml-api
@@ -258,6 +262,7 @@ services:
       - ./data:/app/data
       - ./models/artifacts:/app/artifacts
       - ./models/logs:/app/logs
+      - ./utils:/app/utils
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
@@ -275,8 +280,8 @@ services:
   # Interface utilisateur MLflow
   mlflow-ui:
     build:
-      context: ./models
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: models/Dockerfile
       args:
         PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: mlflow-ui
@@ -286,6 +291,14 @@ services:
     volumes:
       - ./models/artifacts:/app/artifacts
     command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001
+    # Le HEALTHCHECK du Dockerfile cible le port 8010 (crypto-bot-ml-api) : ce service
+    # tourne sur 5001 (mlflow ui), d'ou ce healthcheck dedie.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy

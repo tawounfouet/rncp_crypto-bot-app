@@ -63,7 +63,7 @@ class AdminService:
             last_login=_parse_dt(u.get("last_active_at")),
             first_name=u.get("first_name") or "",
             last_name=u.get("last_name") or None,
-            binance_configured=False,
+            exchange_configured=False,
         )
 
     def list_users(self) -> list[AdminUserRow]:
@@ -97,7 +97,7 @@ class AdminService:
             first_name=user.get("first_name") or "",
             last_name=user.get("last_name") or None,
             created_at=_parse_dt(user.get("created_at")) or datetime.now(UTC),
-            binance_configured=False,
+            exchange_configured=False,
             failed_login_count=0,
         )
 

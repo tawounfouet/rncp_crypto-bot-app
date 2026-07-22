@@ -87,8 +87,8 @@ services:
   crypto-bot-backend:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/backend:${IMAGE_TAG:-latest}
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: staging-backend
@@ -108,7 +108,7 @@ services:
       - MINIO_BUCKET=crypto-bot-data
       - ENVIRONMENT=staging
       - DEBUG=true
-      - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
+      - EXCHANGE_ENC_KEY=${EXCHANGE_ENC_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,6 +140,65 @@ services:
       - APP_VERSION=${APP_VERSION:-staging}
     depends_on:
       crypto-bot-backend:
+        condition: service_healthy
+    networks:
+      - staging-network
+
+  # Service de prediction ML (FastAPI)
+  crypto-bot-ml-api:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: models/Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: staging-ml-api
+    restart: always
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+      - ./models/logs:/app/logs
+    environment:
+      - ENVIRONMENT=staging
+      - DEBUG=false
+      - BINANCE_API_KEY=${BINANCE_API_KEY}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
+      - MLFLOW_TRACKING_URI=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - staging-network
+
+  # Interface utilisateur MLflow (meme image que crypto-bot-ml-api, commande differente)
+  mlflow-ui:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
+    container_name: staging-mlflow-ui
+    restart: always
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001
+    # Le HEALTHCHECK de l'image cible le port 8010 (crypto-bot-ml-api) : ce service
+    # tourne sur 5001 (mlflow ui), d'ou ce healthcheck dedie.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
         condition: service_healthy
     networks:
       - staging-network

@@ -29,6 +29,13 @@ fastparquet==$FASTPARQUET_VERSION
 # Binance API
 python-binance==$BINANCE_VERSION
 
+# Multi-exchange (ccxt)
+ccxt==$CCXT_VERSION
+
+# Machine Learning (inference)
+scikit-learn==$SCIKIT_LEARN_VERSION
+joblib==$JOBLIB_VERSION
+
 # Utilities
 python-dotenv==$PYTHON_DOTENV_VERSION
 requests==$REQUESTS_VERSION

@@ -85,7 +85,9 @@ class DatabaseManager:
             with test_engine.connect() as conn:
                 # Test basic connection
                 conn.execute(text("SELECT 1"))
-                logger.info(f"Database connection test successful for: {url.split('@')[0]}@...")
+                host_part = url.split("@")[-1] if "@" in url else url
+                scheme = url.split("://")[0]
+                logger.info(f"Database connection test successful for: {scheme}://***:***@{host_part}")
                 return True
         except Exception as e:
             logger.warning(f"Database connection test failed: {e}")

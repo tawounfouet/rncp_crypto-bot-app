@@ -9,10 +9,11 @@ from pydantic import BaseModel, Field
 
 class SystemStatus(BaseModel):
     backend_ok: bool
-    binance_ok: bool
+    exchange: str = "binance"
+    exchange_ok: bool
     last_sync: datetime
     backend_message: str = "Connecte"
-    binance_message: str = "Connecte"
+    exchange_message: str = "Connecte"
 
 
 class BalanceRow(BaseModel):

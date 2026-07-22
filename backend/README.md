@@ -229,9 +229,10 @@ pytest src/tests/integration -v
 | `MINIO_ENDPOINT` | Endpoint MinIO | localhost:9000 |
 | `MINIO_ACCESS_KEY` | Cle d'acces MinIO | - |
 | `MINIO_SECRET_KEY` | Cle secrete MinIO | - |
-| `BINANCE_API_KEY` | Cle API Binance (optionnel) | - |
-| `BINANCE_API_SECRET` | Secret API Binance (optionnel) | - |
-| `BINANCE_ENC_KEY` | Cle AES-GCM base64 pour le chiffrement des clés Binance | - |
+| `BINANCE_TESTNET` | Utiliser le testnet Binance pour le driver natif | true |
+| `BINANCE_TESTNET_API_KEY` | Cle API Binance testnet (driver natif, optionnel) | - |
+| `BINANCE_TESTNET_API_SECRET` | Secret API Binance testnet (driver natif, optionnel) | - |
+| `EXCHANGE_ENC_KEY` | Cle AES-GCM base64 pour le chiffrement des clés API exchange (Binance, Kraken, ...) | - |
 
 ## CI/CD
 

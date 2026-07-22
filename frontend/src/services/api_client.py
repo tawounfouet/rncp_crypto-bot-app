@@ -47,16 +47,19 @@ class BackendApiClient(AuthApiClient):
         self,
         access_token: str,
         *,
-        binance_api_key: str | None = None,
-        binance_api_secret: str | None = None,
+        exchange: str | None = None,
+        api_key: str | None = None,
+        api_secret: str | None = None,
         theme: str | None = None,
         risk_profile: str | None = None,
     ) -> ApiResponse:
         payload: dict[str, Any] = {}
-        if binance_api_key is not None:
-            payload["binance_api_key"] = binance_api_key
-        if binance_api_secret is not None:
-            payload["binance_api_secret"] = binance_api_secret
+        if exchange is not None:
+            payload["exchange"] = exchange
+        if api_key is not None:
+            payload["api_key"] = api_key
+        if api_secret is not None:
+            payload["api_secret"] = api_secret
         if theme is not None:
             payload["theme"] = theme
         if risk_profile is not None:

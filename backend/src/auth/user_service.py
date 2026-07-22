@@ -192,12 +192,12 @@ class UserService:
             settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if settings is None:
                 return None
-            has_binance = bool(settings.api_keys and "binance" in settings.api_keys)
+            configured_exchanges = sorted(settings.api_keys) if settings.api_keys else []
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
                 "notification_preferences": settings.notification_preferences,
-                "has_binance_credentials": has_binance,
+                "configured_exchanges": configured_exchanges,
             }
 
     def export_user_data(self, user_id: str) -> dict:
@@ -214,7 +214,7 @@ class UserService:
                     "theme": settings.theme,
                     "risk_profile": settings.risk_profile,
                     "notification_preferences": settings.notification_preferences,
-                    "has_binance_credentials": bool(settings.api_keys and "binance" in settings.api_keys),
+                    "configured_exchanges": sorted(settings.api_keys) if settings.api_keys else [],
                 }
 
             accounts_data = [
@@ -284,21 +284,22 @@ class UserService:
                 )
                 session.add(settings)
 
-            # Update API credentials if provided
+            # Update API credentials if provided (exchange defaults to "binance" for compat)
             update_data = settings_data.model_dump(exclude_unset=True)
-            binance_api_key = update_data.pop("binance_api_key", None)
-            binance_api_secret = update_data.pop("binance_api_secret", None)
+            exchange = update_data.pop("exchange", None) or "binance"
+            api_key = update_data.pop("api_key", None)
+            api_secret = update_data.pop("api_secret", None)
 
-            if binance_api_key is not None or binance_api_secret is not None:
-                if binance_api_key is None or binance_api_secret is None:
+            if api_key is not None or api_secret is not None:
+                if api_key is None or api_secret is None:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Both binance_api_key and binance_api_secret are required together.",
+                        detail="Both api_key and api_secret are required together.",
                     )
-                if binance_api_key == "" and binance_api_secret == "":
-                    settings.remove_api_credentials("binance")
+                if api_key == "" and api_secret == "":
+                    settings.remove_api_credentials(exchange)
                 else:
-                    settings.set_api_credentials("binance", binance_api_key, binance_api_secret)
+                    settings.set_api_credentials(exchange, api_key, api_secret)
 
             # Update other settings fields if provided
             for field, value in update_data.items():
@@ -306,12 +307,12 @@ class UserService:
                     setattr(settings, field, value)
 
             # Capture return values before session closes
-            has_binance = bool(settings.api_keys and "binance" in settings.api_keys)
+            configured_exchanges = sorted(settings.api_keys) if settings.api_keys else []
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
                 "notification_preferences": settings.notification_preferences,
-                "has_binance_credentials": has_binance,
+                "configured_exchanges": configured_exchanges,
             }
 
     # Admin operations

@@ -8,7 +8,8 @@ from pathlib import Path
 import pandas as pd
 
 from src.config.config_loader import load_config
-from src.data.storage import read_dataset, write_dataset, write_json
+from src.data.binance import apply_symbol_mapping
+from src.data.storage import read_raw_ohlcv_from_minio, write_dataset, write_json
 from src.features.indicators import (
     add_bollinger_bands,
     add_ema,
@@ -99,11 +100,24 @@ def build_features(data: pd.DataFrame, config_path: str = "config.yaml") -> pd.D
 
 
 def build_symbol_features(symbol: str, interval: str, config_path: str = "config.yaml") -> pd.DataFrame:
-    """Build and persist features for one symbol/interval."""
+    """Build and persist features for one symbol/interval.
+
+    Raw OHLCV data is read from MinIO (uploaded by the ingestion job),
+    then symbol mapping (invert_price, source_symbol) is applied if configured,
+    and finally features are computed and saved locally.
+    """
     settings = load_config(config_path)
-    raw_path = Path(settings.data.paths.raw) / symbol.upper() / f"{interval}.{settings.data.formats.raw_primary}"
-    logger.info("features job start symbol=%s interval=%s raw_path=%s", symbol.upper(), interval, raw_path)
-    raw = read_dataset(raw_path)
+    symbol = symbol.upper()
+    mapping = settings.data.symbol_mappings.get(symbol)
+    source_symbol = (mapping.source_symbol if mapping else symbol)
+    logger.info(
+        "features job start symbol=%s interval=%s source_symbol=%s",
+        symbol, interval, source_symbol,
+    )
+    raw = read_raw_ohlcv_from_minio(source_symbol, interval)
+    if mapping and mapping.invert_price:
+        logger.info("Applying price inversion for symbol=%s (source=%s)", symbol, source_symbol)
+        raw = apply_symbol_mapping(raw, symbol, invert_price=True)
     processed = build_features(raw, config_path)
     base_path = Path(settings.data.paths.processed) / symbol.upper() / f"{interval}_features"
     paths = write_dataset(

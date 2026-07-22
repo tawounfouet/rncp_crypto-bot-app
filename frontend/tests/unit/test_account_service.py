@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from schemas.account import AccountProfile, BinanceCredentialInput
+from schemas.account import AccountProfile, ExchangeCredentialInput
 from services.account_service import AccountService
 from services.api_client import BackendApiClient
 from services.auth_api_client import ApiResponse
@@ -31,8 +31,8 @@ def _mock_sync():
 
 
 @pytest.fixture(autouse=True)
-def _mock_set_binance():
-    with patch("services.account_service.set_binance_configured"):
+def _mock_set_exchange():
+    with patch("services.account_service.set_exchange_configured"):
         yield
 
 
@@ -69,50 +69,107 @@ def test_update_profile_empty_first_name(store) -> None:
     client.update_user.assert_not_called()
 
 
-def test_save_binance_credentials_empty_key_rejected(store) -> None:
+def test_save_exchange_credentials_empty_key_rejected(store) -> None:
     client = MagicMock(spec=BackendApiClient)
     service = AccountService(store, client=client)
-    ok, _ = service.save_binance_credentials(
-        BinanceCredentialInput(api_key="", api_secret="AS_NEW_987")
+    ok, _ = service.save_exchange_credentials(
+        ExchangeCredentialInput(exchange="binance", api_key="", api_secret="AS_NEW_987")
     )
     assert ok is False
     client.update_user_settings.assert_not_called()
 
 
-def test_save_binance_credentials_empty_secret_rejected(store) -> None:
+def test_save_exchange_credentials_empty_secret_rejected(store) -> None:
     client = MagicMock(spec=BackendApiClient)
     service = AccountService(store, client=client)
-    ok, _ = service.save_binance_credentials(
-        BinanceCredentialInput(api_key="AK_NEW_123", api_secret="")
+    ok, _ = service.save_exchange_credentials(
+        ExchangeCredentialInput(exchange="binance", api_key="AK_NEW_123", api_secret="")
     )
     assert ok is False
     client.update_user_settings.assert_not_called()
 
 
-def test_save_binance_credentials_success(store) -> None:
+def test_save_exchange_credentials_success(store) -> None:
     client = MagicMock(spec=BackendApiClient)
-    client.update_user_settings.return_value = _ok({"has_binance_credentials": True})
+    client.update_user_settings.return_value = _ok({"configured_exchanges": ["binance"]})
     service = AccountService(store, client=client)
-    ok, _ = service.save_binance_credentials(
-        BinanceCredentialInput(api_key="AK_NEW_123", api_secret="AS_NEW_987")
+    ok, _ = service.save_exchange_credentials(
+        ExchangeCredentialInput(exchange="binance", api_key="AK_NEW_123", api_secret="AS_NEW_987")
     )
     assert ok is True
     client.update_user_settings.assert_called_once()
+    assert client.update_user_settings.call_args.kwargs["exchange"] == "binance"
 
 
-def test_get_binance_status_configured(store) -> None:
+def test_save_exchange_credentials_for_kraken_passes_exchange_through(store) -> None:
     client = MagicMock(spec=BackendApiClient)
-    client.get_user_settings.return_value = _ok({"has_binance_credentials": True})
+    client.update_user_settings.return_value = _ok({"configured_exchanges": ["kraken"]})
     service = AccountService(store, client=client)
-    status = service.get_binance_status()
+    ok, _ = service.save_exchange_credentials(
+        ExchangeCredentialInput(exchange="kraken", api_key="AK_NEW_123", api_secret="AS_NEW_987")
+    )
+    assert ok is True
+    assert client.update_user_settings.call_args.kwargs["exchange"] == "kraken"
+
+
+def test_get_exchange_status_configured(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.get_user_settings.return_value = _ok({"configured_exchanges": ["binance"]})
+    service = AccountService(store, client=client)
+    status = service.get_exchange_status("binance")
     assert status.configured is True
     assert "*" in status.api_key_masked
 
 
-def test_get_binance_status_not_configured(store) -> None:
+def test_get_exchange_status_not_configured(store) -> None:
     client = MagicMock(spec=BackendApiClient)
-    client.get_user_settings.return_value = _ok({"has_binance_credentials": False})
+    client.get_user_settings.return_value = _ok({"configured_exchanges": []})
     service = AccountService(store, client=client)
-    status = service.get_binance_status()
+    status = service.get_exchange_status("binance")
     assert status.configured is False
     assert status.api_key_masked == ""
+
+
+def test_get_exchange_status_distinguishes_exchanges(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.get_user_settings.return_value = _ok({"configured_exchanges": ["binance"]})
+    service = AccountService(store, client=client)
+    assert service.get_exchange_status("binance").configured is True
+    assert service.get_exchange_status("kraken").configured is False
+
+
+def test_list_configured_exchanges_returns_sorted_list(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.get_user_settings.return_value = _ok({"configured_exchanges": ["kraken", "binance"]})
+    service = AccountService(store, client=client)
+    assert service.list_configured_exchanges() == ["binance", "kraken"]
+
+
+def test_list_configured_exchanges_empty_when_backend_call_fails(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.get_user_settings.return_value = _err()
+    service = AccountService(store, client=client)
+    assert service.list_configured_exchanges() == []
+
+
+def test_delete_exchange_credentials_sends_empty_keys_for_that_exchange(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.update_user_settings.return_value = _ok({"configured_exchanges": ["kraken"]})
+    service = AccountService(store, client=client)
+    ok, _ = service.delete_exchange_credentials("binance")
+    assert ok is True
+    client.update_user_settings.assert_called_once_with(
+        "fake-token", exchange="binance", api_key="", api_secret=""
+    )
+
+
+def test_delete_exchange_credentials_does_not_affect_other_exchanges(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.update_user_settings.side_effect = [
+        _ok({"configured_exchanges": ["binance"]}),
+    ]
+    service = AccountService(store, client=client)
+    service.delete_exchange_credentials("kraken")
+    # Seul "kraken" est envoye pour suppression ; "binance" n'est jamais touche par cet appel.
+    _, kwargs = client.update_user_settings.call_args
+    assert kwargs["exchange"] == "kraken"

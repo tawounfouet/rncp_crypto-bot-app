@@ -8,7 +8,7 @@ from mocks.db import MockStore
 from schemas.portfolio import BalanceRow, OpenOrder, PortfolioSnapshot, SpotTrade, SystemStatus
 from services.api_client import BackendApiClient
 from services.base import ServiceError
-from state.session import get_access_token
+from state.session import get_access_token, get_selected_exchange
 
 
 def _parse_dt(value: object) -> datetime:
@@ -40,6 +40,7 @@ class PortfolioService:
             raise ServiceError("Non authentifie.")
 
         now = datetime.now(UTC)
+        exchange = get_selected_exchange()
 
         # --- Portfolio (balances) ---
         portfolio_resp = self.client.get_portfolio(token)
@@ -48,8 +49,8 @@ class PortfolioService:
         total_value_usdt = 0.0
         free_cash_usdt = 0.0
 
-        binance_ok = False
-        binance_message = "Non configure"
+        exchange_ok = False
+        exchange_message = "Non configure"
 
         if portfolio_resp.success and isinstance(portfolio_resp.data, dict):
             raw_portfolio = portfolio_resp.data.get("portfolio") or portfolio_resp.data
@@ -69,10 +70,10 @@ class PortfolioService:
                         BalanceRow(asset=asset, free=free, locked=locked, value_usdt=value)
                     )
             if inner_success:
-                binance_ok = True
-                binance_message = "Connecte"
+                exchange_ok = True
+                exchange_message = "Connecte"
             else:
-                binance_message = inner_message or "Clés Binance non configurées"
+                exchange_message = inner_message or "Clés d'exchange non configurées"
 
         # --- Open orders ---
         orders_resp = self.client.list_orders(token, status="NEW", limit=50)
@@ -118,10 +119,11 @@ class PortfolioService:
 
         system_status = SystemStatus(
             backend_ok=backend_ok,
-            binance_ok=binance_ok,
+            exchange=exchange,
+            exchange_ok=exchange_ok,
             last_sync=now,
             backend_message="Connecte" if backend_ok else "Erreur backend",
-            binance_message=binance_message,
+            exchange_message=exchange_message,
         )
 
         return PortfolioSnapshot(
