@@ -2,7 +2,9 @@
 # =============================================
 # IMPORTANT : ne pas lancer directement avec "docker compose".
 # Utiliser : make prod-up / make prod-down / make prod-config
-# Ports: Backend 9009, Postgres 5435 (cohabite avec staging)
+# Ports (prod = staging+1, cf. docker-compose.staging.yml) : Backend 8010,
+# Postgres 5435, MinIO API 9001 / Console 9011, Adminer 8086, Frontend 8502,
+# ml-api 8021, mlflow-ui 5002, Airflow 8081
 
 services:
   postgres:
@@ -49,8 +51,8 @@ services:
     container_name: prod-minio
     restart: always
     ports:
-      - "9002:9000"
-      - "9003:9001"
+      - "9001:9000"
+      - "9011:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_USER_ADMIN:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_PWD_ADMIN:-minioadmin}
@@ -91,7 +93,7 @@ services:
     container_name: prod-backend
     restart: always
     ports:
-      - "9009:8009"
+      - "8010:8009"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
@@ -142,7 +144,7 @@ services:
     container_name: prod-ml-api
     restart: always
     ports:
-      - "8011:8010"
+      - "8021:8010"
     volumes:
       - ./models/artifacts:/app/artifacts
       - ./models/logs:/app/logs
@@ -190,9 +192,114 @@ services:
     networks:
       - prod-network
 
+  # Airflow (orchestration DAGs : ingestion, pipeline ML)
+  airflow-webserver:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    container_name: prod-airflow-webserver
+    restart: always
+    command: webserver
+    ports:
+      - "8081:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_BASE_URL=https://api.binance.com
+    volumes:
+      - prod_airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - prod-network
+
+  airflow-scheduler:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    container_name: prod-airflow-scheduler
+    restart: always
+    command: scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_BASE_URL=https://api.binance.com
+    volumes:
+      - prod_airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - prod-network
+
+  airflow-init:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    container_name: prod-airflow-init
+    command: version
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        airflow db init
+        airflow connections delete postgres_default || true
+        airflow connections add 'postgres_default' \
+          --conn-type 'postgres' \
+          --conn-host 'postgres' \
+          --conn-port '5432' \
+          --conn-login '${POSTGRES_USER:-postgres}' \
+          --conn-password '${POSTGRES_PWD:-postgres}' \
+          --conn-schema 'crypto_bot_db'
+        airflow users create \
+          --username '${AIRFLOW_ADMIN_USER:-admin}' \
+          --firstname Crypto \
+          --lastname Admin \
+          --role Admin \
+          --email admin@cryptobot.local \
+          --password '${AIRFLOW_ADMIN_PASSWORD:-admin}' || true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - prod-network
+
 volumes:
   prod_postgres_data:
   prod_minio_data:
+  prod_airflow_logs:
 
 networks:
   prod-network:

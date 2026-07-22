@@ -276,6 +276,40 @@ make dev-up
 
 ---
 
+## Problème 8 — DAG `ml_pipeline` : `train-rf` échoue (ModuleNotFoundError sklearn/torch)
+
+### Symptôme
+
+Une fois Airflow déployé sur staging/prod (VM AWS, image construite depuis
+`orchestration/Dockerfile`), les tâches `build_features_*` et `train_random_forest`
+du DAG `ml_pipeline` échouent avec `ModuleNotFoundError: No module named 'sklearn'`
+(ou `torch`).
+
+### Cause
+
+`ml_pipeline.py` lance l'entraînement via `BashOperator` (`cd {MODELS_DIR} && python
+-m src.main train-rf`), exécuté **dans le conteneur Airflow lui-même**. Mais
+`orchestration/requirements.txt` n'inclut que `jobs/requirements.txt` (dépendances
+d'ingestion), pas `models/requirements.txt` (`pandas`, `scikit-learn`, `torch`,
+`mlflow`...). `pandas` fonctionne par hasard (dépendance transitive d'un provider
+Airflow), pas les autres.
+
+### Limitation connue — pas encore résolue (2026-07-22)
+
+Deux pistes envisagées, aucune retenue pour l'instant :
+
+1. Ajouter `-r /opt/airflow/models/requirements.txt` à `orchestration/requirements.txt`
+   — simple, mais alourdit beaucoup l'image Airflow (torch, mlflow...) et risque de
+   futurs conflits de versions avec les dépendances propres à Airflow.
+2. Repenser `train-rf` pour appeler `crypto-bot-ml-api` en HTTP plutôt que d'exécuter
+   l'entraînement localement dans le conteneur Airflow — évite la duplication de
+   dépendances lourdes, mais demande de revoir le DAG.
+
+Le DAG `ingest_ohlcv` n'est pas concerné (dépendances légères, déjà dans
+`jobs/requirements.txt`) et fonctionne normalement.
+
+---
+
 ## Checklist de diagnostic rapide
 
 ```

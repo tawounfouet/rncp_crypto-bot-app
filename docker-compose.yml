@@ -15,6 +15,7 @@ x-airflow-common: &airflow-common
       AIRFLOW_IMAGE: ${AIRFLOW_IMAGE}
   environment:
     - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - PYTHONPATH=/opt/airflow
     - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
     - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
     - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
