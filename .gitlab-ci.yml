@@ -446,7 +446,16 @@ deploy:staging:
     - |
       VERSION="staging-${CI_COMMIT_SHORT_SHA}"
       ssh $SSH_USER@$VM_HOST << ENDSSH
+        set -e
         cd /opt/crypto-bot-staging
+
+        echo "=== Verification ownership ==="
+        NOT_OWNED=\$(find . -not -user "\$(whoami)" -not -path "./.git/*" 2>/dev/null || true)
+        if [ -n "\$NOT_OWNED" ]; then
+          echo "ATTENTION : fichiers/dossiers non possedes par \$(whoami) detectes (corrige automatiquement, mais signaler si ca se reproduit) :"
+          echo "\$NOT_OWNED"
+        fi
+        sudo chown -R "\$(whoami)":"\$(whoami)" .
 
         echo "=== Pulling latest code ==="
         git fetch origin staging --tags
@@ -515,7 +524,16 @@ deploy:production:
     - |
       echo "=== Deploying tag $CI_COMMIT_TAG to production ==="
       ssh $SSH_USER@$VM_HOST << ENDSSH
+        set -e
         cd /opt/crypto-bot-prod
+
+        echo "=== Verification ownership ==="
+        NOT_OWNED=\$(find . -not -user "\$(whoami)" -not -path "./.git/*" 2>/dev/null || true)
+        if [ -n "\$NOT_OWNED" ]; then
+          echo "ATTENTION : fichiers/dossiers non possedes par \$(whoami) detectes (corrige automatiquement, mais signaler si ca se reproduit) :"
+          echo "\$NOT_OWNED"
+        fi
+        sudo chown -R "\$(whoami)":"\$(whoami)" .
 
         echo "=== Fetching tag $CI_COMMIT_TAG ==="
         git fetch origin --tags
