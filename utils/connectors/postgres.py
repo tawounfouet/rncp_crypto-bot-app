@@ -4,7 +4,8 @@ import logging
 import os
 from typing import Any
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
 

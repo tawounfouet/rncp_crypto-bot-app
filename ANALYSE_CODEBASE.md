@@ -43,18 +43,20 @@ Le projet est structuré en **5 domaines métier** clairement séparés, orchest
 
 ### Services Docker
 
-| Service | Technologie | Port | Rôle |
-|---------|-------------|------|------|
-| `postgres` | PostgreSQL | 5434 (host) | Base de données principale |
-| `adminer` | Adminer | 8085 | UI d'administration PostgreSQL |
-| `minio` | MinIO | 9000/9001 | Stockage objet S3 (données brutes) |
-| `crypto-bot-backend` | FastAPI | 8009 | API REST backend |
-| `crypto-bot-frontend` | Streamlit | 8501 | Interface utilisateur |
-| `airflow-webserver` | Airflow | 8080 | UI d'orchestration |
-| `airflow-scheduler` | Airflow | — | Scheduler de tâches |
-| `crypto-bot-ml-api` | FastAPI | 8010 | API de prédiction ML |
-| `mlflow-ui` | MLflow | 5001 | Tracking d'experiments |
-| `createbuckets` | MinIO mc | — | Init buckets (one-shot, profile `tools`) |
+Ports détaillés (dev/staging/prod) : voir [docs/SETUP.md](docs/SETUP.md#services-par-environnement-vm-aws).
+
+| Service | Technologie | Rôle |
+|---------|-------------|------|
+| `postgres` | PostgreSQL | Base de données principale |
+| `adminer` | Adminer | UI d'administration PostgreSQL |
+| `minio` | MinIO | Stockage objet S3 (données brutes) |
+| `crypto-bot-backend` | FastAPI | API REST backend |
+| `crypto-bot-frontend` | Streamlit | Interface utilisateur |
+| `airflow-webserver` | Airflow | UI d'orchestration |
+| `airflow-scheduler` | Airflow | Scheduler de tâches |
+| `crypto-bot-ml-api` | FastAPI | API de prédiction ML |
+| `mlflow-ui` | MLflow | Tracking d'experiments |
+| `createbuckets` | MinIO mc | Init buckets (one-shot, profile `tools`) |
 
 ---
 

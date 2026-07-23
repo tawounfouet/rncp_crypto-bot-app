@@ -318,6 +318,15 @@ build:docker:
         echo "  pushed ml-api:$TAG"
       done
 
+      # Build airflow (image orchestration, DAGs/jobs/models/utils copies en dur)
+      echo "Building airflow runtime image..."
+      docker build --build-arg AIRFLOW_IMAGE=${AIRFLOW_IMAGE} --target runtime -f orchestration/Dockerfile -t $CI_REGISTRY_IMAGE/airflow:build .
+      for TAG in $TAGS_BACKEND; do
+        docker tag $CI_REGISTRY_IMAGE/airflow:build $CI_REGISTRY_IMAGE/airflow:$TAG
+        docker push $CI_REGISTRY_IMAGE/airflow:$TAG
+        echo "  pushed airflow:$TAG"
+      done
+
       # Build frontend
       echo "Building frontend image (APP_VERSION=$FRONTEND_VERSION)..."
       docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg APP_VERSION=$FRONTEND_VERSION -t $CI_REGISTRY_IMAGE/frontend:build ./frontend
@@ -500,7 +509,7 @@ deploy:production:
   extends: .deploy_template
   environment:
     name: production
-    url: http://$VM_HOST:9009
+    url: http://$VM_HOST:8010
     on_stop: stop:production
   script:
     - |
@@ -539,7 +548,7 @@ deploy:production:
         docker compose -f docker-compose.prod.yml ps
 
         echo "=== Health check ==="
-        curl -f http://localhost:9009/health || exit 1
+        curl -f http://localhost:8010/health || exit 1
 
         echo "Production deployment of $CI_COMMIT_TAG successful!"
       ENDSSH

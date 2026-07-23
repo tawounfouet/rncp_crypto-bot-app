@@ -39,7 +39,7 @@ Crypto-bot-app/                 # Monorepo applicatif
 
 **Deploiement principal** : cluster Kubernetes (Talos) via ArgoCD.
 Les fichiers `docker-compose.*.yml` servent uniquement pour le dev local et comme
-fallback sur la VM AWS DataScientest.
+fallback sur la VM AWS Liora.
 
 ## Prerequis
 
@@ -197,6 +197,9 @@ Services disponibles (dev local) :
 | Frontend | http://localhost:8501 |
 | Adminer (PostgreSQL) | http://localhost:8085 |
 | MinIO Console | http://localhost:9001 |
+| ml-api | http://localhost:8010 |
+| mlflow-ui | http://localhost:5001 |
+| Airflow UI | http://localhost:8080 (admin / admin) |
 
 ## Developpement
 
@@ -335,7 +338,7 @@ Ils servent pour :
 
 1. **Dev local** : `docker-compose.yml` pour lancer tous les services sur sa machine.
 2. **VM AWS fallback** : `docker-compose.staging.yml` et `docker-compose.prod.yml`
-   deployes sur la VM DataScientest comme solution de repli si le
+   deployes sur la VM Liora comme solution de repli si le
    cluster K8s est indisponible.
 
 Le deploiement principal se fait sur le cluster Kubernetes Talos via ArgoCD
@@ -416,14 +419,22 @@ Taper `make` pour afficher toutes les commandes disponibles.
 
 ### Services par environnement (VM AWS)
 
+Staging et Production cohabitent sur la meme VM : convention `Prod = Staging + 1` sur
+tous les ports externes. MinIO API et Console sont volontairement dans des dizaines
+distinctes (9000s / 9010s) pour eviter la confusion entre "prod du port API" et
+"console" quand on applique +1.
+
 | Service | Dev | Staging | Prod |
 |---------|-----|---------|------|
-| Backend | 8009 | 8009 | 9009 |
+| Backend | 8009 | 8009 | 8010 |
 | Frontend | 8501 | 8501 | 8502 |
 | PostgreSQL | 5434 | 5434 | 5435 |
-| MinIO API | 9000 | 9000 | 9002 |
-| MinIO Console | 9001 | 9001 | 9003 |
+| MinIO API | 9000 | 9000 | 9001 |
+| MinIO Console | 9001 | 9010 | 9011 |
 | Adminer | 8085 | 8085 | 8086 (profile debug) |
+| ml-api | 8010 | 8020 | 8021 |
+| mlflow-ui | 5001 | 5001 | 5002 |
+| Airflow webserver | 8080 | 8080 | 8081 |
 
 En production, Adminer ne demarre pas par defaut (profile `debug`).
 Le service `createbuckets` est sous le profile `tools` dans tous les environnements.
