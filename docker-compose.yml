@@ -66,7 +66,7 @@ services:
       # Vérifie aussi que les bases créées par init-user-db.sh existent : pg_isready
       # seul passe via le socket DÈS la phase d'init (avant CREATE DATABASE airflow),
       # ce qui faisait démarrer airflow-init trop tôt -> "database airflow does not exist".
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -q && psql -U ${POSTGRES_USER:-postgres} -d airflow -c 'SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d postgres -q && psql -U ${POSTGRES_USER:-postgres} -d airflow -c 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 5
