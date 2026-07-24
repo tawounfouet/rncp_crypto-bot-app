@@ -233,6 +233,7 @@ async def api_info():
 # Router includes (after app configuration)
 from auth.router import router as auth_router  # noqa: E402
 from auth.users_router import router as users_router  # noqa: E402
+from inference.router import router as inference_router  # noqa: E402
 from market.router import router as market_router  # noqa: E402
 from strategy.router import router as strategies_router  # noqa: E402
 from trading.router import router as trading_router  # noqa: E402
@@ -250,8 +251,8 @@ app.include_router(trading_router, prefix=settings.API_PREFIX)
 # Include market data router
 app.include_router(market_router, prefix=settings.API_PREFIX)
 
-# Future route includes will go here
-# app.include_router(trading_router, prefix=f"{settings.API_PREFIX}/trading", tags=["Trading"])
+# Include model inference router
+app.include_router(inference_router, prefix=settings.API_PREFIX)
 # app.include_router(market_router, prefix=f"{settings.API_PREFIX}/market", tags=["Market Data"])
 
 

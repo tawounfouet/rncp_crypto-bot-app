@@ -1,0 +1,215 @@
+# Configuration principale du MVP models-training CryptoBot v2.
+# Les secrets ne doivent pas être stockés ici. Utiliser les variables
+# d'environnement référencées dans la section exchange.
+
+project:
+  name: "dst-crypto-bot-models-training"
+  version: "0.1.0"
+  description: "MVP ML pour signaux BUY/SELL/HOLD sur BTCUSDT et BTCETH"
+  timezone: "UTC"
+  random_state: 42
+
+exchange:
+  name: "binance"
+  testnet: true
+  base_url: "https://api.binance.com"
+  api_key_env: "BINANCE_API_KEY"
+  api_secret_env: "BINANCE_API_SECRET"
+  request_timeout_seconds: 20
+  rate_limit_sleep_seconds: 0.25
+
+data:
+  symbols:
+    - "BTCUSDT"
+    - "BTCETH"
+  symbol_mappings:
+    BTCETH:
+      source_symbol: "ETHBTC"
+      invert_price: true
+  primary_interval: "1h"
+  intervals:
+    - "1h"
+  history:
+    start: "2024-01-01"
+    end: null
+  paths:
+    raw: "data/raw"
+    processed: "data/processed"
+    reports: "reports"
+    artifacts: "artifacts"
+  formats:
+    raw_primary: "parquet"
+    raw_exports:
+      - "csv"
+      - "jsonl"
+    processed_primary: "parquet"
+    processed_exports:
+      - "csv"
+      - "jsonl"
+    sample_export: "json"
+  quality:
+    min_valid_candle_ratio: 0.99
+    allow_missing_candles: false
+    drop_duplicates: true
+    enforce_ohlc_consistency: true
+  collection:
+    mode: paginated
+    target_rows: 26000
+    page_size: 1000
+    page_delay_ms: 100
+
+features:
+  price_columns:
+    - "open"
+    - "high"
+    - "low"
+    - "close"
+  volume_column: "volume"
+  technical_indicators:
+    returns:
+      enabled: true
+      periods: [1, 3, 6]
+    volatility:
+      enabled: true
+      windows: [20]
+    sma:
+      enabled: true
+      windows: [20, 50]
+    ema:
+      enabled: true
+      windows: [12, 26]
+    rsi:
+      enabled: true
+      window: 14
+    macd:
+      enabled: true
+      fast: 12
+      slow: 26
+      signal: 9
+    bollinger_bands:
+      enabled: true
+      window: 20
+      num_std: 2.0
+    volume_sma:
+      enabled: true
+      windows: [20]
+    order_flow:
+      enabled: true
+  missing_values:
+    drop_initial_rolling_rows: true
+    fill_method: "ffill"
+
+labels:
+  classes:
+    sell: 0
+    hold: 1
+    buy: 2
+  horizon: 1
+  threshold_mode: "fixed"
+  fixed_threshold: 0.002
+  volatility_window: 20
+  volatility_multiplier: 0.5
+
+split:
+  method: "temporal"
+  train_ratio: 0.70
+  validation_ratio: 0.15
+  test_ratio: 0.15
+  shuffle: false
+
+preprocessing:
+  scaler: "standard"
+  fit_scaler_on: "train"
+  persist_scaler: true
+
+models:
+  random_forest:
+    enabled: true
+    n_estimators: 300
+    max_depth: 8
+    min_samples_leaf: 20
+    class_weight: "balanced"
+    n_jobs: -1
+    random_state: 42
+  lstm:
+    enabled: true
+    sequence_length: 128
+    hidden_size: 128
+    num_layers: 2
+    dropout: 0.2
+    bidirectional: false
+    output_size: 3
+
+training:
+  batch_size: 32
+  epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.00001
+  optimizer: "adam"
+  loss: "cross_entropy"
+  focal_gamma: 3.0
+  use_class_weights: true
+  early_stopping:
+    patience: 15
+    min_delta: 0.0002
+    restore_best_weights: true
+  gradient_clipping:
+    enabled: true
+    max_norm: 1.0
+
+evaluation:
+  primary_metric: "f1_macro"
+  metrics:
+    - "accuracy"
+    - "precision_macro"
+    - "recall_macro"
+    - "f1_macro"
+    - "directional_accuracy"
+  export_confusion_matrix: true
+  export_feature_importance: true
+
+mlops:
+  enabled: true
+  tracking_backend: "mlflow"
+  tracking_uri: "sqlite:///mlflow.db"
+  experiment_name: "cryptobot-mvp-models"
+  register_best_model: true
+  model_registry_path: "artifacts/registry"
+  run_id_format: "%Y%m%d-%H%M%S"
+  log:
+    parameters: true
+    metrics: true
+    artifacts: true
+    dataset_profile: true
+    git_commit: true
+    config_snapshot: true
+  model_card:
+    enabled: true
+    output_filename: "model_card.md"
+
+backtesting:
+  enabled: true
+  fee_rate: 0.001        # Binance spot taker fee 0.1%
+  slippage_rate: 0.0001  # conservative slippage estimate
+  allow_short: false     # long-only for MVP
+
+inference:
+  default_model: "random_forest"
+  confidence_policy: "predicted_class_probability"
+  fallback_signal: "HOLD"
+  max_data_freshness_seconds: 7200
+
+api:
+  host: "0.0.0.0"
+  port: 8010
+  reload: false
+  latency_target_ms_p95: 300
+  cors_origins:
+    - "http://localhost:8501"
+    - "http://localhost:8009"
+
+logging:
+  level: "INFO"
+  log_dir: "logs"
+  json_logs: false
+  file_logging: true

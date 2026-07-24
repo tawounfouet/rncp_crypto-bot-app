@@ -17,7 +17,7 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   ├── pyproject.toml          # Config pytest + ruff specifique frontend
 │   └── requirements.txt        # Deps runtime (streamlit, plotly, pandas, pydantic)
 ├── ci/                         # Tests d'integration CI
-│   ├── docker-compose.test.yml # Compose pour tests (Postgres + Mongo reels)
+│   ├── docker-compose.test.yml # Compose pour tests (Postgres reel)
 │   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
 ├── scripts/
 │   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles (8 checks)
@@ -39,17 +39,24 @@ Crypto-bot-app/                 # Monorepo applicatif
 
 **Deploiement principal** : cluster Kubernetes (Talos) via ArgoCD.
 Les fichiers `docker-compose.*.yml` servent uniquement pour le dev local et comme
-fallback sur la VM AWS DataScientest.
+fallback sur la VM AWS Liora.
 
 ## Prerequis
 
 - Git >= 2.13
 - Docker >= 20.10
 - Docker Compose >= 2.0
-- Python 3.14 (pour le venv local)
+- Python 3.11.x (aligne sur `PYTHON_CI_IMAGE=python:3.11.15-slim` dans `versions.env` —
+  c'est l'image utilisee par la CI pour lint et tests, garder son venv local sur la
+  meme version mineure evite les ecarts "ca passe chez moi / ca casse en CI")
 - pre-commit (pour les hooks)
 - kubectl (pour le deploiement K8s dev)
 - kubeseal (pour la gestion des secrets K8s)
+
+> **Windows** : tout ce guide fonctionne aussi bien en PowerShell qu'en Git Bash / WSL2.
+> Les seules differences sont l'emplacement des executables dans le venv
+> (`.venv/bin/...` sous Linux/macOS/WSL vs `.venv/Scripts/...` sous PowerShell natif)
+> et la syntaxe d'activation — chaque commande ci-dessous donne les deux variantes.
 
 ## Installation
 
@@ -76,19 +83,13 @@ Variables importantes dans `.env` :
 POSTGRES_USER=postgres
 POSTGRES_PWD=your_password
 
-# MongoDB
-MONGODB_USER=admin
-MONGODB_PWD=your_mongo_password
-MONGODB_USER_ADMIN=admin
-MONGODB_PWD_ADMIN=your_mongo_admin_password
-
 # MinIO
 MINIO_USER_ADMIN=minioadmin
 MINIO_PWD_ADMIN=your_minio_password
 
-# Chiffrement des cles API Binance en BDD
+# Chiffrement des cles API exchange (Binance, Kraken, ...) en BDD
 # Generer avec : python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
-BINANCE_ENC_KEY=your_base64_encoded_32_byte_key
+EXCHANGE_ENC_KEY=your_base64_encoded_32_byte_key
 
 # API Binance (optionnel pour dev)
 BINANCE_API_KEY=
@@ -97,30 +98,67 @@ BINANCE_API_SECRET=
 
 ### 3. Creer le venv local (tests + lint)
 
-Le `.venv` racine est **partage entre backend et frontend** (un seul Python 3.14,
+Le `.venv` racine est **partage entre backend et frontend** (un seul Python 3.11,
 streamlit + fastapi cohabitent sans conflit). Cela evite de jongler avec deux
 venvs en dev local. En prod, l'isolation est garantie par les images Docker
 separees (backend / frontend), pas besoin de la dupliquer ici.
 
+La creation et l'installation des dependances sont identiques partout ; seul le
+**chemin des executables** dans le venv change selon l'OS :
+
+| OS | Chemin Python du venv |
+|----|------------------------|
+| Linux / macOS / WSL2 | `.venv/bin/python` |
+| Windows (PowerShell / cmd) | `.venv\Scripts\python.exe` |
+| Windows (Git Bash) | `.venv/Scripts/python.exe` |
+
+**Linux / macOS / WSL2 :**
+
 ```bash
-python3.14 -m venv .venv
+python3.11 -m venv .venv
 
 # Deps backend (FastAPI, SQLAlchemy, PyJWT, pytest, ruff, ...)
-.venv/bin/pip install -r backend/requirements-dev.txt
+.venv/bin/python -m pip install -r backend/requirements-dev.txt
 
 # Deps frontend (Streamlit, Plotly, Pandas, Pydantic v2)
-.venv/bin/pip install -r frontend/requirements.txt
+.venv/bin/python -m pip install -r frontend/requirements.txt
 ```
 
-> Si `uv` est installe, prefere `uv pip install --python .venv/bin/python -r ...`
-> (10x plus rapide, resolution deterministe).
+**Windows (PowerShell) :**
+
+```powershell
+py -3.11 -m venv .venv
+
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r frontend\requirements.txt
+```
+
+**Windows (Git Bash) :**
+
+```bash
+py -3.11 -m venv .venv
+
+.venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
+.venv/Scripts/python.exe -m pip install -r frontend/requirements.txt
+```
+
+> Si `uv` est installe, prefere `uv pip install --python <chemin-python-ci-dessus> -r ...`
+> (10x plus rapide, resolution deterministe) — le chemin du Python cible depend de
+> l'OS comme indique dans le tableau ci-dessus.
 
 `pytest` et `ruff` sont fournis par `backend/requirements-dev.txt` ; ils
 servent aussi aux tests / lint du frontend (pas besoin d'un install dev separe
-cote frontend).
+cote frontend). Ce sont les memes fichiers `requirements-dev.txt` /
+`requirements.txt` qu'installe la CI (job `.python_job` / `lint:python` dans
+`.gitlab-ci.yml`, sur l'image `$PYTHON_CI_IMAGE`) : un venv local cree avec cette
+procedure a donc les memes versions que celles qui font foi en CI.
 
 Le `.venv` est utilise par `make lint`, `make test`, `make test-backend`,
-`make test-frontend` et le hook pre-commit `run-tests-if-needed.sh`.
+`make test-frontend` et le hook pre-commit `run-tests-if-needed.sh`. Ces trois
+outils **detectent automatiquement** le bon chemin d'executable Python
+(`.venv/bin/python` ou `.venv/Scripts/python.exe`) — vous n'avez jamais besoin
+d'adapter une commande `make` selon votre OS, seule la creation initiale du venv
+ci-dessus differe.
 
 ### 4. Installer les hooks pre-commit
 
@@ -158,8 +196,10 @@ Services disponibles (dev local) :
 | Backend API | http://localhost:8009/api/v1/docs |
 | Frontend | http://localhost:8501 |
 | Adminer (PostgreSQL) | http://localhost:8085 |
-| Mongo Express | http://localhost:8081 |
 | MinIO Console | http://localhost:9001 |
+| ml-api | http://localhost:8010 |
+| mlflow-ui | http://localhost:5001 |
+| Airflow UI | http://localhost:8080 (admin / admin) |
 
 ## Developpement
 
@@ -176,20 +216,22 @@ make test-backend
 make test-frontend
 ```
 
-Equivalents manuels :
+Equivalents manuels (remplacer `<python-venv>` par le chemin du tableau de
+l'etape 3 : `.venv/bin/python` sous Linux/macOS/WSL2, `.venv\Scripts\python.exe`
+ou `.venv/Scripts/python.exe` sous Windows) :
 
 ```bash
 # Backend
-PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+PYTHONPATH=backend/src <python-venv> -m pytest backend/src/tests -v
 
-# Frontend (depuis frontend/ pour respecter pythonpath du pyproject.toml de Ben)
-cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
+# Frontend (depuis frontend/ pour respecter le pythonpath de frontend/pyproject.toml)
+cd frontend && ../<python-venv> -m pytest tests -q
 ```
 
-> **Note** : le `cache_dir` est override car le `frontend/pyproject.toml` definit
-> `%TEMP%/crypto-bot-app-pytest-cache` (style Windows), qui creerait un dossier
-> litteral `%TEMP%/` sur Linux. A nettoyer dans le pyproject.toml de Ben quand
-> on aura un moment.
+> `make test-backend`/`make test-frontend` et `run-tests-if-needed.sh` font deja
+> cette resolution de chemin automatiquement (variable `VENV_PYTHON` dans le
+> `Makefile`) : preferer `make` au quotidien, ces commandes manuelles servent
+> surtout au debug.
 
 ### Lancer le linting
 
@@ -240,7 +282,6 @@ Ports par environnement :
 | Frontend   | 8501       | 8601       | 8701       |
 | Backend    | 8009       | 8109       | 8209       |
 | PostgreSQL | 5432       | 5532       | 5632       |
-| MongoDB    | 27017      | 27117      | 27217      |
 | MinIO      | 9000/9001  | 9100/9101  | 9200/9201  |
 
 ## Workflow Git
@@ -297,7 +338,7 @@ Ils servent pour :
 
 1. **Dev local** : `docker-compose.yml` pour lancer tous les services sur sa machine.
 2. **VM AWS fallback** : `docker-compose.staging.yml` et `docker-compose.prod.yml`
-   deployes sur la VM DataScientest comme solution de repli si le
+   deployes sur la VM Liora comme solution de repli si le
    cluster K8s est indisponible.
 
 Le deploiement principal se fait sur le cluster Kubernetes Talos via ArgoCD
@@ -312,19 +353,37 @@ Le deploiement principal se fait sur le cluster Kubernetes Talos via ArgoCD
 Les versions d'images Docker sont centralisees dans `versions.env` (tracke dans git) :
 
 ```env
-MONGO_IMAGE=mongo:4.4
 POSTGRES_IMAGE=postgres:14
 ADMINER_IMAGE=adminer
 # ...
 ```
 
-Les docker-compose referent ces versions via `${MONGO_IMAGE}`, `${POSTGRES_IMAGE}`, etc.
+Les docker-compose referent ces versions via `${POSTGRES_IMAGE}`, etc.
 Le `Makefile` et la CI chargent ce fichier automatiquement.
 
 Pour mettre a jour une version :
 1. Modifier `versions.env`
 2. Tester avec `make dev-config` / `make staging-config` / `make prod-config`
 3. Committer et pousser
+
+### Ajouter ou mettre a jour une dependance Python
+
+> **Ne jamais editer `requirements.txt` directement** : ces fichiers sont
+> *generes* a partir de `versions.env` + des templates `*.template` par
+> `scripts/generate-requirements.py` (lance automatiquement par `make dev-up`,
+> `make dev-build`, `make staging-up`, `make prod-up`...). Toute ligne ajoutee a
+> la main dans un `requirements.txt` est ecrasee a la regeneration.
+
+Procedure propre :
+1. Ajouter la version dans `versions.env` : `MA_LIB_VERSION=x.y.z`
+2. Ajouter le paquet dans le(s) template(s) concerne(s) avec le placeholder :
+   `ma-lib==$MA_LIB_VERSION`. Templates disponibles :
+   - `backend/requirements.txt.template` (API FastAPI)
+   - `jobs/requirements.txt.template` (jobs batch, tournent dans l'image Airflow)
+   - `orchestration/requirements.txt.template` (DAGs Airflow)
+3. Regenerer : `make generate-requirements` (ou `make dev-config`)
+4. Committer `versions.env`, le `*.template` **et** le `requirements.txt` regenere
+   (les trois doivent rester coherents).
 
 ### Commandes Makefile
 
@@ -348,8 +407,8 @@ Taper `make` pour afficher toutes les commandes disponibles.
 | `make prod-config` | Valider la config prod |
 | `make prod-logs` | Suivre les logs prod |
 | `make prod-init` | Creer les buckets MinIO (prod) |
-| `make prod-debug-up` | Activer Adminer + Mongo Express en prod |
-| `make prod-debug-down` | Desactiver Adminer + Mongo Express en prod |
+| `make prod-debug-up` | Activer Adminer en prod |
+| `make prod-debug-down` | Desactiver Adminer en prod |
 | `make test` | Tous les tests (backend + frontend) |
 | `make test-backend` | Tests unitaires backend |
 | `make test-frontend` | Tests frontend mock-first (Streamlit) |
@@ -360,18 +419,24 @@ Taper `make` pour afficher toutes les commandes disponibles.
 
 ### Services par environnement (VM AWS)
 
+Staging et Production cohabitent sur la meme VM : convention `Prod = Staging + 1` sur
+tous les ports externes. MinIO API et Console sont volontairement dans des dizaines
+distinctes (9000s / 9010s) pour eviter la confusion entre "prod du port API" et
+"console" quand on applique +1.
+
 | Service | Dev | Staging | Prod |
 |---------|-----|---------|------|
-| Backend | 8009 | 8009 | 9009 |
+| Backend | 8009 | 8009 | 8010 |
 | Frontend | 8501 | 8501 | 8502 |
 | PostgreSQL | 5434 | 5434 | 5435 |
-| MongoDB | 27017 | 27017 | 27018 |
-| MinIO API | 9000 | 9000 | 9002 |
-| MinIO Console | 9001 | 9001 | 9003 |
+| MinIO API | 9000 | 9000 | 9001 |
+| MinIO Console | 9001 | 9010 | 9011 |
 | Adminer | 8085 | 8085 | 8086 (profile debug) |
-| Mongo Express | 8081 | 8081 | 8082 (profile debug) |
+| ml-api | 8010 | 8020 | 8021 |
+| mlflow-ui | 5001 | 5001 | 5002 |
+| Airflow webserver | 8080 | 8080 | 8081 |
 
-En production, Adminer et Mongo Express ne demarrent pas par defaut (profile `debug`).
+En production, Adminer ne demarre pas par defaut (profile `debug`).
 Le service `createbuckets` est sous le profile `tools` dans tous les environnements.
 
 ## Depannage
@@ -380,9 +445,45 @@ Le service `createbuckets` est sous le profile `tools` dans tous les environneme
 
 ```bash
 # Le PYTHONPATH est gere automatiquement par make test
-# Pour lancer pytest manuellement :
-PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+# Pour lancer pytest manuellement (remplacer <python-venv> selon l'OS, cf. etape 3) :
+PYTHONPATH=backend/src <python-venv> -m pytest backend/src/tests -v
 ```
+
+### Windows : `PytestCacheWarning` / `[WinError 267] Nom de repertoire non valide`
+
+Symptome (frontend, tests lances depuis un dossier synchronise type OneDrive, ou
+un chemin de projet tres long/imbrique) :
+
+```
+PytestCacheWarning: could not create cache path ... .pytest_cache\v\cache\nodeids:
+[WinError 267] Nom de répertoire non valide: '...\pytest-cache-files-...\.gitignore'
+```
+
+Cause : pytest cree et nettoie des dossiers temporaires `pytest-cache-files-*`
+dans `.pytest_cache/` a la racine du projet frontend ; certains environnements
+Windows (synchronisation OneDrive active sur le dossier, chemin trop long,
+antivirus qui verrouille un fichier pendant le cleanup) empechent cette
+creation/suppression. Ce n'est pas un bug general de Windows — la plupart des
+setups Windows n'y sont jamais confrontes — donc **pas de contournement dans la
+config partagee** (`frontend/pyproject.toml`) : un `cache_dir` en dur type
+`%TEMP%/...` y a deja ete tente et cassait les tests sous Linux/macOS (pytest
+n'expanse `%VAR%` que via `ntpath.expandvars`, pas sous POSIX — le dossier
+`%TEMP%` etait alors cree littéralement).
+
+Corrections locales, a essayer dans l'ordre :
+1. Sortir le clone du dossier synchronise OneDrive (ou mettre le dossier du
+   projet en exclusion de synchronisation).
+2. Raccourcir le chemin du projet (eviter les repertoires trop imbriques).
+3. Si le probleme persiste, rediriger le cache pytest **localement** en creant
+   `frontend/pytest.ini` (prioritaire sur `pyproject.toml`, donc pas besoin de
+   modifier ce dernier) avec un chemin Windows absolu explicite, sans variable
+   `%...%` :
+   ```ini
+   [pytest]
+   cache_dir = C:/Users/<vous>/AppData/Local/Temp/crypto-bot-app-pytest-cache
+   ```
+   **Ne pas commiter ce fichier** — c'est un reglage propre a votre poste,
+   pas a la config partagee de l'equipe.
 
 ### Les containers ne demarrent pas (Docker Compose local)
 

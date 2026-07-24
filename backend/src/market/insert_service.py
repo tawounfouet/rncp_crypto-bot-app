@@ -1,6 +1,7 @@
 """
-Service for inserting historical market data from Binance into PostgreSQL and MinIO.
-This service handles fetching real data from Binance and persisting it to the database and object storage.
+Service for inserting historical market data into PostgreSQL and MinIO.
+This service fetches OHLCV data through the shared multi-exchange market data
+driver (utils.connectors.exchanges) and persists it to the database and object storage.
 """
 
 import json
@@ -12,30 +13,21 @@ import pandas as pd
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from market.clients.binance import ClientBinance
 from market.clients.minio import ClientMinIO
 from market.models import MarketData
+from utils.connectors.exchanges import get_market_data_driver
 
 logger = logging.getLogger(__name__)
+
+# Intervalles supportes par les drivers de donnees de marche (natif Binance et ccxt)
+ALLOWED_INTERVALS = {"1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"}
 
 
 class MarketDataInsertService:
     """
-    Service for inserting historical market data from Binance.
+    Service for inserting historical market data from any registered exchange.
     Handles data fetching, validation, and persistence.
     """
-
-    # Mapping Binance interval strings to our format
-    INTERVAL_MAP = {
-        "1m": "1m",
-        "5m": "5m",
-        "15m": "15m",
-        "30m": "30m",
-        "1h": "1h",
-        "4h": "4h",
-        "1d": "1d",
-        "1w": "1w",
-    }
 
     def __init__(self, db: Session):
         """
@@ -45,11 +37,11 @@ class MarketDataInsertService:
             db: SQLAlchemy database session
         """
         self.db = db
-        self.binance_client = ClientBinance()
         self.minio_client = ClientMinIO()
 
     def insert_historical_data(
         self,
+        exchange: str,
         symbol: str,
         interval: str,
         start_time: datetime,
@@ -57,9 +49,10 @@ class MarketDataInsertService:
         limit: int = 1000,
     ) -> dict:
         """
-        Fetch historical data from Binance and insert into database.
+        Fetch historical data from the given exchange and insert into database.
 
         Args:
+            exchange: Exchange source (e.g. 'binance', 'kraken') — resolved via the registry
             symbol: Trading pair symbol (e.g., 'BTCUSDT')
             interval: Time interval (e.g., '1h', '4h', '1d')
             start_time: Start datetime for historical data
@@ -69,110 +62,95 @@ class MarketDataInsertService:
         Returns:
             dict: Statistics about the insertion (inserted, updated, failed)
         """
+        if interval.lower() not in ALLOWED_INTERVALS:
+            raise ValueError(f"Invalid interval: {interval}")
+
         if end_time is None:
             end_time = datetime.now(UTC)
 
         logger.info(
-            f"Fetching historical data for {symbol} ({interval}) from {start_time} to {end_time}, limit={limit}"
+            f"Fetching historical data for {exchange}:{symbol} ({interval}) "
+            f"from {start_time} to {end_time}, limit={limit}"
         )
 
-        # Convert interval to Binance format
-        binance_interval = self._convert_interval(interval)
-        if not binance_interval:
-            raise ValueError(f"Invalid interval: {interval}")
+        rows = self._fetch_klines(exchange, symbol, interval, start_time, end_time, limit)
 
-        # Fetch data from Binance
-        klines = self._fetch_binance_klines(symbol, binance_interval, start_time, end_time, limit)
-
-        if not klines:
-            logger.warning(f"No data received from Binance for {symbol}")
+        if not rows:
+            logger.warning(f"No data received from {exchange} for {symbol}")
             return {"inserted": 0, "updated": 0, "failed": 0, "total": 0}
 
-        # Save raw JSON data to MinIO
-        self._save_to_minio(symbol, interval, start_time, end_time, klines)
+        # Save raw data to MinIO
+        self._save_to_minio(exchange, symbol, interval, start_time, end_time, rows)
 
         # Insert data into database
-        result = self._insert_klines_to_db(symbol, interval, klines)
+        result = self._insert_rows_to_db(rows)
 
         logger.info(
-            f"Data insertion complete for {symbol}: "
+            f"Data insertion complete for {exchange}:{symbol}: "
             f"{result['inserted']} inserted, {result['updated']} updated, "
             f"{result['failed']} failed out of {result['total']} total"
         )
 
         return result
 
-    def _convert_interval(self, interval: str) -> str | None:
-        """
-        Convert our interval format to Binance interval format.
-
-        Args:
-            interval: Our interval string (e.g., '1h')
-
-        Returns:
-            Binance interval string or None if invalid
-        """
-        return self.INTERVAL_MAP.get(interval.lower())
-
-    def _fetch_binance_klines(
+    def _fetch_klines(
         self,
+        exchange: str,
         symbol: str,
         interval: str,
         start_time: datetime,
         end_time: datetime,
         limit: int,
-    ) -> list:
+    ) -> list[dict]:
         """
-        Fetch klines data from Binance.
+        Fetch normalised OHLCV rows from the exchange's market data driver.
 
         Args:
+            exchange: Exchange source (e.g. 'binance', 'kraken')
             symbol: Trading pair symbol
-            interval: Binance interval string
+            interval: Time interval
             start_time: Start datetime
             end_time: End datetime
             limit: Maximum number of records
 
         Returns:
-            List of klines data from Binance
+            List of normalised OHLCV dicts (see utils.connectors.exchanges.base.normalize_ohlcv)
         """
         try:
-            # Convert datetime to milliseconds timestamp
-            start_str = int(start_time.timestamp() * 1000)
-            end_str = int(end_time.timestamp() * 1000)
-
-            # Fetch historical klines from Binance
-            klines = self.binance_client.client.get_historical_klines(
-                symbol=symbol,
-                interval=interval,
-                start_str=start_str,
-                end_str=end_str,
+            driver = get_market_data_driver(exchange)
+            rows = driver.fetch_klines(
+                symbol,
+                interval,
                 limit=limit,
+                start_time_ms=int(start_time.timestamp() * 1000),
+                end_time_ms=int(end_time.timestamp() * 1000),
             )
-
-            logger.info(f"Fetched {len(klines)} klines from Binance for {symbol}")
-            return klines
+            logger.info(f"Fetched {len(rows)} klines from {exchange} for {symbol}")
+            return rows
 
         except Exception as e:
-            logger.error(f"Error fetching data from Binance: {e!s}")
+            logger.error(f"Error fetching data from {exchange}: {e!s}")
             raise
 
     def _save_to_minio(
         self,
+        exchange: str,
         symbol: str,
         interval: str,
         start_time: datetime,
         end_time: datetime,
-        klines: list,
+        rows: list[dict],
     ) -> bool:
         """
-        Save klines data to MinIO in JSON and CSV formats.
+        Save normalised OHLCV rows to MinIO in JSON and CSV formats.
 
         Args:
+            exchange: Exchange source (e.g. 'binance', 'kraken')
             symbol: Trading pair symbol
             interval: Time interval
             start_time: Start datetime
             end_time: End datetime
-            klines: List of klines from Binance
+            rows: List of normalised OHLCV dicts
 
         Returns:
             bool: True if successful, False otherwise
@@ -181,18 +159,19 @@ class MarketDataInsertService:
             # Generate timestamp for filename
             timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
-            # Generate folder structure: market_data/{symbol}/{interval}/
-            folder_prefix = f"market_data/{symbol}/{interval}"
+            # Generate folder structure: market_data/{exchange}/{symbol}/{interval}/
+            folder_prefix = f"market_data/{exchange.lower()}/{symbol}/{interval}"
 
-            # 1. Save as JSON (raw Binance format)
+            # 1. Save as JSON (normalised format)
             json_filename = f"{folder_prefix}/raw_{timestamp}.json"
             json_data = {
+                "exchange": exchange,
                 "symbol": symbol,
                 "interval": interval,
                 "start_time": start_time.isoformat(),
                 "end_time": end_time.isoformat(),
-                "count": len(klines),
-                "data": klines,
+                "count": len(rows),
+                "data": rows,
                 "fetched_at": datetime.now(UTC).isoformat(),
             }
 
@@ -218,26 +197,7 @@ class MarketDataInsertService:
             # 2. Save as CSV (formatted OHLCV data)
             csv_filename = f"{folder_prefix}/ohlcv_{timestamp}.csv"
 
-            # Convert klines to DataFrame
-            df_data = []
-            for kline in klines:
-                df_data.append(
-                    {
-                        "open_time": datetime.fromtimestamp(kline[0] / 1000, tz=UTC).isoformat(),
-                        "open": float(kline[1]),
-                        "high": float(kline[2]),
-                        "low": float(kline[3]),
-                        "close": float(kline[4]),
-                        "volume": float(kline[5]),
-                        "close_time": datetime.fromtimestamp(kline[6] / 1000, tz=UTC).isoformat(),
-                        "quote_asset_volume": float(kline[7]),
-                        "number_of_trades": int(kline[8]),
-                        "taker_buy_base_volume": float(kline[9]),
-                        "taker_buy_quote_volume": float(kline[10]),
-                    }
-                )
-
-            df = pd.DataFrame(df_data)
+            df = pd.DataFrame(rows)
 
             # Upload CSV using the minio_client method
             success = self.minio_client.upload_dataframe(df=df, object_name=csv_filename, format="csv")
@@ -253,14 +213,12 @@ class MarketDataInsertService:
             logger.error(f"❌ Error saving data to MinIO: {e!s}")
             return False
 
-    def _insert_klines_to_db(self, symbol: str, interval: str, klines: list) -> dict:
+    def _insert_rows_to_db(self, rows: list[dict]) -> dict:
         """
-        Insert klines data into PostgreSQL database with upsert logic.
+        Insert normalised OHLCV rows into PostgreSQL database with upsert logic.
 
         Args:
-            symbol: Trading pair symbol
-            interval: Time interval
-            klines: List of klines from Binance
+            rows: List of normalised OHLCV dicts (see utils.connectors.exchanges.base.normalize_ohlcv)
 
         Returns:
             dict: Statistics about the insertion
@@ -268,27 +226,35 @@ class MarketDataInsertService:
         inserted = 0
         updated = 0
         failed = 0
-        total = len(klines)
+        total = len(rows)
 
-        for kline in klines:
+        for row in rows:
             try:
-                # Parse Binance kline data
-                # Kline format: [open_time, open, high, low, close, volume, close_time, ...]
+                quote_asset_volume = row["quote_asset_volume"]
+                taker_buy_base_volume = row["taker_buy_base_volume"]
+                taker_buy_quote_volume = row["taker_buy_quote_volume"]
+
                 market_data = {
-                    "symbol": symbol,
-                    "exchange": "binance",
-                    "interval_timeframe": interval,
-                    "open_time": datetime.fromtimestamp(kline[0] / 1000, tz=UTC),
-                    "open_price": Decimal(str(kline[1])),
-                    "high_price": Decimal(str(kline[2])),
-                    "low_price": Decimal(str(kline[3])),
-                    "close_price": Decimal(str(kline[4])),
-                    "volume": Decimal(str(kline[5])),
-                    "close_time": datetime.fromtimestamp(kline[6] / 1000, tz=UTC),
-                    "quote_asset_volume": Decimal(str(kline[7])),
-                    "number_of_trades": int(kline[8]),
-                    "taker_buy_base_volume": Decimal(str(kline[9])),
-                    "taker_buy_quote_volume": Decimal(str(kline[10])),
+                    "symbol": row["symbol"],
+                    "exchange": row["source"],
+                    "interval_timeframe": row["interval"],
+                    "open_time": row["open_time"],
+                    "open_price": Decimal(str(row["open"])),
+                    "high_price": Decimal(str(row["high"])),
+                    "low_price": Decimal(str(row["low"])),
+                    "close_price": Decimal(str(row["close"])),
+                    "volume": Decimal(str(row["volume"])),
+                    "close_time": row["close_time"],
+                    "quote_asset_volume": (
+                        Decimal(str(quote_asset_volume)) if quote_asset_volume is not None else None
+                    ),
+                    "number_of_trades": row["number_of_trades"],
+                    "taker_buy_base_volume": (
+                        Decimal(str(taker_buy_base_volume)) if taker_buy_base_volume is not None else None
+                    ),
+                    "taker_buy_quote_volume": (
+                        Decimal(str(taker_buy_quote_volume)) if taker_buy_quote_volume is not None else None
+                    ),
                 }
 
                 # Use PostgreSQL UPSERT to insert or update
@@ -339,7 +305,14 @@ class MarketDataInsertService:
             "total": total,
         }
 
-    def get_data_count(self, symbol: str, interval: str, start_time: datetime, end_time: datetime) -> int:
+    def get_data_count(
+        self,
+        symbol: str,
+        interval: str,
+        start_time: datetime,
+        end_time: datetime,
+        exchange: str | None = None,
+    ) -> int:
         """
         Get count of existing records in the database for the given parameters.
 
@@ -348,44 +321,49 @@ class MarketDataInsertService:
             interval: Time interval
             start_time: Start datetime
             end_time: End datetime
+            exchange: Restrict the count to this exchange (a symbol can exist on several)
 
         Returns:
             int: Number of existing records
         """
         try:
-            count = (
-                self.db.query(MarketData)
-                .filter(
-                    MarketData.symbol == symbol,
-                    MarketData.interval_timeframe == interval,
-                    MarketData.open_time >= start_time,
-                    MarketData.open_time <= end_time,
-                )
-                .count()
+            query = self.db.query(MarketData).filter(
+                MarketData.symbol == symbol,
+                MarketData.interval_timeframe == interval,
+                MarketData.open_time >= start_time,
+                MarketData.open_time <= end_time,
             )
-            return count
+            if exchange:
+                query = query.filter(MarketData.exchange == exchange.lower())
+            return query.count()
         except Exception as e:
             logger.error(f"Error counting records: {e!s}")
             return 0
 
-    def validate_symbol(self, symbol: str) -> bool:
+    def validate_symbol(self, exchange: str, symbol: str) -> bool:
         """
-        Validate if a symbol exists on Binance.
+        Validate if a symbol exists on the given exchange.
+
+        No dedicated "symbol info" endpoint is exposed by the market data driver
+        contract, so validation fetches a single kline: it fails the same way
+        (invalid symbol/pair) on both the native and ccxt drivers.
 
         Args:
+            exchange: Exchange source (e.g. 'binance', 'kraken')
             symbol: Trading pair symbol
 
         Returns:
             bool: True if symbol is valid
         """
         try:
-            info = self.binance_client.client.get_symbol_info(symbol)
-            return info is not None
+            driver = get_market_data_driver(exchange)
+            driver.fetch_klines(symbol, "1h", limit=1)
+            return True
         except Exception as e:
-            logger.warning(f"Symbol validation failed for {symbol}: {e!s}")
+            logger.warning(f"Symbol validation failed for {exchange}:{symbol}: {e!s}")
             return False
 
-    def get_latest_data(self, symbol: str, interval: str, limit: int = 100) -> list[dict]:
+    def get_latest_data(self, symbol: str, interval: str, limit: int = 100, exchange: str | None = None) -> list[dict]:
         """
         Retrieve the latest market data from PostgreSQL database.
 
@@ -393,22 +371,20 @@ class MarketDataInsertService:
             symbol: Trading pair symbol (e.g., 'BTCUSDT')
             interval: Time interval (e.g., '1h', '4h', '1d')
             limit: Maximum number of records to retrieve (default: 100)
+            exchange: Restrict to this exchange (a symbol can exist on several)
 
         Returns:
             List[dict]: List of market data records ordered by time (most recent first)
         """
         try:
             # Query database for latest records
-            records = (
-                self.db.query(MarketData)
-                .filter(
-                    MarketData.symbol == symbol,
-                    MarketData.interval_timeframe == interval,
-                )
-                .order_by(MarketData.open_time.desc())
-                .limit(limit)
-                .all()
+            query = self.db.query(MarketData).filter(
+                MarketData.symbol == symbol,
+                MarketData.interval_timeframe == interval,
             )
+            if exchange:
+                query = query.filter(MarketData.exchange == exchange.lower())
+            records = query.order_by(MarketData.open_time.desc()).limit(limit).all()
 
             # Convert ORM objects to dictionaries
             data_list = []

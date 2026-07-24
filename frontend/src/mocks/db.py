@@ -18,7 +18,7 @@ class MockStore:
     users: dict[str, MockUser]
     bots: dict[str, BotInfo]
     bot_configs: dict[str, BotConfig]
-    binance_credentials: dict[str, tuple[str, str]]
+    exchange_credentials: dict[str, tuple[str, str]]
     credential_updated_at: dict[str, datetime]
     current_user_email: str | None = None
     scenario: MockScenario = MockScenario.USER_NORMAL
@@ -41,7 +41,7 @@ def _seed_users() -> dict[str, MockUser]:
             status=UserStatus.ENABLED,
             created_at=now - timedelta(days=110),
             last_login=now - timedelta(hours=3),
-            binance_configured=True,
+            exchange_configured=True,
         ),
         MockUser(
             id="usr_9001",
@@ -53,7 +53,7 @@ def _seed_users() -> dict[str, MockUser]:
             status=UserStatus.ENABLED,
             created_at=now - timedelta(days=300),
             last_login=now - timedelta(minutes=40),
-            binance_configured=True,
+            exchange_configured=True,
         ),
     ]
     return {user.email.lower(): user for user in users}
@@ -153,7 +153,7 @@ def create_mock_store(disable_latency: bool = False) -> MockStore:
         users=_seed_users(),
         bots=_seed_bots(),
         bot_configs=_seed_configs(),
-        binance_credentials={
+        exchange_credentials={
             "alice@cryptobot.dev": ("AK_TEST_ALICE_1234", "AS_TEST_ALICE_9876"),
             "admin@cryptobot.dev": ("AK_TEST_ADMIN_5678", "AS_TEST_ADMIN_4321"),
         },

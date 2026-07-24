@@ -1,0 +1,41 @@
+# FastAPI Backend Dependencies
+# ============================
+
+# Core Framework
+fastapi==$FASTAPI_VERSION
+uvicorn[standard]==$UVICORN_VERSION
+pydantic==$PYDANTIC_VERSION
+pydantic-settings==$PYDANTIC_SETTINGS_VERSION
+pydantic[email]==$PYDANTIC_VERSION
+
+# Authentication & Security
+PyJWT[crypto]==$PYJWT_VERSION
+argon2-cffi==$ARGON2_CFFI_VERSION
+python-multipart==$PYTHON_MULTIPART_VERSION
+
+# Database - PostgreSQL
+sqlalchemy==$SQLALCHEMY_VERSION
+psycopg2-binary==$PSYCOPG2_VERSION
+
+# Object Storage - MinIO
+minio==$MINIO_VERSION
+
+# Data Processing
+pandas==$PANDAS_VERSION
+numpy==$NUMPY_VERSION
+pyarrow==$PYARROW_VERSION
+fastparquet==$FASTPARQUET_VERSION
+
+# Binance API
+python-binance==$BINANCE_VERSION
+
+# Multi-exchange (ccxt)
+ccxt==$CCXT_VERSION
+
+# Machine Learning (inference)
+scikit-learn==$SCIKIT_LEARN_VERSION
+joblib==$JOBLIB_VERSION
+
+# Utilities
+python-dotenv==$PYTHON_DOTENV_VERSION
+requests==$REQUESTS_VERSION

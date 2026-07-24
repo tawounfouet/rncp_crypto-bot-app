@@ -1,3 +1,3 @@
 """
-External API clients for market data.
+External API clients for market data and multi-exchange execution (accounts, orders).
 """

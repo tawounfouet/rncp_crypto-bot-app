@@ -14,10 +14,10 @@ from components.alerts import show_feedback
 from components.badges import render_status_badge
 from components.cards import KpiItem, render_kpi_cards
 from components.headers import render_page_header, render_section_title
-from components.prerequisites import render_binance_prerequisite_state
+from components.prerequisites import render_exchange_prerequisite_state
 from components.tables import render_dataframe
 from layouts.page_shell import setup_page
-from prerequisites.binance import evaluate_binance_prerequisite
+from prerequisites.exchange import evaluate_exchange_prerequisite
 from services.base import ServiceError
 from services.portfolio_service import PortfolioService
 from state.session import get_theme_mode
@@ -34,7 +34,10 @@ def _render_status_banner(snapshot) -> None:
     with col1:
         render_status_badge("Backend", "OK" if snapshot.system_status.backend_ok else "ERROR")
     with col2:
-        render_status_badge("Binance", "OK" if snapshot.system_status.binance_ok else "WARNING")
+        render_status_badge(
+            snapshot.system_status.exchange.capitalize(),
+            "OK" if snapshot.system_status.exchange_ok else "WARNING",
+        )
     with col3:
         st.caption(f"Derniere synchro: {format_datetime(snapshot.system_status.last_sync)}")
     with col4:
@@ -51,12 +54,12 @@ def main() -> None:
     store, user = setup_page(title="Portefeuille Spot", icon="💼", page_key="portfolio")
     render_page_header(
         "Portefeuille Spot",
-        "Vue temps reel mockee de vos actifs Spot, ordres ouverts et derniers trades.",
+        "Vue temps reel de vos actifs Spot, ordres ouverts et derniers trades.",
     )
 
-    gate = evaluate_binance_prerequisite("portfolio", user)
+    gate = evaluate_exchange_prerequisite("portfolio", user)
     if gate.should_block_content:
-        render_binance_prerequisite_state("portfolio", cta_key="cta_binance_portfolio")
+        render_exchange_prerequisite_state("portfolio", cta_key="cta_exchange_portfolio")
         return
 
     service = PortfolioService(store)
@@ -69,10 +72,11 @@ def main() -> None:
         return
 
     _render_status_banner(snapshot)
-    if not snapshot.system_status.binance_ok:
+    if not snapshot.system_status.exchange_ok:
         show_feedback(
             "warning",
-            "Binance n'est pas configure. Ajoutez vos cles dans Gestion de compte.",
+            f"{snapshot.system_status.exchange.capitalize()} n'est pas configure. "
+            "Ajoutez vos cles dans Gestion de compte.",
         )
 
     kpis = [
@@ -136,7 +140,7 @@ def main() -> None:
             render_dataframe(filtered, key="table_balances", height=360)
 
     st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
-    render_section_title("Ordres ouverts", "Action d'annulation mockee.")
+    render_section_title("Ordres ouverts", "Annulation transmise au backend.")
     if orders_df.empty:
         show_feedback("info", "Aucun ordre ouvert.")
     else:

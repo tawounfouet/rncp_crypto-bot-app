@@ -2,50 +2,11 @@
 # =============================================
 # IMPORTANT : ne pas lancer directement avec "docker compose".
 # Utiliser : make prod-up / make prod-down / make prod-config
-# Ports: Backend 9009, Postgres 5435, Mongo 27018 (cohabite avec staging)
+# Ports (prod = staging+1, cf. docker-compose.staging.yml) : Backend 8010,
+# Postgres 5435, MinIO API 9001 / Console 9011, Adminer 8086, Frontend 8502,
+# ml-api 8021, mlflow-ui 5002, Airflow 8081
 
 services:
-  mongo:
-    image: ${MONGO_IMAGE}
-    container_name: prod-mongo
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PWD}
-    ports:
-      - "27018:27017"
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongo mongodb://${MONGODB_USER}:${MONGODB_PWD}@localhost:27017/admin --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    volumes:
-      - prod_mongo_data:/data/db
-    networks:
-      - prod-network
-
-  # MongoDB Admin UI (debug only — not started by default)
-  mongo-express:
-    image: ${MONGO_EXPRESS_IMAGE}
-    container_name: prod-mongo-admin-ui
-    restart: always
-    ports:
-      - "8082:8081"
-    environment:
-      ME_CONFIG_BASICAUTH_USERNAME: ${MONGODB_USER_ADMIN}
-      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGODB_PWD_ADMIN}
-      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USER}
-      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PWD}
-      ME_CONFIG_MONGODB_URL: "mongodb://${MONGODB_USER}:${MONGODB_PWD}@mongo:27017/admin?authSource=admin"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    profiles:
-      - debug
-    networks:
-      - prod-network
-
   postgres:
     image: ${POSTGRES_IMAGE}
     container_name: prod-postgres
@@ -90,8 +51,8 @@ services:
     container_name: prod-minio
     restart: always
     ports:
-      - "9002:9000"
-      - "9003:9001"
+      - "9001:9000"
+      - "9011:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_USER_ADMIN:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_PWD_ADMIN:-minioadmin}
@@ -132,12 +93,8 @@ services:
     container_name: prod-backend
     restart: always
     ports:
-      - "9009:8009"
+      - "8010:8009"
     environment:
-      - MONGODB_USER=${MONGODB_USER}
-      - MONGODB_PWD=${MONGODB_PWD}
-      - MONGODB_HOST=mongo
-      - MONGODB_PORT=27017
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
       - POSTGRES_HOST=postgres
@@ -150,10 +107,9 @@ services:
       - MINIO_BUCKET=crypto-bot-data
       - ENVIRONMENT=production
       - DEBUG=false
+      - EXCHANGE_ENC_KEY=${EXCHANGE_ENC_KEY}
     depends_on:
       postgres:
-        condition: service_healthy
-      mongo:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -182,10 +138,173 @@ services:
     networks:
       - prod-network
 
+  # Service de prediction ML (FastAPI)
+  crypto-bot-ml-api:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
+    container_name: prod-ml-api
+    restart: always
+    ports:
+      - "8021:8010"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+      - ./models/logs:/app/logs
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - BINANCE_API_KEY=${BINANCE_API_KEY}
+      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
+      - MLFLOW_TRACKING_URI=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - prod-network
+
+  # Interface utilisateur MLflow (meme image que crypto-bot-ml-api, commande differente)
+  mlflow-ui:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
+    container_name: prod-mlflow-ui
+    restart: always
+    ports:
+      - "5002:5001"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001 --allowed-hosts "${MLFLOW_SERVER_ALLOWED_HOSTS:-localhost:*,127.0.0.1:*}"
+    # Le HEALTHCHECK de l'image cible le port 8010 (crypto-bot-ml-api) : ce service
+    # tourne sur 5001 (mlflow ui), d'ou ce healthcheck dedie.
+    # --allowed-hosts : protection anti DNS-rebinding de MLflow >= 3.x, n'autorise par
+    # defaut que localhost/IP privees -- MLFLOW_SERVER_ALLOWED_HOSTS (.env.production) doit
+    # inclure l'IP publique de la VM (SANS oublier ":*" pour le port, sinon comparaison
+    # exacte qui echoue -- cf. is_allowed_host_header dans mlflow/server/security_utils.py),
+    # ex. MLFLOW_SERVER_ALLOWED_HOSTS=localhost:*,127.0.0.1:*,<IP_PUBLIQUE_VM>:*
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - prod-network
+
+  # Airflow (orchestration DAGs : ingestion, pipeline ML)
+  airflow-webserver:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    container_name: prod-airflow-webserver
+    restart: always
+    command: webserver
+    ports:
+      - "8081:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_BASE_URL=https://api.binance.com
+    volumes:
+      - prod_airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - prod-network
+
+  airflow-scheduler:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    container_name: prod-airflow-scheduler
+    restart: always
+    command: scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_BASE_URL=https://api.binance.com
+    volumes:
+      - prod_airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - prod-network
+
+  airflow-init:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    container_name: prod-airflow-init
+    command: version
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        airflow db init
+        airflow connections delete postgres_default || true
+        airflow connections add 'postgres_default' \
+          --conn-type 'postgres' \
+          --conn-host 'postgres' \
+          --conn-port '5432' \
+          --conn-login '${POSTGRES_USER:-postgres}' \
+          --conn-password '${POSTGRES_PWD:-postgres}' \
+          --conn-schema 'crypto_bot_db'
+        airflow users create \
+          --username '${AIRFLOW_ADMIN_USER:-admin}' \
+          --firstname Crypto \
+          --lastname Admin \
+          --role Admin \
+          --email admin@cryptobot.local \
+          --password '${AIRFLOW_ADMIN_PASSWORD:-admin}' || true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - prod-network
+
 volumes:
-  prod_mongo_data:
   prod_postgres_data:
   prod_minio_data:
+  prod_airflow_logs:
 
 networks:
   prod-network:

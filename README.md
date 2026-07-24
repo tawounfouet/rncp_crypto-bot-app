@@ -58,9 +58,14 @@ cp .env.example .env
 ### Venv Python (lint + tests)
 
 ```bash
-# Creer le venv a la racine du projet (Python 3.14 requis)
-python3.14 -m venv .venv
-.venv/bin/pip install -r backend/requirements-dev.txt
+# Creer le venv a la racine du projet (Python 3.11 requis)
+python3.11 -m venv .venv
+
+# Activer le venv
+source .venv/bin/activate
+
+# Installer les dependances
+pip install -r backend/requirements-dev.txt
 
 # Installer les hooks pre-commit
 pre-commit install
@@ -93,15 +98,10 @@ make dev-down
 
 ## Services (developpement local)
 
-| Service | Port | URL |
-|---------|------|-----|
-| Backend API | 8009 | http://localhost:8009/api/v1/docs |
-| Frontend | 8501 | http://localhost:8501 |
-| PostgreSQL | 5434 | - |
-| MongoDB | 27017 | - |
-| MinIO Console | 9001 | http://localhost:9001 |
-| Adminer | 8085 | http://localhost:8085 |
-| Mongo Express | 8081 | http://localhost:8081 |
+Backend : http://localhost:8009/api/v1/docs — Frontend : http://localhost:8501
+
+Liste complete des ports (dev/staging/prod, VM AWS, port-forward K8s) : voir
+[docs/SETUP.md](docs/SETUP.md#services-par-environnement-vm-aws).
 
 ## Tests et qualite
 
@@ -110,7 +110,7 @@ make test              # Tests unitaires (venv local)
 make lint              # Verifier le code (ruff check + format)
 make lint-fix          # Corriger automatiquement les erreurs ruff
 make check-infra       # Valider coherence versions.env / Dockerfiles / docker-compose
-make health            # Verifier la sante du backend (PORT=9009 make health pour prod)
+make health            # Verifier la sante du backend (PORT=8010 make health pour prod VM)
 ```
 
 ### Pre-commit hooks
@@ -207,17 +207,18 @@ ArgoCD surveille le repo `Crypto-bot-infra` et applique les manifestes Kustomize
 En staging, les changements sont appliques automatiquement. En production, un sync
 manuel est requis pour valider le deploiement.
 
-## VM AWS DataScientest (fallback)
+## VM AWS Liora (fallback)
 
 La VM AWS est conservee en tant qu'environnement de fallback. La CI deploie en parallele
 sur la VM et sur le cluster K8s.
 
-| Environnement | Repertoire | Compose file | Ports |
-|---------------|------------|--------------|-------|
-| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` | Backend 8009, Frontend 8501, PostgreSQL 5434, MongoDB 27017, MinIO 9000/9001, Adminer 8085, Mongo Express 8081 |
-| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` | Backend 9009, Frontend 8502, PostgreSQL 5435, MongoDB 27018, MinIO 9002/9003, Adminer 8086*, Mongo Express 8082* |
+| Environnement | Repertoire | Compose file |
+|---------------|------------|--------------|
+| Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` |
+| Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` |
 
-\* En production, Adminer et Mongo Express sont sous le profile `debug` et ne demarrent pas par defaut.
+Ports detailles : voir [docs/SETUP.md](docs/SETUP.md#services-par-environnement-vm-aws).
+En production, Adminer est sous le profile `debug` et ne demarre pas par defaut.
 Pour les activer ponctuellement : `make prod-debug-up` / `make prod-debug-down`.
 
 ## Scripts utilitaires
@@ -251,8 +252,8 @@ Taper `make` pour afficher toutes les commandes disponibles.
 | `make prod-config` | Valider la config prod |
 | `make prod-logs` | Suivre les logs prod |
 | `make prod-init` | Creer les buckets MinIO (prod) |
-| `make prod-debug-up` | Activer Adminer + Mongo Express en prod |
-| `make prod-debug-down` | Desactiver Adminer + Mongo Express en prod |
+| `make prod-debug-up` | Activer Adminer en prod |
+| `make prod-debug-down` | Desactiver Adminer en prod |
 | `make test` | Tests unitaires (venv local) |
 | `make lint` | Ruff check + format |
 | `make lint-fix` | Corriger automatiquement |

@@ -21,7 +21,7 @@ def main() -> None:
     store, _ = setup_page(title="Admin", icon="🛡️", page_key="admin")
     render_page_header(
         "Administration",
-        "Gestion des utilisateurs mockes: statut, role, dernier login et details.",
+        "Gestion des utilisateurs: statut, role, dernier login et details.",
     )
 
     service = AdminService(store)
@@ -32,7 +32,7 @@ def main() -> None:
         return
 
     if not rows:
-        show_feedback("warning", "Aucun utilisateur en base mock.")
+        show_feedback("warning", "Aucun utilisateur en base de donnees.")
         return
 
     users_df = models_to_dataframe(rows)
@@ -41,15 +41,15 @@ def main() -> None:
             "email",
             "role",
             "status",
-            "binance_configured",
+            "exchange_configured",
             "last_login",
             "first_name",
             "last_name",
         ]
     ]
     users_df["last_login"] = users_df["last_login"].apply(format_datetime)
-    users_df["binance_configured"] = users_df["binance_configured"].apply(bool_to_label)
-    users_df = users_df.rename(columns={"binance_configured": "Binance configuré"})
+    users_df["exchange_configured"] = users_df["exchange_configured"].apply(bool_to_label)
+    users_df = users_df.rename(columns={"exchange_configured": "Exchange configuré"})
 
     filter_col1, filter_col2 = st.columns(2)
     with filter_col1:
@@ -88,7 +88,7 @@ def main() -> None:
         render_status_badge("Statut", detail.status.value)
         st.caption(f"Dernier login: {format_datetime(detail.last_login)}")
         st.caption(f"Cree le: {format_datetime(detail.created_at)}")
-        st.caption(f"Binance configure: {bool_to_label(detail.binance_configured)}")
+        st.caption(f"Exchange configure: {bool_to_label(detail.exchange_configured)}")
         st.caption(f"Echecs login: {detail.failed_login_count}")
         st.markdown("</div>", unsafe_allow_html=True)
 

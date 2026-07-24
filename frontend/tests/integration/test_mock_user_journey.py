@@ -1,3 +1,5 @@
+"""Integration test: simulated full user journey via mocked backend HTTP clients."""
+
 from __future__ import annotations
 
 import streamlit as st
@@ -9,6 +11,7 @@ from schemas.bot import BotConfigUpdate
 from schemas.common import UserRole
 from services.account_service import AccountService
 from services.admin_service import AdminService
+from services.api_client import BackendApiClient
 from services.auth_api_client import ApiResponse
 from services.auth_service import AuthService
 from services.bot_config_service import BotConfigService
@@ -17,8 +20,10 @@ from utils.constants import ACTION_START
 
 
 class JourneyAuthClient:
+    """Auth client simule pour le test de parcours."""
+
     def __init__(self) -> None:
-        self.users: dict[str, dict[str, str | bool]] = {}
+        self.users: dict[str, dict] = {}
         self.token_to_email: dict[str, str] = {}
 
     def register(
@@ -71,9 +76,8 @@ class JourneyAuthClient:
         email_key = self.token_to_email.get(access_token)
         if not email_key:
             return ApiResponse(status_code=401, data={"detail": "Could not validate credentials"})
-        user = self.users[email_key].copy()
-        user.pop("password", None)
-        if not user["last_name"]:
+        user = {k: v for k, v in self.users[email_key].items() if k != "password"}
+        if not user.get("last_name"):
             user["last_name"] = None
         return ApiResponse(status_code=200, data=user)
 
@@ -83,9 +87,8 @@ class JourneyAuthClient:
         self.token_to_email[access_token] = email_key
         self.token_to_email[refresh_token] = email_key
 
-        user = self.users[email_key].copy()
-        user.pop("password", None)
-        if not user["last_name"]:
+        user = {k: v for k, v in self.users[email_key].items() if k != "password"}
+        if not user.get("last_name"):
             user["last_name"] = None
 
         return ApiResponse(
@@ -104,11 +107,131 @@ class JourneyAuthClient:
         )
 
 
-def test_end_to_end_auth_and_mock_pages_journey() -> None:
+class JourneyBackendClient(BackendApiClient):
+    """
+    Simule le backend FastAPI en memoire pour les tests d'integration.
+    Extends BackendApiClient mais intercepte tous les appels reseau.
+    """
+
+    def __init__(self, auth_client: JourneyAuthClient) -> None:
+        # Ne pas appeler super().__init__() pour eviter toute connexion reseau
+        self._auth = auth_client
+        self._strategies: dict[str, dict] = {
+            "strat_sol": {
+                "id": "strat_sol",
+                "name": "SOL Trend",
+                "strategy_type": "trend",
+                "is_active": True,
+                "updated_at": "2024-01-01T00:00:00Z",
+                "parameters": {"budget_usdt": 2000.0, "max_open_positions": 3, "version": 1},
+            },
+        }
+        self._configured_exchanges: dict[str, set[str]] = {}
+
+    def _user_by_token(self, token: str) -> dict | None:
+        email = self._auth.token_to_email.get(token)
+        return self._auth.users.get(email) if email else None
+
+    # ─── Users ───────────────────────────────────────────────────────────────
+
+    def update_user(self, access_token, *, first_name=None, last_name=None, email=None):
+        user = self._user_by_token(access_token)
+        if not user:
+            return ApiResponse(status_code=401, data={"detail": "Unauthorized"})
+        old_email = user["email"]
+        if first_name is not None:
+            user["first_name"] = first_name
+        if last_name is not None:
+            user["last_name"] = last_name
+        if email and email.lower() != old_email:
+            new_email = email.lower()
+            user["email"] = new_email
+            self._auth.users[new_email] = user
+            del self._auth.users[old_email]
+            for k, v in list(self._auth.token_to_email.items()):
+                if v == old_email:
+                    self._auth.token_to_email[k] = new_email
+        result = {k: v for k, v in user.items() if k != "password"}
+        return ApiResponse(status_code=200, data=result)
+
+    def get_user_settings(self, access_token):
+        if not self._user_by_token(access_token):
+            return ApiResponse(status_code=401, data={})
+        email = self._auth.token_to_email.get(access_token, "")
+        return ApiResponse(
+            status_code=200,
+            data={"configured_exchanges": sorted(self._configured_exchanges.get(email, set()))},
+        )
+
+    def update_user_settings(self, access_token, *, exchange=None, api_key=None, api_secret=None, **_):
+        email = self._auth.token_to_email.get(access_token)
+        if not email:
+            return ApiResponse(status_code=401, data={})
+        if api_key and api_secret:
+            self._configured_exchanges.setdefault(email, set()).add(exchange or "binance")
+        return ApiResponse(
+            status_code=200,
+            data={"configured_exchanges": sorted(self._configured_exchanges.get(email, set()))},
+        )
+
+    def list_users(self, access_token):
+        return ApiResponse(
+            status_code=200,
+            data=[{k: v for k, v in u.items() if k != "password"} for u in self._auth.users.values()],
+        )
+
+    def activate_user(self, access_token, user_id):
+        return ApiResponse(status_code=200, data={"message": "activated"})
+
+    def deactivate_user(self, access_token, user_id):
+        return ApiResponse(status_code=200, data={"message": "deactivated"})
+
+    # ─── Strategies ──────────────────────────────────────────────────────────
+
+    def list_strategies(self, access_token):
+        return ApiResponse(status_code=200, data=list(self._strategies.values()))
+
+    def get_strategy(self, access_token, strategy_id):
+        s = self._strategies.get(strategy_id)
+        if not s:
+            return ApiResponse(status_code=404, data={"detail": "Not found"})
+        return ApiResponse(status_code=200, data=dict(s))
+
+    def update_strategy(self, access_token, strategy_id, payload):
+        s = self._strategies.get(strategy_id)
+        if not s:
+            return ApiResponse(status_code=404, data={"detail": "Not found"})
+        if "parameters" in payload:
+            params = dict(s.get("parameters") or {})
+            params.update(payload["parameters"])
+            s["parameters"] = params
+        return ApiResponse(status_code=200, data=dict(s))
+
+    def list_deployments(self, access_token, *, active_only=False):
+        return ApiResponse(status_code=200, data=[])
+
+    # ─── Trading (stub) ──────────────────────────────────────────────────────
+
+    def get_portfolio(self, access_token):
+        return ApiResponse(status_code=200, data={"total_usd_value": 0.0, "balances": []})
+
+    def list_orders(self, access_token, *, status=None, limit=50):
+        return ApiResponse(status_code=200, data=[])
+
+    def list_transactions(self, access_token, *, limit=100):
+        return ApiResponse(status_code=200, data=[])
+
+    def get_trading_stats(self, access_token, period="30d"):
+        return ApiResponse(status_code=200, data={"total_trades": 0, "total_profit_loss": 0.0, "win_rate": 0.0})
+
+
+def test_end_to_end_auth_and_backend_pages_journey() -> None:
     st.session_state.clear()
     store = create_mock_store(disable_latency=True)
     auth_client = JourneyAuthClient()
+    backend = JourneyBackendClient(auth_client)
 
+    # ── Auth: register + login ────────────────────────────────────────────────
     auth = AuthService(store, client=auth_client)
     register = auth.register(
         RegisterRequest(
@@ -130,20 +253,24 @@ def test_end_to_end_auth_and_mock_pages_journey() -> None:
     assert store.current_user_email == "nina@cryptobot.dev"
     assert auth.ensure_authenticated_user() is not None
 
-    account = AccountService(store)
+    # ── Account: mise a jour du profil ───────────────────────────────────────
+    account = AccountService(store, client=backend)
     ok, _ = account.update_profile(
         AccountProfile(first_name="Nina", last_name="Durand", email="nina2@cryptobot.dev")
     )
     assert ok is True
+    # L'email dans le store est mis a jour via sync_current_user_from_backend
     assert store.current_user_email == "nina2@cryptobot.dev"
 
-    bot_control = BotControlService(store)
-    action_result = bot_control.apply_action("bot_sol_trend", ACTION_START)
-    assert action_result.success is True
+    # ── Bot control: START retourne un message informatif (params requis) ─────
+    bot_control = BotControlService(store, client=backend)
+    action_result = bot_control.apply_action("strat_sol", ACTION_START)
+    assert action_result.success is False  # intentionnel: START necessite des params de deployment
 
-    bot_config = BotConfigService(store)
-    save_result = bot_config.save(
-        "bot_sol_trend",
+    # ── Bot config: sauvegarde incrementee ───────────────────────────────────
+    bot_config = BotConfigService(store, client=backend)
+    save_ok, _, config = bot_config.save(
+        "strat_sol",
         BotConfigUpdate(
             strategy="Trend Following",
             budget_usdt=2500,
@@ -154,10 +281,19 @@ def test_end_to_end_auth_and_mock_pages_journey() -> None:
             cooldown_seconds=180,
         ),
     )
-    assert save_result[0] is True
+    assert save_ok is True
 
-    store.current_user_email = "admin@cryptobot.dev"
-    store.users["nina2@cryptobot.dev"].role = UserRole.USER
-    admin = AdminService(store)
-    ok, _ = admin.set_role("nina2@cryptobot.dev", UserRole.ADMIN)
+    # ── Admin: set_role non disponible via API, set_enabled fonctionne ────────
+    store.current_user_email = "nina2@cryptobot.dev"
+    # Simuler un admin pour le store (pre-requis de AdminService._ensure_admin)
+    store.users["nina2@cryptobot.dev"].role = UserRole.ADMIN
+
+    admin = AdminService(store, client=backend)
+    ok, message = admin.set_role("nina2@cryptobot.dev", UserRole.ADMIN)
+    assert ok is False
+    assert "non disponible" in message
+
+    # list_users puis set_enabled fonctionne
+    admin.list_users()
+    ok, _ = admin.set_enabled("nina2@cryptobot.dev", True)
     assert ok is True

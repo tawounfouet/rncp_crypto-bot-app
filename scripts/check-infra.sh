@@ -36,15 +36,16 @@ echo ""
 echo "=== 1. Verification versions.env ==="
 
 REQUIRED_VARS=(
-    MONGO_IMAGE
-    MONGO_EXPRESS_IMAGE
     POSTGRES_IMAGE
     ADMINER_IMAGE
     MINIO_IMAGE
     MINIO_MC_IMAGE
+    AIRFLOW_IMAGE
+    REDIS_IMAGE
     PYTHON_VERSION
     PYTHON_CI_IMAGE
     SEMGREP_IMAGE
+    SEMGREP_PRECOMMIT_VERSION
     HADOLINT_IMAGE
     RELEASE_CLI_IMAGE
 )
@@ -253,6 +254,55 @@ else
 fi
 
 # =============================================================================
+# 9b. Synchronisation versions.env <-> .pre-commit-config.yaml (semgrep)
+# =============================================================================
+# Pas fonctionnelle (pre-commit ne lit pas versions.env : son "rev:" doit etre
+# un tag git litteral, resolu par le framework pre-commit lui-meme). Ce check
+# garde juste versions.env comme point unique a consulter, avec alerte en cas
+# de derive plutot qu'une vraie source commune (impossible ici techniquement).
+echo ""
+echo "=== 9b. Synchronisation versions.env / .pre-commit-config.yaml (semgrep) ==="
+
+if [ -f .pre-commit-config.yaml ]; then
+    precommit_semgrep_rev=$(awk '/repo: https:\/\/github.com\/semgrep\/semgrep/{getline; print}' .pre-commit-config.yaml | sed -E 's/.*rev:[[:space:]]*v?//')
+    env_semgrep_precommit=$(grep "^SEMGREP_PRECOMMIT_VERSION=" versions.env | cut -d= -f2-)
+
+    if [ -z "$env_semgrep_precommit" ]; then
+        fail "SEMGREP_PRECOMMIT_VERSION absent de versions.env"
+    elif [ -z "$precommit_semgrep_rev" ]; then
+        fail "rev semgrep introuvable dans .pre-commit-config.yaml"
+    elif [ "$env_semgrep_precommit" != "$precommit_semgrep_rev" ]; then
+        fail "Semgrep pre-commit desynchronise : versions.env=$env_semgrep_precommit, .pre-commit-config.yaml=$precommit_semgrep_rev"
+    else
+        pass "Semgrep pre-commit synchronise (v$precommit_semgrep_rev)"
+    fi
+else
+    warn ".pre-commit-config.yaml introuvable"
+fi
+
+# =============================================================================
+# 9. Coherence requirements.txt <-> requirements.txt.template
+# =============================================================================
+echo ""
+echo "=== 9. Verification des requirements.txt generes ==="
+
+if [ -f scripts/generate-requirements.py ]; then
+    # Executer le generateur de requirements
+    python3 scripts/generate-requirements.py > /dev/null 2>&1
+
+    # Verifier s'il y a un diff git sur les fichiers generes
+    if git diff --exit-code -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt > /dev/null 2>&1; then
+        pass "Fichiers requirements.txt synchronises avec les templates"
+    else
+        fail "Fichiers requirements.txt desynchronises ! Lancez 'python3 scripts/generate-requirements.py' et commitez les modifications."
+        # Afficher le diff pour aider le developpeur
+        git diff -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt
+    fi
+else
+    fail "scripts/generate-requirements.py introuvable"
+fi
+
+# =============================================================================
 # Resultat
 # =============================================================================
 echo ""
@@ -260,6 +310,6 @@ if [ $ERRORS -gt 0 ]; then
     echo -e "${RED}=== $ERRORS erreur(s) detectee(s) ===${NC}"
     exit 1
 else
-    echo -e "${GREEN}=== Toutes les verifications passent (8 checks) ===${NC}"
+    echo -e "${GREEN}=== Toutes les verifications passent (10 checks) ===${NC}"
     exit 0
 fi

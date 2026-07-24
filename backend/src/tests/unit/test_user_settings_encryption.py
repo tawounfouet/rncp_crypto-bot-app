@@ -19,7 +19,7 @@ class TestEncryptDecryptSecret:
     def test_encrypt_decrypt_roundtrip(self, monkeypatch):
         """Chiffrer puis dechiffrer retourne le texte original."""
         raw_key = base64.b64encode(os.urandom(32)).decode()
-        monkeypatch.setenv("BINANCE_ENC_KEY", raw_key)
+        monkeypatch.setenv("EXCHANGE_ENC_KEY", raw_key)
 
         plaintext = "my_super_secret_api_key_123"
         encrypted = encrypt_secret(plaintext)
@@ -30,7 +30,7 @@ class TestEncryptDecryptSecret:
     def test_encrypt_returns_dict_with_required_keys(self, monkeypatch):
         """encrypt_secret retourne un dict avec ciphertext et nonce en base64."""
         raw_key = base64.b64encode(os.urandom(32)).decode()
-        monkeypatch.setenv("BINANCE_ENC_KEY", raw_key)
+        monkeypatch.setenv("EXCHANGE_ENC_KEY", raw_key)
 
         result = encrypt_secret("test")
 
@@ -44,7 +44,7 @@ class TestEncryptDecryptSecret:
     def test_encrypt_produces_different_ciphertexts(self, monkeypatch):
         """Deux chiffrements du meme texte donnent des resultats differents (nonce aleatoire)."""
         raw_key = base64.b64encode(os.urandom(32)).decode()
-        monkeypatch.setenv("BINANCE_ENC_KEY", raw_key)
+        monkeypatch.setenv("EXCHANGE_ENC_KEY", raw_key)
 
         enc1 = encrypt_secret("same_text")
         enc2 = encrypt_secret("same_text")
@@ -53,8 +53,8 @@ class TestEncryptDecryptSecret:
         assert enc1["nonce"] != enc2["nonce"]
 
     def test_encrypt_raises_without_env_key(self, monkeypatch):
-        """encrypt_secret leve RuntimeError si BINANCE_ENC_KEY n'est pas defini."""
-        monkeypatch.delenv("BINANCE_ENC_KEY", raising=False)
+        """encrypt_secret leve RuntimeError si EXCHANGE_ENC_KEY n'est pas defini."""
+        monkeypatch.delenv("EXCHANGE_ENC_KEY", raising=False)
 
         with pytest.raises(RuntimeError, match="Missing required environment variable"):
             encrypt_secret("test")
@@ -63,7 +63,7 @@ class TestEncryptDecryptSecret:
         """encrypt_secret leve ValueError si la cle n'a pas une taille AES valide."""
         # 10 bytes = 80 bits, pas valide pour AES
         bad_key = base64.b64encode(os.urandom(10)).decode()
-        monkeypatch.setenv("BINANCE_ENC_KEY", bad_key)
+        monkeypatch.setenv("EXCHANGE_ENC_KEY", bad_key)
 
         with pytest.raises(ValueError, match="128-, 192- or 256-bit"):
             encrypt_secret("test")
@@ -77,7 +77,7 @@ class TestEncryptDecryptSecret:
 def test_user_settings_encrypts_and_decrypts_binance_credentials(monkeypatch):
     """UserSettings should encrypt stored Binance API credentials and decrypt them when read."""
     raw_key = base64.b64encode(os.urandom(32)).decode()
-    monkeypatch.setenv("BINANCE_ENC_KEY", raw_key)
+    monkeypatch.setenv("EXCHANGE_ENC_KEY", raw_key)
 
     settings = UserSettings(
         id="test-settings-id",
@@ -123,7 +123,7 @@ def test_user_settings_returns_plaintext_values_for_legacy_storage():
 def test_user_settings_multiple_exchanges(monkeypatch):
     """On peut stocker des credentials pour plusieurs exchanges."""
     raw_key = base64.b64encode(os.urandom(32)).decode()
-    monkeypatch.setenv("BINANCE_ENC_KEY", raw_key)
+    monkeypatch.setenv("EXCHANGE_ENC_KEY", raw_key)
 
     settings = UserSettings(
         id="test-id",
@@ -146,7 +146,7 @@ def test_user_settings_multiple_exchanges(monkeypatch):
 def test_user_settings_remove_api_credentials(monkeypatch):
     """remove_api_credentials supprime les credentials d'un exchange."""
     raw_key = base64.b64encode(os.urandom(32)).decode()
-    monkeypatch.setenv("BINANCE_ENC_KEY", raw_key)
+    monkeypatch.setenv("EXCHANGE_ENC_KEY", raw_key)
 
     settings = UserSettings(
         id="test-id",

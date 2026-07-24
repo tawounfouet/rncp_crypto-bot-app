@@ -1,39 +1,59 @@
-"""Service de gestion de compte utilisateur."""
+"""Service de gestion de compte utilisateur - connecte au backend reel."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from mocks.db import MockStore
-from schemas.account import AccountProfile, BinanceCredentialInput, BinanceCredentialStatus
-from services.base import ServiceError, raise_if_forced_error, simulate_latency
-from utils.formatters import mask_secret
+from schemas.account import AccountProfile, ExchangeCredentialInput, ExchangeCredentialStatus
+from services.api_client import BackendApiClient
+from services.base import ServiceError
+from state.session import (
+    get_access_token,
+    get_selected_exchange,
+    set_exchange_configured,
+    sync_current_user_from_backend,
+)
 from utils.validators import validate_email, validate_required
 
 
-class AccountService:
-    def __init__(self, store: MockStore) -> None:
-        self.store = store
+def _extract_error(response) -> str:
+    if response.error:
+        return response.error
+    data = response.data
+    if isinstance(data, dict):
+        detail = data.get("detail")
+        if isinstance(detail, str) and detail:
+            return detail
+    return f"Erreur backend ({response.status_code})."
 
-    def _current_user(self):
-        if not self.store.current_user_email:
-            raise ServiceError("Utilisateur non connecte.")
-        user = self.store.users.get(self.store.current_user_email.lower())
-        if not user:
-            raise ServiceError("Utilisateur introuvable.")
-        return user
+
+class AccountService:
+    def __init__(self, store: MockStore, client: BackendApiClient | None = None) -> None:
+        self.store = store
+        self.client = client or BackendApiClient()
+
+    def _token(self) -> str:
+        token = get_access_token()
+        if not token:
+            raise ServiceError("Non authentifie.")
+        return token
 
     def get_profile(self) -> AccountProfile:
-        simulate_latency(self.store, min_ms=80, max_ms=220)
-        user = self._current_user()
+        token = self._token()
+        response = self.client.get_current_user(token)
+        if not response.success:
+            raise ServiceError(f"Impossible de charger le profil: {_extract_error(response)}")
+        data = response.data or {}
         return AccountProfile(
-            first_name=user.first_name, last_name=user.last_name, email=user.email
+            first_name=data.get("first_name") or "",
+            last_name=data.get("last_name") or None,
+            email=data.get("email") or "",
         )
 
     def update_profile(self, profile: AccountProfile) -> tuple[bool, str]:
-        simulate_latency(self.store, min_ms=120, max_ms=260)
-        raise_if_forced_error(self.store, "account.profile.update", "Maj profil impossible (mock).")
-        user = self._current_user()
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
 
         ok, message = validate_required(profile.first_name, "Le prenom")
         if not ok:
@@ -42,65 +62,101 @@ class AccountService:
         if not ok:
             return False, message
 
-        normalized_email = profile.email.lower().strip()
-        if normalized_email != user.email and normalized_email in self.store.users:
-            return False, "Cet email est deja utilise."
+        response = self.client.update_user(
+            token,
+            first_name=profile.first_name.strip(),
+            last_name=(profile.last_name or "").strip() or None,
+            email=profile.email.strip().lower(),
+        )
+        if not response.success:
+            return False, _extract_error(response)
 
-        if normalized_email != user.email:
-            previous_email = user.email
-            del self.store.users[previous_email]
-            user.email = normalized_email
-            self.store.users[user.email] = user
-            self.store.current_user_email = user.email
-            if previous_email in self.store.binance_credentials:
-                self.store.binance_credentials[user.email] = self.store.binance_credentials.pop(
-                    previous_email
-                )
-            if previous_email in self.store.credential_updated_at:
-                self.store.credential_updated_at[user.email] = self.store.credential_updated_at.pop(
-                    previous_email
-                )
+        if isinstance(response.data, dict):
+            sync_current_user_from_backend(response.data, store=self.store, access_token=token)
 
-        user.first_name = profile.first_name.strip()
-        user.last_name = (profile.last_name or "").strip() or None
         return True, "Profil mis a jour."
 
-    def get_binance_status(self) -> BinanceCredentialStatus:
-        simulate_latency(self.store, min_ms=80, max_ms=220)
-        user = self._current_user()
-        raw = self.store.binance_credentials.get(user.email.lower())
-        updated_at = self.store.credential_updated_at.get(user.email.lower())
-        if not raw:
-            return BinanceCredentialStatus(configured=False, updated_at=updated_at)
-        api_key, api_secret = raw
-        return BinanceCredentialStatus(
-            configured=True,
-            updated_at=updated_at,
-            api_key_masked=mask_secret(api_key),
-            api_secret_masked=mask_secret(api_secret),
+    def get_exchange_status(self, exchange: str) -> ExchangeCredentialStatus:
+        try:
+            token = self._token()
+        except ServiceError:
+            return ExchangeCredentialStatus(exchange=exchange, configured=False)
+
+        response = self.client.get_user_settings(token)
+        if not response.success:
+            return ExchangeCredentialStatus(exchange=exchange, configured=False)
+
+        data = response.data or {}
+        # L'endpoint retourne configured_exchanges=[...] (ou api_keys.{exchange} present)
+        if "configured_exchanges" in data:
+            configured = exchange in (data["configured_exchanges"] or [])
+        else:
+            api_keys = data.get("api_keys") or {}
+            configured = bool(api_keys.get(exchange))
+
+        set_exchange_configured(configured, store=self.store)
+
+        return ExchangeCredentialStatus(
+            exchange=exchange,
+            configured=configured,
+            api_key_masked="sk_****" if configured else "",
+            api_secret_masked="sk_****" if configured else "",
         )
 
-    def save_binance_credentials(self, payload: BinanceCredentialInput) -> tuple[bool, str]:
-        simulate_latency(self.store, min_ms=120, max_ms=280)
-        raise_if_forced_error(
-            self.store,
-            "account.binance.save",
-            "Enregistrement des cles impossible (mock).",
-        )
-        user = self._current_user()
+    def save_exchange_credentials(self, payload: ExchangeCredentialInput) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
 
-        checks = [
-            validate_required(payload.api_key, "L'API key"),
-            validate_required(payload.api_secret, "L'API secret"),
-            validate_required(payload.password_confirmation, "La confirmation mot de passe"),
-        ]
-        for ok, message in checks:
+        for value, label in [
+            (payload.api_key, "L'API key"),
+            (payload.api_secret, "L'API secret"),
+        ]:
+            ok, msg = validate_required(value, label)
             if not ok:
-                return False, message
-        if payload.password_confirmation != user.password:
-            return False, "Mot de passe de confirmation invalide."
+                return False, msg
 
-        self.store.binance_credentials[user.email.lower()] = (payload.api_key, payload.api_secret)
-        self.store.credential_updated_at[user.email.lower()] = datetime.now(UTC)
-        user.binance_configured = True
-        return True, "Cles Binance enregistrees."
+        response = self.client.update_user_settings(
+            token,
+            exchange=payload.exchange,
+            api_key=payload.api_key.strip(),
+            api_secret=payload.api_secret.strip(),
+        )
+        if not response.success:
+            return False, _extract_error(response)
+
+        set_exchange_configured(True, store=self.store)
+        return True, "Cles enregistrees et chiffrees en base."
+
+    def list_configured_exchanges(self) -> list[str]:
+        try:
+            token = self._token()
+        except ServiceError:
+            return []
+
+        response = self.client.get_user_settings(token)
+        if not response.success:
+            return []
+
+        data = response.data or {}
+        if "configured_exchanges" in data:
+            return sorted(data["configured_exchanges"] or [])
+        api_keys = data.get("api_keys") or {}
+        return sorted(api_keys.keys())
+
+    def delete_exchange_credentials(self, exchange: str) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
+
+        response = self.client.update_user_settings(
+            token, exchange=exchange, api_key="", api_secret=""
+        )
+        if not response.success:
+            return False, _extract_error(response)
+
+        if exchange == get_selected_exchange():
+            set_exchange_configured(False, store=self.store)
+        return True, "Cles supprimees."

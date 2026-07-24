@@ -71,15 +71,6 @@ class Settings(BaseSettings):
     # Computed database URL
     DATABASE_URL: str | None = None
 
-    # MongoDB settings (optional)
-    MONGODB_HOST: str = "localhost"
-    MONGODB_PORT: int = 27017
-    MONGODB_USER: str | None = None
-    MONGODB_PWD: str | None = None
-    MONGODB_DB: str = "crypto_market_data"
-    MONGODB_URL: str | None = None
-    USE_MONGODB: bool = False
-
     # MinIO settings (optional)
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "miniouser"
@@ -97,8 +88,6 @@ class Settings(BaseSettings):
     USE_REDIS: bool = False
 
     # Binance API settings
-    BINANCE_API_KEY: SecretStr | None = None
-    BINANCE_API_SECRET: SecretStr | None = None
     BINANCE_TESTNET: bool = True
     BINANCE_TESTNET_API_KEY: SecretStr | None = None
     BINANCE_TESTNET_API_SECRET: SecretStr | None = None
@@ -155,9 +144,6 @@ class Settings(BaseSettings):
         if not self.POSTGRES_HOST:
             self.POSTGRES_HOST = "postgres"
             self.POSTGRES_PORT = 5432
-
-        if self.MONGODB_HOST == "localhost":
-            self.MONGODB_HOST = "mongo"
 
         if self.MINIO_ENDPOINT == "localhost:9000":
             self.MINIO_ENDPOINT = "minio:9000"
@@ -221,24 +207,6 @@ class Settings(BaseSettings):
             return url
 
         raise ValueError("No database configuration provided and SQLite fallback is disabled")
-
-    @field_validator("MONGODB_URL", mode="after")
-    @classmethod
-    def build_mongodb_url(cls, v, info):
-        """Build MongoDB URL if enabled."""
-        if v or not info.data.get("USE_MONGODB", False):
-            return v
-
-        host = info.data.get("MONGODB_HOST", "localhost")
-        port = info.data.get("MONGODB_PORT", 27017)
-        user = info.data.get("MONGODB_USER")
-        password = info.data.get("MONGODB_PWD")
-        db = info.data.get("MONGODB_DB", "crypto_market_data")
-
-        if user and password:
-            return f"mongodb://{user}:{password}@{host}:{port}/{db}?authSource=admin"
-        else:
-            return f"mongodb://{host}:{port}/{db}"
 
     @field_validator("REDIS_URL", mode="after")
     @classmethod
@@ -348,7 +316,6 @@ class Settings(BaseSettings):
             logger.info(f"Database: PostgreSQL ({masked_url.split('@')[1] if '@' in masked_url else 'unknown'})")
 
         # Optional services
-        logger.info(f"MongoDB: {'Enabled' if self.USE_MONGODB else 'Disabled'}")
         logger.info(f"MinIO: {'Enabled' if self.USE_MINIO else 'Disabled'}")
         logger.info(f"Redis: {'Enabled' if self.USE_REDIS else 'Disabled'}")
 
