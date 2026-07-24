@@ -118,8 +118,8 @@ test: test-backend test-frontend test-utils test-jobs ## Lancer les tests (backe
 # NB: test-models exclu de l'agregat tant que la suite models n'est pas verte (echecs
 #     pre-existants: config/features/utils). Lancable seul via `make test-models`. Voir issue hygiene tests models.
 
-verify: ## Verifier que tous les services installes sont presents et healthy (backend/frontend/airflow/minio/postgres/ml)
-	./scripts/verify.sh $(ARGS)
+verify: ## Verifier que tous les services installes sont presents et healthy (playbook Ansible, cf. crypto-bot-infra/ansible/)
+	cd ../crypto-bot-infra/ansible && ansible-playbook verify.yml -i inventories/dev
 
 test-backend: ## Lancer les tests unitaires backend
 	PYTHONPATH=backend/src $(VENV_PYTHON) -m pytest backend/src/tests -v

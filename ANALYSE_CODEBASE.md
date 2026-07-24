@@ -318,16 +318,19 @@ staging → build + deploy staging automatique
 tag vX.Y → build + deploy production (manuel) + release
 ```
 
-### Scripts (9 scripts)
+### Scripts (8 scripts)
 
 | Script | Rôle |
 |--------|------|
 | `check-infra.sh` | Validation cohérence versions/Dockerfiles/CI |
 | `dev-deploy.sh` | Déploiement local automatisé |
-| `verify.sh` | Vérification de santé de tous les services |
 | `generate-requirements.py` | Compilation des requirements depuis versions.env |
 | `run_tests.sh` / `run-lint.sh` | Exécution tests/lint |
 | `push.sh` | Push avec hooks |
+
+`make verify` (vérification de santé de tous les services) délègue désormais au playbook
+Ansible `crypto-bot-infra/ansible/verify.yml -i inventories/dev` — l'ancien
+`scripts/verify.sh` faisait doublon et a été retiré (2026-07-23).
 
 ---
 
