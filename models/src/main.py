@@ -8,6 +8,7 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
+
     env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(dotenv_path=env_path)
 except ImportError:
@@ -104,7 +105,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     train_lstm_parser.set_defaults(func=train_lstm_command)
 
-    train_baselines_parser = subparsers.add_parser("train-baselines", help="Evaluate AlwaysHold and UniformRandom baselines")
+    train_baselines_parser = subparsers.add_parser(
+        "train-baselines", help="Evaluate AlwaysHold and UniformRandom baselines"
+    )
     train_baselines_parser.add_argument(
         "--dataset",
         default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),

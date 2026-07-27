@@ -86,9 +86,7 @@ def start_run(settings: AppSettings, model_name: str, run_id: str | None = None)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     config_snapshot_path = run_dir / "config_snapshot.json"
-    config_snapshot_path.write_text(
-        json.dumps(dump_config_snapshot(settings), indent=2, default=str), encoding="utf-8"
-    )
+    config_snapshot_path.write_text(json.dumps(dump_config_snapshot(settings), indent=2, default=str), encoding="utf-8")
 
     # MLFLOW_TRACKING_URI (defini par docker-compose pour crypto-bot-ml-api, pointe
     # vers le Postgres partage avec mlflow-ui) prime sur le sqlite local de
@@ -100,7 +98,10 @@ def start_run(settings: AppSettings, model_name: str, run_id: str | None = None)
 
     logger.info(
         "mlops run start model=%s run_id=%s run_dir=%s config_snapshot=%s",
-        model_name, actual_run_id, run_dir, config_snapshot_path,
+        model_name,
+        actual_run_id,
+        run_dir,
+        config_snapshot_path,
     )
 
     with mlflow.start_run(run_name=f"{model_name}/{actual_run_id}") as active_run:
@@ -112,5 +113,7 @@ def start_run(settings: AppSettings, model_name: str, run_id: str | None = None)
         finally:
             logger.info(
                 "mlops run complete model=%s run_id=%s run_dir=%s",
-                model_name, actual_run_id, run_dir,
+                model_name,
+                actual_run_id,
+                run_dir,
             )

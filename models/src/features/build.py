@@ -64,7 +64,9 @@ def build_features(data: pd.DataFrame, config_path: str = "config.yaml") -> pd.D
             len(output.columns),
         )
     if indicators.bollinger_bands.get("enabled"):
-        output = add_bollinger_bands(output, indicators.bollinger_bands["window"], indicators.bollinger_bands["num_std"])
+        output = add_bollinger_bands(
+            output, indicators.bollinger_bands["window"], indicators.bollinger_bands["num_std"]
+        )
         logger.info(
             "features added bollinger_bands window=%s num_std=%s columns=%s",
             indicators.bollinger_bands["window"],
@@ -109,10 +111,12 @@ def build_symbol_features(symbol: str, interval: str, config_path: str = "config
     settings = load_config(config_path)
     symbol = symbol.upper()
     mapping = settings.data.symbol_mappings.get(symbol)
-    source_symbol = (mapping.source_symbol if mapping else symbol)
+    source_symbol = mapping.source_symbol if mapping else symbol
     logger.info(
         "features job start symbol=%s interval=%s source_symbol=%s",
-        symbol, interval, source_symbol,
+        symbol,
+        interval,
+        source_symbol,
     )
     raw = read_raw_ohlcv_from_minio(source_symbol, interval)
     if mapping and mapping.invert_price:

@@ -22,7 +22,7 @@ EXCLUDED_FEATURE_COLUMNS = {
     "source",
     "target",
     "future_return",
-    "price_inverted",   # always False for BTCUSDT, 0% importance
+    "price_inverted",  # always False for BTCUSDT, 0% importance
 }
 
 
@@ -122,19 +122,26 @@ def train_random_forest(data: pd.DataFrame, settings: AppSettings):
 
         X_all = data.sort_values("open_time")[feature_columns].to_numpy()
         y_all = data.sort_values("open_time")["target"].to_numpy()
-        pipeline = Pipeline([
-            ("scaler", StandardScaler()),
-            ("rf", RandomForestClassifier(
-                n_estimators=rf_cfg.n_estimators,
-                max_depth=rf_cfg.max_depth,
-                min_samples_leaf=rf_cfg.min_samples_leaf,
-                class_weight=rf_cfg.class_weight,
-                n_jobs=rf_cfg.n_jobs,
-                random_state=rf_cfg.random_state,
-            )),
-        ])
+        pipeline = Pipeline(
+            [
+                ("scaler", StandardScaler()),
+                (
+                    "rf",
+                    RandomForestClassifier(
+                        n_estimators=rf_cfg.n_estimators,
+                        max_depth=rf_cfg.max_depth,
+                        min_samples_leaf=rf_cfg.min_samples_leaf,
+                        class_weight=rf_cfg.class_weight,
+                        n_jobs=rf_cfg.n_jobs,
+                        random_state=rf_cfg.random_state,
+                    ),
+                ),
+            ]
+        )
         cv_results = cross_validate(
-            pipeline, X_all, y_all,
+            pipeline,
+            X_all,
+            y_all,
             cv=TimeSeriesSplit(n_splits=5),
             scoring={"f1_macro": "f1_macro", "accuracy": "accuracy"},
         )
@@ -142,14 +149,17 @@ def train_random_forest(data: pd.DataFrame, settings: AppSettings):
         metrics["cv_f1_macro_std"] = float(cv_results["test_f1_macro"].std())
         logger.info(
             "random_forest cv f1_macro mean=%.4f std=%.4f",
-            metrics["cv_f1_macro_mean"], metrics["cv_f1_macro_std"],
+            metrics["cv_f1_macro_mean"],
+            metrics["cv_f1_macro_std"],
         )
     else:
         logger.info(
-            "random_forest cv skipped rows=%s (need >= 5000)", len(data),
+            "random_forest cv skipped rows=%s (need >= 5000)",
+            len(data),
         )
 
     from src.backtesting.engine import BacktestConfig, run_backtest
+
     bt_result = run_backtest(
         prices=test["close"].reset_index(drop=True),
         signals=list(y_pred),
@@ -189,9 +199,7 @@ def save_random_forest_artifacts(result: dict, output_dir: str | Path) -> None:
     logger.info("random_forest artifact save start destination=%s", destination)
     joblib.dump(result["model"], destination / "model.joblib")
     joblib.dump(result["scaler"], destination / "scaler.joblib")
-    (destination / "feature_columns.json").write_text(
-        json.dumps(result["feature_columns"], indent=2), encoding="utf-8"
-    )
+    (destination / "feature_columns.json").write_text(json.dumps(result["feature_columns"], indent=2), encoding="utf-8")
     (destination / "metrics.json").write_text(json.dumps(result["metrics"], indent=2), encoding="utf-8")
     plot_confusion_matrix(
         result["y_test"],

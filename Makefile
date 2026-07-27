@@ -121,9 +121,7 @@ prod-logs: ## Suivre les logs prod
 # Tests & Lint (venv local)
 # ===========================================================================
 
-test: test-backend test-frontend test-utils test-jobs ## Lancer les tests (backend + frontend + utils + jobs)
-# NB: test-models exclu de l'agregat tant que la suite models n'est pas verte (echecs
-#     pre-existants: config/features/utils). Lancable seul via `make test-models`. Voir issue hygiene tests models.
+test: test-backend test-frontend test-utils test-jobs test-models ## Lancer les tests (backend + frontend + utils + jobs + models)
 
 verify: ## Verifier que tous les services installes sont presents et healthy (playbook Ansible, cf. crypto-bot-infra/ansible/)
 	cd ../crypto-bot-infra/ansible && ansible-playbook verify.yml -i inventories/dev
@@ -148,8 +146,10 @@ test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils, un
 test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
 	PYTHONPATH=. $(VENV_PYTHON) -m pytest jobs/tests -q -o cache_dir=/tmp/utils-pytest-cache
 
-test-models: ## Lancer les tests unitaires des models (backend/src/models)
-	PYTHONPATH=. $(VENV_PYTHON) -m pytest models/tests -q -o cache_dir=/tmp/models-pytest-cache
+test-models: ## Lancer les tests unitaires des models (models/src)
+# cd models : le code de models/src/ resout ses chemins relatifs (config.yaml, mlruns/...)
+# depuis son propre repertoire, pas depuis la racine du repo.
+	cd models && PYTHONPATH=..:. ../$(VENV_PYTHON) -m pytest tests -q -o cache_dir=/tmp/models-pytest-cache
 
 ci-test: ## Rejouer localement le job CI test:integration (build image test + tests contre un vrai Postgres)
 	docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --target test -f backend/Dockerfile -t crypto-bot-backend:ci-test-local .
@@ -162,14 +162,12 @@ ci-test: ## Rejouer localement le job CI test:integration (build image test + te
 	exit $$STATUS
 
 lint: ## Lancer ruff check + format
-# models/ exclu : test-models a des echecs preexistants (matplotlib manquant), pas encore
-# dans le perimetre lint/tests automatique -- cf. commentaire sur la cible `test`.
-	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ --output-format=concise
-	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/ utils/ jobs/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ models/src/ --output-format=concise
+	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/ utils/ jobs/ models/src/
 
 lint-fix: ## Corriger automatiquement les erreurs ruff
-	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ --fix
-	$(VENV_PYTHON) -m ruff format backend/src/ frontend/src/ utils/ jobs/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ models/src/ --fix
+	$(VENV_PYTHON) -m ruff format backend/src/ frontend/src/ utils/ jobs/ models/src/
 
 # ===========================================================================
 # Outils

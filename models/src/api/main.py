@@ -69,7 +69,11 @@ def latest_signal(
     if not artifact_path.exists():
         raise HTTPException(status_code=404, detail=f"Model artifact not found: {artifact_path}")
 
-    features_path = Path(settings.data.paths.processed) / symbol.upper() / f"{interval}_features.{settings.data.formats.processed_primary}"
+    features_path = (
+        Path(settings.data.paths.processed)
+        / symbol.upper()
+        / f"{interval}_features.{settings.data.formats.processed_primary}"
+    )
     if not features_path.exists():
         raise HTTPException(status_code=503, detail=f"Processed dataset not found: {features_path}")
 
@@ -98,9 +102,7 @@ def build_features(request: BuildFeaturesRequest) -> BuildFeaturesResponse:
         try:
             frame = build_symbol_features(symbol, request.interval, request.config)
         except Exception as exc:
-            raise HTTPException(
-                status_code=500, detail=f"build_symbol_features failed for {symbol}: {exc}"
-            ) from exc
+            raise HTTPException(status_code=500, detail=f"build_symbol_features failed for {symbol}: {exc}") from exc
         results.append(BuildFeaturesResult(symbol=symbol.upper(), interval=request.interval, rows=len(frame)))
     return BuildFeaturesResponse(results=results)
 

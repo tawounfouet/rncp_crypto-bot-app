@@ -90,18 +90,14 @@ MINIO_PWD_ADMIN=your_minio_password
 # Chiffrement des cles API exchange (Binance, Kraken, ...) en BDD
 # Generer avec : python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
 EXCHANGE_ENC_KEY=your_base64_encoded_32_byte_key
-
-# API Binance (optionnel pour dev)
-BINANCE_API_KEY=
-BINANCE_API_SECRET=
 ```
 
 ### 3. Creer le venv local (tests + lint)
 
-Le `.venv` racine est **partage entre backend et frontend** (un seul Python 3.11,
-streamlit + fastapi cohabitent sans conflit). Cela evite de jongler avec deux
-venvs en dev local. En prod, l'isolation est garantie par les images Docker
-separees (backend / frontend), pas besoin de la dupliquer ici.
+Le `.venv` racine est **partage entre backend, frontend et models** (un seul
+Python 3.11). Cela evite de jongler avec plusieurs venvs en dev local. En prod,
+l'isolation est garantie par les images Docker separees (backend / frontend /
+ml-api), pas besoin de la dupliquer ici.
 
 La creation et l'installation des dependances sont identiques partout ; seul le
 **chemin des executables** dans le venv change selon l'OS :
@@ -122,6 +118,9 @@ python3.11 -m venv .venv
 
 # Deps frontend (Streamlit, Plotly, Pandas, Pydantic v2)
 .venv/bin/python -m pip install -r frontend/requirements.txt
+
+# Deps models (scikit-learn, torch, mlflow, matplotlib, ...)
+.venv/bin/python -m pip install -r models/requirements-dev.txt
 ```
 
 **Windows (PowerShell) :**
@@ -131,6 +130,7 @@ py -3.11 -m venv .venv
 
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
 .\.venv\Scripts\python.exe -m pip install -r frontend\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r models\requirements-dev.txt
 ```
 
 **Windows (Git Bash) :**
@@ -140,6 +140,7 @@ py -3.11 -m venv .venv
 
 .venv/Scripts/python.exe -m pip install -r backend/requirements-dev.txt
 .venv/Scripts/python.exe -m pip install -r frontend/requirements.txt
+.venv/Scripts/python.exe -m pip install -r models/requirements-dev.txt
 ```
 
 > Si `uv` est installe, prefere `uv pip install --python <chemin-python-ci-dessus> -r ...`

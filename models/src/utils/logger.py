@@ -17,11 +17,11 @@ LOGGER_NAME = "cryptobot_models"
 _RESET = "\033[0m"
 _DIM = "\033[2m"
 _LEVEL_COLORS = {
-    "DEBUG": "\033[36m",     # cyan
-    "INFO": "\033[32m",      # green
-    "WARNING": "\033[33m",   # yellow
-    "ERROR": "\033[31m",     # red
-    "CRITICAL": "\033[1;31m" # bold red
+    "DEBUG": "\033[36m",  # cyan
+    "INFO": "\033[32m",  # green
+    "WARNING": "\033[33m",  # yellow
+    "ERROR": "\033[31m",  # red
+    "CRITICAL": "\033[1;31m",  # bold red
 }
 
 
@@ -34,12 +34,7 @@ class ColoredFormatter(logging.Formatter):
         record.levelname = f"{color}{record.levelname:<8}{_RESET}"
         record.asctime = self.formatTime(record, self.datefmt)
         record.name = f"{_DIM}{record.name}{_RESET}"
-        return (
-            f"{_DIM}{record.asctime}{_RESET}"
-            f" {record.levelname}"
-            f" {record.name}"
-            f" {record.getMessage()}"
-        )
+        return f"{_DIM}{record.asctime}{_RESET} {record.levelname} {record.name} {record.getMessage()}"
 
 
 class JsonFormatter(logging.Formatter):
