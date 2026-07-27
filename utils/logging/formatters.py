@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sys
 from datetime import UTC, datetime
 
 _RESET = "\033[0m"
@@ -28,12 +27,7 @@ class ColoredFormatter(logging.Formatter):
         record.levelname = f"{color}{record.levelname:<8}{_RESET}"
         record.asctime = self.formatTime(record, self.datefmt)
         record.name = f"{_DIM}{record.name}{_RESET}"
-        return (
-            f"{_DIM}{record.asctime}{_RESET}"
-            f" {record.levelname}"
-            f" {record.name}"
-            f" {record.getMessage()}"
-        )
+        return f"{_DIM}{record.asctime}{_RESET} {record.levelname} {record.name} {record.getMessage()}"
 
 
 class JsonFormatter(logging.Formatter):

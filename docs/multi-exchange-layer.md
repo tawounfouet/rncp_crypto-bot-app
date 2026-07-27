@@ -213,13 +213,13 @@ qu'avant, généralisé.
 
 ## 5. Tests de référence
 
-- `backend/src/tests/unit/test_market_clients_execution.py` — couche exécution (`quotes`,
+- `backend/tests/unit/test_market_clients_execution.py` — couche exécution (`quotes`,
   `ccxt_client`, `binance_native`, `registry`, `factory`).
 - `utils/tests/test_ccxt_driver.py`, `test_binance_native.py`, `test_registry.py`, `test_base.py`
   — couche données de marché.
-- `backend/src/tests/unit/test_insert_service.py` — orchestration collecte → MinIO → DB,
+- `backend/tests/unit/test_insert_service.py` — orchestration collecte → MinIO → DB,
   driver et session DB mockés.
-- `backend/src/tests/integration/test_user_service.py` — `configured_exchanges` sur
+- `backend/tests/integration/test_user_service.py` — `configured_exchanges` sur
   `export_user_data`.
 - `frontend/tests/unit/test_exchange_prerequisite.py`, `test_account_service.py` — pré-requis
   d'exchange et sauvegarde/lecture des credentials par exchange.

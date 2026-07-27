@@ -35,7 +35,9 @@ echo "=== Dev Deploy (tag :$TAG) ==="
 if [[ "$COMPONENT" == "backend" || "$COMPONENT" == "all" ]]; then
     echo ""
     echo "[1/2] Building backend..."
-    docker build -t "$REGISTRY/backend:$TAG" ./backend
+    # Contexte = racine du repo (pas ./backend) : backend/Dockerfile fait COPY utils/,
+    # le package multi-exchange partage avec jobs/orchestration (cf. issue #10).
+    docker build --target runtime -f backend/Dockerfile -t "$REGISTRY/backend:$TAG" .
     echo "Pushing backend:$TAG..."
     docker push "$REGISTRY/backend:$TAG"
     echo "Restarting backend pods..."

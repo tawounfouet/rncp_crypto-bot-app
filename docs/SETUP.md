@@ -20,10 +20,10 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   ├── docker-compose.test.yml # Compose pour tests (Postgres reel)
 │   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
 ├── scripts/
-│   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles (8 checks)
-│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests si code Python modifie
-│   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev
-│   └── docker_status.sh        # Statut des containers Docker
+│   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles (10 checks)
+│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests cibles si code Python modifie
+│   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev (outil perso)
+│   └── generate-requirements.py # Compilation des requirements depuis versions.env
 ├── .semgrep/                   # Regles de securite Semgrep
 ├── init-scripts/               # Scripts d'init PostgreSQL
 ├── docker-compose.yml          # Dev local
@@ -222,7 +222,7 @@ ou `.venv/Scripts/python.exe` sous Windows) :
 
 ```bash
 # Backend
-PYTHONPATH=backend/src <python-venv> -m pytest backend/src/tests -v
+PYTHONPATH=backend/src <python-venv> -m pytest backend/tests -v
 
 # Frontend (depuis frontend/ pour respecter le pythonpath de frontend/pyproject.toml)
 cd frontend && ../<python-venv> -m pytest tests -q
@@ -446,7 +446,7 @@ Le service `createbuckets` est sous le profile `tools` dans tous les environneme
 ```bash
 # Le PYTHONPATH est gere automatiquement par make test
 # Pour lancer pytest manuellement (remplacer <python-venv> selon l'OS, cf. etape 3) :
-PYTHONPATH=backend/src <python-venv> -m pytest backend/src/tests -v
+PYTHONPATH=backend/src <python-venv> -m pytest backend/tests -v
 ```
 
 ### Windows : `PytestCacheWarning` / `[WinError 267] Nom de repertoire non valide`

@@ -45,7 +45,7 @@ def _kline_row(
 
 @pytest.fixture
 def mock_minio():
-    with patch("src.market.insert_service.ClientMinIO") as mock_cls:
+    with patch("market.insert_service.ClientMinIO") as mock_cls:
         instance = mock_cls.return_value
         instance.default_bucket = "crypto-bot-data"
         instance.upload_dataframe.return_value = True
@@ -54,7 +54,7 @@ def mock_minio():
 
 @pytest.fixture
 def service(mock_minio):
-    from src.market.insert_service import MarketDataInsertService
+    from market.insert_service import MarketDataInsertService
 
     return MarketDataInsertService(db=MagicMock())
 
@@ -63,7 +63,7 @@ class TestInsertHistoricalData:
     """insert_historical_data() : orchestration collecte -> MinIO -> DB."""
 
     def test_invalid_interval_raises_before_any_fetch(self, service):
-        with patch("src.market.insert_service.get_market_data_driver") as mock_get_driver:
+        with patch("market.insert_service.get_market_data_driver") as mock_get_driver:
             with pytest.raises(ValueError, match="Invalid interval"):
                 service.insert_historical_data(
                     exchange="binance",
@@ -77,7 +77,7 @@ class TestInsertHistoricalData:
         mock_driver = MagicMock()
         mock_driver.fetch_klines.return_value = []
 
-        with patch("src.market.insert_service.get_market_data_driver", return_value=mock_driver):
+        with patch("market.insert_service.get_market_data_driver", return_value=mock_driver):
             result = service.insert_historical_data(
                 exchange="kraken",
                 symbol="BTCEUR",
@@ -95,7 +95,7 @@ class TestInsertHistoricalData:
         start_time = datetime(2026, 1, 1, tzinfo=UTC)
         end_time = datetime(2026, 1, 2, tzinfo=UTC)
 
-        with patch("src.market.insert_service.get_market_data_driver", return_value=mock_driver) as mock_get_driver:
+        with patch("market.insert_service.get_market_data_driver", return_value=mock_driver) as mock_get_driver:
             service.insert_historical_data(
                 exchange="kraken",
                 symbol="BTCEUR",
@@ -118,8 +118,8 @@ class TestInsertHistoricalData:
         mock_driver = MagicMock()
         mock_driver.fetch_klines.return_value = []
 
-        with patch("src.market.insert_service.get_market_data_driver", return_value=mock_driver):
-            with patch("src.market.insert_service.datetime") as mock_datetime:
+        with patch("market.insert_service.get_market_data_driver", return_value=mock_driver):
+            with patch("market.insert_service.datetime") as mock_datetime:
                 mock_datetime.now.return_value = datetime(2026, 6, 1, tzinfo=UTC)
                 mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
                 service.insert_historical_data(
@@ -136,7 +136,7 @@ class TestInsertHistoricalData:
         mock_driver = MagicMock()
         mock_driver.fetch_klines.side_effect = RuntimeError("boom")
 
-        with patch("src.market.insert_service.get_market_data_driver", return_value=mock_driver):
+        with patch("market.insert_service.get_market_data_driver", return_value=mock_driver):
             with pytest.raises(RuntimeError, match="boom"):
                 service.insert_historical_data(
                     exchange="binance",
@@ -236,7 +236,7 @@ class TestValidateSymbol:
         mock_driver = MagicMock()
         mock_driver.fetch_klines.return_value = [_kline_row()]
 
-        with patch("src.market.insert_service.get_market_data_driver", return_value=mock_driver) as mock_get_driver:
+        with patch("market.insert_service.get_market_data_driver", return_value=mock_driver) as mock_get_driver:
             assert service.validate_symbol("kraken", "BTCEUR") is True
 
         mock_get_driver.assert_called_once_with("kraken")
@@ -246,7 +246,7 @@ class TestValidateSymbol:
         mock_driver = MagicMock()
         mock_driver.fetch_klines.side_effect = ValueError("Unknown quote in symbol: NOTAPAIR")
 
-        with patch("src.market.insert_service.get_market_data_driver", return_value=mock_driver):
+        with patch("market.insert_service.get_market_data_driver", return_value=mock_driver):
             assert service.validate_symbol("binance", "NOTAPAIR") is False
 
 

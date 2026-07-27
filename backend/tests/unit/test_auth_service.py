@@ -10,7 +10,7 @@ class TestAuthServicePasswordHashing:
 
     def test_get_password_hash_returns_hash(self):
         """Le hash retourne est different du mot de passe original."""
-        from src.auth.service import AuthService
+        from auth.service import AuthService
 
         auth = AuthService()
         password = "TestPassword123!"  # noqa: S105
@@ -22,7 +22,7 @@ class TestAuthServicePasswordHashing:
 
     def test_verify_password_correct(self):
         """Verification reussie avec le bon mot de passe."""
-        from src.auth.service import AuthService
+        from auth.service import AuthService
 
         auth = AuthService()
         password = "TestPassword123!"  # noqa: S105
@@ -32,7 +32,7 @@ class TestAuthServicePasswordHashing:
 
     def test_verify_password_incorrect(self):
         """Verification echoue avec un mauvais mot de passe."""
-        from src.auth.service import AuthService
+        from auth.service import AuthService
 
         auth = AuthService()
         password = "TestPassword123!"  # noqa: S105
@@ -47,7 +47,7 @@ class TestAuthServiceTokens:
 
     def test_create_access_token_returns_string(self):
         """create_access_token retourne un token string."""
-        from src.auth.service import AuthService
+        from auth.service import AuthService
 
         auth = AuthService()
         data = {"sub": "user-123", "username": "testuser"}
@@ -59,7 +59,7 @@ class TestAuthServiceTokens:
 
     def test_create_refresh_token_returns_string(self):
         """create_refresh_token retourne un token string."""
-        from src.auth.service import AuthService
+        from auth.service import AuthService
 
         auth = AuthService()
         data = {"sub": "user-123"}
@@ -71,7 +71,7 @@ class TestAuthServiceTokens:
 
     def test_verify_token_valid_access_token(self):
         """verify_token decode un token valide."""
-        from src.auth.service import AuthService
+        from auth.service import AuthService
 
         auth = AuthService()
         data = {"sub": "user-123", "username": "testuser"}
@@ -84,7 +84,7 @@ class TestAuthServiceTokens:
 
     def test_verify_token_wrong_type_raises(self):
         """verify_token leve une exception si le type ne correspond pas."""
-        from src.auth.service import AuthService
+        from auth.service import AuthService
         from fastapi import HTTPException
 
         auth = AuthService()

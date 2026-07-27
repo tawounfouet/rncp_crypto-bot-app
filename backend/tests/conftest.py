@@ -2,15 +2,15 @@
 Configuration pytest pour les tests du backend.
 
 Fixtures centralisees :
-- PYTHONPATH configuration
 - mock_settings : mock des settings applicatifs
 - db_engine / db_session : base SQLite en memoire pour tests d'integration
 - patch_db_session : remplace get_db_session par la session de test
+
+Le PYTHONPATH (backend/src + racine du repo pour `utils`) est fourni par l'appelant
+(make test-backend, make test-coverage, CI) -- ce fichier ne manipule plus sys.path.
 """
 
-import sys
 from contextlib import contextmanager
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -18,11 +18,6 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from shared.models.base import Base
-
-# Ajouter le repertoire backend au PYTHONPATH
-backend_dir = Path(__file__).resolve().parent.parent.parent
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
 
 
 # =============================================================================
@@ -51,8 +46,8 @@ def mock_settings():
     mock.DATABASE_ECHO = False
     mock.SQLITE_DB_PATH = "test.sqlite3"
 
-    with patch("src.shared.config.settings.get_settings", return_value=mock):
-        with patch("src.shared.config.settings.settings", mock):
+    with patch("shared.config.settings.get_settings", return_value=mock):
+        with patch("shared.config.settings.settings", mock):
             yield mock
 
 

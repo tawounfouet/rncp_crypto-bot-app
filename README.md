@@ -20,12 +20,9 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
 ├── scripts/
 │   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles
-│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests si code modifie
-│   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev
-│   ├── push.sh                 # Push sur le remote
-│   ├── run_lint.sh             # Linting local (legacy, preferer make lint)
-│   ├── run_tests.sh            # Tests locaux (legacy, preferer make test)
-│   └── docker_status.sh        # Statut des containers Docker
+│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests cibles si code modifie
+│   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev (outil perso)
+│   └── generate-requirements.py # Compilation des requirements depuis versions.env
 ├── .semgrep/                   # Regles de securite Semgrep
 ├── init-scripts/               # Scripts d'init PostgreSQL
 ├── docker-compose.yml          # Developpement local
@@ -225,10 +222,10 @@ Pour les activer ponctuellement : `make prod-debug-up` / `make prod-debug-down`.
 
 | Script | Description |
 |--------|-------------|
-| `scripts/check-infra.sh` | Validation coherence infra (8 checks) |
-| `scripts/run-tests-if-needed.sh` | Pre-commit : lint + tests si code Python modifie |
-| `scripts/dev-deploy.sh` | Build + push + restart K8s namespace dev |
-| `scripts/docker_status.sh` | Statut des containers Docker |
+| `scripts/check-infra.sh` | Validation coherence infra (10 checks) |
+| `scripts/run-tests-if-needed.sh` | Pre-commit : lint + tests cibles sur les zones modifiees |
+| `scripts/dev-deploy.sh` | Build + push + restart K8s namespace dev (outil perso) |
+| `scripts/generate-requirements.py` | Compilation des requirements depuis versions.env |
 
 ## Commandes Makefile
 
@@ -273,7 +270,7 @@ interface de visualisation et d'alerte.
 ```bash
 # Le PYTHONPATH est gere automatiquement par make test
 # Pour lancer pytest manuellement :
-PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+PYTHONPATH=backend/src:. .venv/bin/pytest backend/tests -v
 ```
 
 ### Les containers ne demarrent pas

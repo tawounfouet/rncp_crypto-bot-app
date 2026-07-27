@@ -122,7 +122,7 @@ verify: ## Verifier que tous les services installes sont presents et healthy (pl
 	cd ../crypto-bot-infra/ansible && ansible-playbook verify.yml -i inventories/dev
 
 test-backend: ## Lancer les tests unitaires backend
-	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest backend/src/tests -v
+	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest backend/tests -v
 
 test-frontend: ## Lancer les tests frontend mock-first
 	cd frontend && ../$(VENV_PYTHON) -m pytest tests -q
@@ -135,7 +135,7 @@ test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils, un
 # chacun leur propre package "utils" (utils/ a la racine vs frontend/src/utils/), qui se
 # marchent dessus des que les deux repertoires sont sur le meme PYTHONPATH. D'ou 2 invocations
 # separees, comme test-backend/test-frontend/test-utils.
-	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest --cov=backend/src --cov=utils --cov-report=term-missing backend/src/tests utils/tests
+	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest --cov=backend/src --cov=utils --cov-report=term-missing backend/tests utils/tests
 	cd frontend && PYTHONPATH=src ../$(VENV_PYTHON) -m pytest --cov=src --cov-report=term-missing tests
 
 test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
@@ -155,12 +155,14 @@ ci-test: ## Rejouer localement le job CI test:integration (build image test + te
 	exit $$STATUS
 
 lint: ## Lancer ruff check + format
-	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ --output-format=concise
-	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/
+# models/ exclu : test-models a des echecs preexistants (matplotlib manquant), pas encore
+# dans le perimetre lint/tests automatique -- cf. commentaire sur la cible `test`.
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ --output-format=concise
+	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/ utils/ jobs/
 
 lint-fix: ## Corriger automatiquement les erreurs ruff
-	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ --fix
-	$(VENV_PYTHON) -m ruff format backend/src/ frontend/src/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ --fix
+	$(VENV_PYTHON) -m ruff format backend/src/ frontend/src/ utils/ jobs/
 
 # ===========================================================================
 # Outils

@@ -264,7 +264,7 @@ crypto-bot-app/
 │       └── tests/{unit,integration} # ses propres tests
 │
 ├── backend/                         # utilise cryptobot-core
-│   └── src/tests/{unit,integration,fixtures}
+│   ├── tests/{unit,integration,fixtures}
 │
 ├── jobs/                            # utilise cryptobot-core (le collecteur Airflow)
 │   └── tests/{unit,integration}

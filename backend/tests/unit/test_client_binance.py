@@ -19,10 +19,10 @@ class TestClientBinanceInit:
             "BINANCE_TESTNET_API_SECRET": "test_secret",
         },
     )
-    @patch("src.market.clients.binance.Client")
+    @patch("market.clients.binance.Client")
     def test_init_with_valid_credentials(self, mock_client):
         """Initialisation réussie avec des credentials valides."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         client = ClientBinance()
 
@@ -33,15 +33,15 @@ class TestClientBinanceInit:
     @patch.dict("os.environ", {}, clear=True)
     def test_init_without_credentials_raises(self):
         """Initialisation échoue sans credentials."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         with pytest.raises(ValueError, match="Clés API Binance manquantes"):
             ClientBinance()
 
-    @patch("src.market.clients.binance.Client")
+    @patch("market.clients.binance.Client")
     def test_init_with_explicit_credentials(self, mock_client):
         """Initialisation réussie avec des credentials fournis explicitement."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         client = ClientBinance(api_key="explicit_key", api_secret="explicit_secret")
 
@@ -53,10 +53,10 @@ class TestClientBinanceInit:
 class TestClientBinanceFromUserSettings:
     """Tests pour la classmethod from_user_settings."""
 
-    @patch("src.market.clients.binance.Client")
+    @patch("market.clients.binance.Client")
     def test_from_user_settings_uses_decrypted_credentials(self, mock_client_class):
         """from_user_settings cree un client avec les credentials dechiffres du user."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         mock_settings = MagicMock()
         mock_settings.get_api_key.return_value = "decrypted_key"
@@ -71,7 +71,7 @@ class TestClientBinanceFromUserSettings:
 
     def test_from_user_settings_raises_without_credentials(self):
         """from_user_settings leve ValueError si les credentials sont absents."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         mock_settings = MagicMock()
         mock_settings.get_api_key.return_value = None
@@ -91,10 +91,10 @@ class TestClientBinanceGetPrice:
             "BINANCE_TESTNET_API_SECRET": "test_secret",
         },
     )
-    @patch("src.market.clients.binance.Client")
+    @patch("market.clients.binance.Client")
     def test_get_price_success(self, mock_client_class):
         """get_price retourne le prix correctement."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         mock_client = MagicMock()
         mock_client.get_symbol_ticker.return_value = {
@@ -117,10 +117,10 @@ class TestClientBinanceGetPrice:
             "BINANCE_TESTNET_API_SECRET": "test_secret",
         },
     )
-    @patch("src.market.clients.binance.Client")
+    @patch("market.clients.binance.Client")
     def test_get_price_api_error_returns_none(self, mock_client_class):
         """get_price retourne None en cas d'erreur API."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
         from binance.exceptions import BinanceAPIException
 
         mock_client = MagicMock()
@@ -147,10 +147,10 @@ class TestClientBinanceGetAccountBalances:
             "BINANCE_TESTNET_API_SECRET": "test_secret",
         },
     )
-    @patch("src.market.clients.binance.Client")
+    @patch("market.clients.binance.Client")
     def test_get_account_balances_filters_zero(self, mock_client_class):
         """get_account_balances retourne seulement les soldes > 0."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         mock_client = MagicMock()
         mock_client.get_account.return_value = {
@@ -179,10 +179,10 @@ class TestClientBinanceGetHistoricalKlines:
             "BINANCE_TESTNET_API_SECRET": "test_secret",
         },
     )
-    @patch("src.market.clients.binance.Client")
+    @patch("market.clients.binance.Client")
     def test_get_historical_klines_success(self, mock_client_class):
         """get_historical_klines retourne les données OHLCV."""
-        from src.market.clients.binance import ClientBinance
+        from market.clients.binance import ClientBinance
 
         mock_klines = [
             [1640000000000, "50000", "51000", "49000", "50500", "100"],

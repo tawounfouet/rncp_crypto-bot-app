@@ -13,27 +13,27 @@ class TestQuotes:
     """Tests pour src/market/clients/quotes.py."""
 
     def test_get_default_quote_binance(self):
-        from src.market.clients.quotes import get_default_quote
+        from market.clients.quotes import get_default_quote
 
         assert get_default_quote("binance") == "USDT"
 
     def test_get_default_quote_kraken(self):
-        from src.market.clients.quotes import get_default_quote
+        from market.clients.quotes import get_default_quote
 
         assert get_default_quote("kraken") == "EUR"
 
     def test_get_default_quote_unknown_falls_back_to_usdt(self):
-        from src.market.clients.quotes import get_default_quote
+        from market.clients.quotes import get_default_quote
 
         assert get_default_quote("unknown_exchange") == "USDT"
 
     def test_get_stable_quotes_kraken(self):
-        from src.market.clients.quotes import get_stable_quotes
+        from market.clients.quotes import get_stable_quotes
 
         assert get_stable_quotes("kraken") == ("EUR", "USDC")
 
     def test_get_stable_quotes_case_insensitive(self):
-        from src.market.clients.quotes import get_stable_quotes
+        from market.clients.quotes import get_stable_quotes
 
         assert get_stable_quotes("KRAKEN") == get_stable_quotes("kraken")
 
@@ -42,7 +42,7 @@ class TestCcxtClient:
     """Tests pour src/market/clients/ccxt_client.py (ccxt mocke, hors ligne)."""
 
     def _make_client(self, mock_ccxt_module, exchange="kraken", sandbox=False):
-        from src.market.clients.ccxt_client import CcxtClient
+        from market.clients.ccxt_client import CcxtClient
 
         with patch.dict("sys.modules", {"ccxt": mock_ccxt_module}):
             return CcxtClient(exchange, api_key="key", api_secret="secret", sandbox=sandbox)
@@ -189,9 +189,9 @@ class TestCcxtClient:
 class TestBinanceNativeClient:
     """Tests pour src/market/clients/binance_native.py (ClientBinance mocke)."""
 
-    @patch("src.market.clients.binance_native.ClientBinance")
+    @patch("market.clients.binance_native.ClientBinance")
     def test_get_balances_filters_zero_amounts(self, mock_binance_cls):
-        from src.market.clients.binance_native import BinanceNativeClient
+        from market.clients.binance_native import BinanceNativeClient
 
         mock_binance_cls.return_value.get_account_info.return_value = {
             "balances": [
@@ -207,9 +207,9 @@ class TestBinanceNativeClient:
         assert balances[0].asset == "BTC"
         assert balances[0].free == Decimal("1.0")
 
-    @patch("src.market.clients.binance_native.ClientBinance")
+    @patch("market.clients.binance_native.ClientBinance")
     def test_get_tickers_filters_by_quote(self, mock_binance_cls):
-        from src.market.clients.binance_native import BinanceNativeClient
+        from market.clients.binance_native import BinanceNativeClient
 
         mock_binance_cls.return_value.get_all_tickers.return_value = [
             {"symbol": "BTCUSDT", "price": "60000"},
@@ -228,8 +228,8 @@ class TestRegistry:
     """Tests pour src/market/clients/registry.py."""
 
     def test_get_exchange_client_defaults_to_ccxt(self):
-        from src.market.clients.ccxt_client import CcxtClient
-        from src.market.clients.registry import get_exchange_client
+        from market.clients.ccxt_client import CcxtClient
+        from market.clients.registry import get_exchange_client
 
         with patch.dict("sys.modules", {"ccxt": MagicMock()}):
             client = get_exchange_client("kraken", "key", "secret")
@@ -238,7 +238,7 @@ class TestRegistry:
         assert client.source == "kraken"
 
     def test_get_exchange_client_uses_native_trapdoor_when_registered(self):
-        from src.market.clients import registry
+        from market.clients import registry
 
         fake_native = MagicMock()
         registry._NATIVE_CLIENTS["fake_exchange"] = MagicMock(return_value=fake_native)
@@ -254,7 +254,7 @@ class TestFactory:
     """Tests pour src/market/clients/factory.py."""
 
     def test_from_user_settings_raises_without_credentials(self):
-        from src.market.clients.factory import from_user_settings
+        from market.clients.factory import from_user_settings
 
         mock_settings = MagicMock()
         mock_settings.get_api_key.return_value = None
@@ -264,8 +264,8 @@ class TestFactory:
             from_user_settings(mock_settings, "kraken")
 
     def test_from_user_settings_builds_client_with_decrypted_credentials(self):
-        from src.market.clients.ccxt_client import CcxtClient
-        from src.market.clients.factory import from_user_settings
+        from market.clients.ccxt_client import CcxtClient
+        from market.clients.factory import from_user_settings
 
         mock_settings = MagicMock()
         mock_settings.get_active_mode.return_value = "live"
@@ -280,14 +280,14 @@ class TestFactory:
         assert isinstance(client, CcxtClient)
 
     def test_from_user_settings_passes_sandbox_flag_when_mode_is_sandbox(self):
-        from src.market.clients.factory import from_user_settings
+        from market.clients.factory import from_user_settings
 
         mock_settings = MagicMock()
         mock_settings.get_active_mode.return_value = "sandbox"
         mock_settings.get_api_key.return_value = "sandbox_key"
         mock_settings.get_api_secret.return_value = "sandbox_secret"
 
-        with patch("src.market.clients.factory.get_exchange_client") as mock_get_client:
+        with patch("market.clients.factory.get_exchange_client") as mock_get_client:
             from_user_settings(mock_settings, "binance")
 
         mock_settings.get_api_key.assert_called_once_with("binance", mode="sandbox")
@@ -298,7 +298,7 @@ class TestFactory:
     def test_from_user_settings_falls_back_to_live_credentials_for_kraken_style_sandbox(self):
         """Kraken n'a pas de cles sandbox : mode actif = sandbox mais les cles live doivent
         etre utilisees (le CcxtClient applique alors validate=true, pas un jeu de cles different)."""
-        from src.market.clients.factory import from_user_settings
+        from market.clients.factory import from_user_settings
 
         mock_settings = MagicMock()
         mock_settings.get_active_mode.return_value = "sandbox"
@@ -312,7 +312,7 @@ class TestFactory:
         mock_settings.get_api_key.side_effect = fake_get_api_key
         mock_settings.get_api_secret.side_effect = fake_get_api_secret
 
-        with patch("src.market.clients.factory.get_exchange_client") as mock_get_client:
+        with patch("market.clients.factory.get_exchange_client") as mock_get_client:
             from_user_settings(mock_settings, "kraken")
 
         mock_get_client.assert_called_once_with(
