@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -10,6 +11,7 @@ pytest.importorskip("streamlit.testing.v1")
 from streamlit.testing.v1 import AppTest
 
 from mocks.db import create_mock_store
+from schemas.portfolio import PortfolioSnapshot, SystemStatus
 from utils.constants import EXCHANGE_SETUP_CTA_LABEL
 
 
@@ -359,6 +361,71 @@ def test_light_theme_tables_use_custom_light_table_renderer(
     _assert_no_exception(at)
     markdown_payload = " ".join(entry.value for entry in at.markdown)
     assert "theme-table-wrapper" in markdown_payload
+
+
+def _fake_snapshot(exchange: str, total_value_usdt: float, *, exchange_ok: bool = True) -> PortfolioSnapshot:
+    return PortfolioSnapshot(
+        system_status=SystemStatus(
+            backend_ok=True,
+            exchange=exchange,
+            exchange_ok=exchange_ok,
+            last_sync=datetime.now(UTC),
+        ),
+        total_value_usdt=total_value_usdt,
+        free_cash_usdt=0.0,
+        asset_count=0,
+        open_order_count=0,
+    )
+
+
+def test_portfolio_shows_a_card_per_configured_exchange_when_multiple_are_configured() -> None:
+    with (
+        patch(
+            "services.account_service.AccountService.list_configured_exchanges",
+            return_value=["binance", "kraken"],
+        ),
+        patch(
+            "services.portfolio_service.PortfolioService.list_snapshots",
+            return_value={
+                "binance": _fake_snapshot("binance", 1000.0),
+                "kraken": _fake_snapshot("kraken", 250.0, exchange_ok=False),
+            },
+        ),
+    ):
+        at = _run_app("pages/03_Portefeuille_Spot.py", auth_email="alice@cryptobot.dev")
+
+    _assert_no_exception(at)
+    metric_labels = [metric.label for metric in at.metric]
+    assert "Binance" in metric_labels
+    assert "Kraken" in metric_labels
+    orange_captions = [caption.value for caption in at.caption if ":orange[" in caption.value]
+    assert len(orange_captions) == 1  # seul Kraken (exchange_ok=False) doit afficher l'avertissement
+
+
+def test_portfolio_switching_active_exchange_via_the_list_updates_selected_exchange() -> None:
+    with (
+        patch(
+            "services.account_service.AccountService.list_configured_exchanges",
+            return_value=["binance", "kraken"],
+        ),
+        patch(
+            "services.portfolio_service.PortfolioService.list_snapshots",
+            return_value={
+                "binance": _fake_snapshot("binance", 1000.0),
+                "kraken": _fake_snapshot("kraken", 250.0),
+            },
+        ),
+    ):
+        at = _run_app("pages/03_Portefeuille_Spot.py", auth_email="alice@cryptobot.dev")
+        _assert_no_exception(at)
+        captions_before = [caption.value for caption in at.caption]
+        assert "**Actif**" in captions_before  # Binance (defaut) marque actif avant tout clic
+
+        voir_kraken = next(b for b in at.button if b.label == "Voir Kraken")
+        at = voir_kraken.click().run(timeout=20)
+        _assert_no_exception(at)
+
+    assert at.session_state["selected_exchange"] == "kraken"
 
 
 def test_portfolio_shows_exchange_prerequisite_without_kpis_when_not_configured() -> None:

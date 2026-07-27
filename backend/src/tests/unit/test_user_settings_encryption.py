@@ -91,10 +91,12 @@ def test_user_settings_encrypts_and_decrypts_binance_credentials(monkeypatch):
     settings.set_api_credentials("binance", "test_binance_key", "test_binance_secret")
 
     assert settings.api_keys is not None
-    assert settings.api_keys["binance"]["api_key"] != "test_binance_key"
-    assert settings.api_keys["binance"]["api_secret"] != "test_binance_secret"
-    assert isinstance(settings.api_keys["binance"]["api_key"], dict)
-    assert isinstance(settings.api_keys["binance"]["api_secret"], dict)
+    stored = settings.api_keys["binance"]["live"]
+    assert stored["api_key"] != "test_binance_key"
+    assert stored["api_secret"] != "test_binance_secret"
+    assert isinstance(stored["api_key"], dict)
+    assert isinstance(stored["api_secret"], dict)
+    assert settings.api_keys["binance"]["active_mode"] == "live"
 
     assert settings.get_api_key("binance") == "test_binance_key"
     assert settings.get_api_secret("binance") == "test_binance_secret"
@@ -177,3 +179,142 @@ def test_user_settings_get_api_key_unknown_exchange():
 
     assert settings.get_api_key("binance") is None
     assert settings.get_api_secret("binance") is None
+
+
+# =============================================================================
+# Tests UserSettings - mode simule/reel (live/sandbox)
+# =============================================================================
+
+
+def _settings_with_env(monkeypatch) -> UserSettings:
+    raw_key = base64.b64encode(os.urandom(32)).decode()
+    monkeypatch.setenv("EXCHANGE_ENC_KEY", raw_key)
+    return UserSettings(
+        id="test-id",
+        user_id="test-user",
+        theme="light",
+        notification_preferences={"email": True},
+        risk_profile="moderate",
+        api_keys=None,
+    )
+
+
+def test_set_api_credentials_defaults_to_live_mode_and_activates_it(monkeypatch):
+    settings = _settings_with_env(monkeypatch)
+
+    settings.set_api_credentials("binance", "key", "secret")
+
+    assert settings.get_active_mode("binance") == "live"
+    assert settings.has_credentials("binance", "live")
+    assert not settings.has_credentials("binance", "sandbox")
+
+
+def test_set_api_credentials_can_target_sandbox_mode_without_touching_live(monkeypatch):
+    settings = _settings_with_env(monkeypatch)
+
+    settings.set_api_credentials("binance", "live_key", "live_secret", mode="live")
+    settings.set_api_credentials("binance", "sandbox_key", "sandbox_secret", mode="sandbox")
+
+    assert settings.get_active_mode("binance") == "sandbox"  # dernier mode enregistre devient actif
+    assert settings.get_api_key("binance", mode="live") == "live_key"
+    assert settings.get_api_key("binance", mode="sandbox") == "sandbox_key"
+    assert settings.get_api_key("binance") == "sandbox_key"  # sans mode explicite -> mode actif
+
+
+def test_set_active_mode_switches_without_resupplying_keys(monkeypatch):
+    settings = _settings_with_env(monkeypatch)
+    settings.set_api_credentials("binance", "live_key", "live_secret", mode="live")
+    settings.set_api_credentials("binance", "sandbox_key", "sandbox_secret", mode="sandbox")
+
+    settings.set_active_mode("binance", "live")
+
+    assert settings.get_active_mode("binance") == "live"
+    assert settings.get_api_key("binance") == "live_key"
+
+
+def test_set_active_mode_raises_without_any_live_credentials(monkeypatch):
+    settings = _settings_with_env(monkeypatch)
+
+    with pytest.raises(ValueError, match="non configure"):
+        settings.set_active_mode("binance", "sandbox")
+
+
+def test_kraken_style_exchange_can_use_sandbox_mode_without_dedicated_keys(monkeypatch):
+    """Kraken n'a pas de cles sandbox distinctes : le mode 'sandbox' pilote validate=true
+    a l'execution, pas un jeu de cles different (cf. testnet-simulation-modes.md)."""
+    settings = _settings_with_env(monkeypatch)
+    settings.set_api_credentials("kraken", "real_key", "real_secret", mode="live")
+
+    settings.set_active_mode("kraken", "sandbox")
+
+    assert settings.get_active_mode("kraken") == "sandbox"
+    assert not settings.has_credentials("kraken", "sandbox")
+    # Les cles utilisees restent les cles reelles -- seul le comportement (validate=true)
+    # differe, decide par le mode actif au niveau du client d'execution, pas ici.
+    assert settings.get_api_key("kraken", mode="live") == "real_key"
+
+
+def test_remove_api_credentials_for_one_mode_keeps_the_other(monkeypatch):
+    settings = _settings_with_env(monkeypatch)
+    settings.set_api_credentials("binance", "live_key", "live_secret", mode="live")
+    settings.set_api_credentials("binance", "sandbox_key", "sandbox_secret", mode="sandbox")
+
+    settings.remove_api_credentials("binance", mode="sandbox")
+
+    assert settings.has_credentials("binance", "live")
+    assert not settings.has_credentials("binance", "sandbox")
+    assert settings.get_active_mode("binance") == "live"  # bascule automatique, sandbox supprime
+
+
+def test_remove_api_credentials_last_mode_removes_the_exchange_entirely(monkeypatch):
+    settings = _settings_with_env(monkeypatch)
+    settings.set_api_credentials("binance", "key", "secret", mode="live")
+
+    settings.remove_api_credentials("binance", mode="live")
+
+    assert "binance" not in (settings.api_keys or {})
+
+
+def test_legacy_flat_storage_is_read_as_live_mode_without_migration():
+    """Anciennes cles (avant le mode simule/reel) restent lisibles telles quelles."""
+    settings = UserSettings(
+        id="test-id",
+        user_id="test-user",
+        theme="light",
+        notification_preferences={"email": True},
+        risk_profile="moderate",
+        api_keys={"binance": {"api_key": "legacy_key", "api_secret": "legacy_secret"}},
+    )
+
+    assert settings.get_active_mode("binance") == "live"
+    assert settings.get_api_key("binance", mode="live") == "legacy_key"
+    assert settings.get_api_key("binance", mode="sandbox") is None
+
+
+def test_exchange_credentials_detail_reports_modes_and_active_mode(monkeypatch):
+    settings = _settings_with_env(monkeypatch)
+    settings.set_api_credentials("binance", "live_key", "live_secret", mode="live")
+    settings.set_api_credentials("binance", "sandbox_key", "sandbox_secret", mode="sandbox")
+    settings.set_api_credentials("kraken", "real_key", "real_secret", mode="live")
+
+    detail = settings.exchange_credentials_detail()
+
+    assert detail == {
+        "binance": {"live": True, "sandbox": True, "active_mode": "sandbox"},
+        "kraken": {"live": True, "sandbox": False, "active_mode": "live"},
+    }
+
+
+def test_exchange_credentials_detail_handles_legacy_storage():
+    settings = UserSettings(
+        id="test-id",
+        user_id="test-user",
+        theme="light",
+        notification_preferences={"email": True},
+        risk_profile="moderate",
+        api_keys={"binance": {"api_key": "legacy_key", "api_secret": "legacy_secret"}},
+    )
+
+    assert settings.exchange_credentials_detail() == {
+        "binance": {"live": True, "sandbox": False, "active_mode": "live"},
+    }

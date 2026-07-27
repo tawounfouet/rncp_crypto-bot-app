@@ -101,10 +101,12 @@ class BackendApiClient(AuthApiClient):
 
     # ─── Trading ─────────────────────────────────────────────────────────────
 
-    def get_portfolio(self, access_token: str) -> ApiResponse:
+    def get_portfolio(self, access_token: str, *, exchange: str | None = None) -> ApiResponse:
+        params = {"exchange": exchange} if exchange else None
         return self._request(
             "GET",
             f"{API_PREFIX}/trading/portfolio",
+            query_params=params,
             access_token=access_token,
         )
 

@@ -462,3 +462,87 @@ class TestCascadeDelete:
             UserSession.user_id == created.id
         ).all()
         assert len(sessions) == 0
+
+
+class TestUserSettingsCredentialModes:
+    """Tests d'integration pour le mode simule/reel (live/sandbox) des cles API."""
+
+    def _create_user(self, email: str):
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+
+        service = UserService()
+        user = service.create_user(UserCreate(
+            email=email,
+            username=email.split("@")[0],
+            password="SecurePass123!",  # noqa: S106
+        ))
+        return service, user
+
+    def test_set_live_and_sandbox_credentials_then_switch_active_mode(self, patch_db_session, monkeypatch):
+        import base64
+        import os
+
+        monkeypatch.setenv("EXCHANGE_ENC_KEY", base64.b64encode(os.urandom(32)).decode())
+        from auth.schemas import UserSettingsUpdate
+
+        service, user = self._create_user("modes1@test.com")
+
+        service.update_user_settings(
+            user.id,
+            UserSettingsUpdate(exchange="binance", api_key="live_key", api_secret="live_secret", mode="live"),
+        )
+        service.update_user_settings(
+            user.id,
+            UserSettingsUpdate(
+                exchange="binance", api_key="sandbox_key", api_secret="sandbox_secret", mode="sandbox"
+            ),
+        )
+
+        settings = service.get_user_settings(user.id)
+        assert settings["exchange_credentials"]["binance"] == {
+            "live": True,
+            "sandbox": True,
+            "active_mode": "sandbox",  # dernier mode enregistre = actif
+        }
+
+        result = service.update_user_settings(user.id, UserSettingsUpdate(exchange="binance", mode="live"))
+
+        assert result["exchange_credentials"]["binance"]["active_mode"] == "live"
+
+    def test_switch_active_mode_without_existing_credentials_raises_400(self, patch_db_session, monkeypatch):
+        import base64
+        import os
+
+        monkeypatch.setenv("EXCHANGE_ENC_KEY", base64.b64encode(os.urandom(32)).decode())
+        from fastapi import HTTPException
+
+        from auth.schemas import UserSettingsUpdate
+
+        service, user = self._create_user("modes2@test.com")
+
+        with pytest.raises(HTTPException) as exc_info:
+            service.update_user_settings(user.id, UserSettingsUpdate(exchange="binance", mode="live"))
+
+        assert exc_info.value.status_code == 400
+
+    def test_kraken_active_mode_switches_without_a_second_credential_set(self, patch_db_session, monkeypatch):
+        import base64
+        import os
+
+        monkeypatch.setenv("EXCHANGE_ENC_KEY", base64.b64encode(os.urandom(32)).decode())
+        from auth.schemas import UserSettingsUpdate
+
+        service, user = self._create_user("modes3@test.com")
+
+        service.update_user_settings(
+            user.id,
+            UserSettingsUpdate(exchange="kraken", api_key="real_key", api_secret="real_secret", mode="live"),
+        )
+        result = service.update_user_settings(user.id, UserSettingsUpdate(exchange="kraken", mode="sandbox"))
+
+        assert result["exchange_credentials"]["kraken"] == {
+            "live": True,
+            "sandbox": False,  # jamais de cles sandbox pour Kraken, seul le mode actif change
+            "active_mode": "sandbox",
+        }

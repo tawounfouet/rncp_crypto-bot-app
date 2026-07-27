@@ -41,11 +41,11 @@ class TestQuotes:
 class TestCcxtClient:
     """Tests pour src/market/clients/ccxt_client.py (ccxt mocke, hors ligne)."""
 
-    def _make_client(self, mock_ccxt_module, exchange="kraken"):
+    def _make_client(self, mock_ccxt_module, exchange="kraken", sandbox=False):
         from src.market.clients.ccxt_client import CcxtClient
 
         with patch.dict("sys.modules", {"ccxt": mock_ccxt_module}):
-            return CcxtClient(exchange, api_key="key", api_secret="secret")
+            return CcxtClient(exchange, api_key="key", api_secret="secret", sandbox=sandbox)
 
     def _mock_ccxt_module(self, exchange_instance):
         mock_ccxt = MagicMock()
@@ -61,6 +61,61 @@ class TestCcxtClient:
 
         assert client.source == "kraken"
         mock_ccxt.kraken.assert_called_once_with({"apiKey": "key", "secret": "secret", "enableRateLimit": True})
+
+    def test_sandbox_true_activates_ccxt_sandbox_mode_when_exchange_supports_it(self):
+        exchange_instance = MagicMock()
+        exchange_instance.urls = {"test": "https://testnet.example", "api": "https://api.example"}
+
+        self._make_client(self._mock_ccxt_module(exchange_instance), exchange="binance", sandbox=True)
+
+        exchange_instance.set_sandbox_mode.assert_called_once_with(True)
+
+    def test_sandbox_true_falls_back_to_validate_only_when_test_url_is_present_but_none(self):
+        """Regression : ccxt.kraken().urls contient bien la cle "test" mais avec la valeur
+        None (verifie contre le vrai ccxt le 2026-07-27) -- "test" in urls vaut True alors
+        qu'il ne faut PAS activer set_sandbox_mode (ca plante cote ccxt sur un clone(None))."""
+        exchange_instance = MagicMock()
+        exchange_instance.urls = {"api": "https://api.kraken.com", "test": None}
+
+        self._make_client(self._mock_ccxt_module(exchange_instance), exchange="kraken", sandbox=True)
+
+        exchange_instance.set_sandbox_mode.assert_not_called()
+
+    def test_sandbox_true_falls_back_to_validate_only_when_exchange_has_no_testnet(self):
+        """Cas Kraken : pas d'URL testnet -> pas de set_sandbox_mode, juste validate=true a l'ordre."""
+        exchange_instance = MagicMock()
+        exchange_instance.urls = {"api": "https://api.kraken.com"}
+        exchange_instance.create_order.return_value = {
+            "id": None,  # Kraken en mode validate ne renvoie jamais d'id d'ordre
+            "side": "buy",
+            "type": "market",
+            "status": "closed",
+            "amount": "0.1",
+        }
+
+        client = self._make_client(self._mock_ccxt_module(exchange_instance), exchange="kraken", sandbox=True)
+        client.place_order("BTCEUR", "buy", "market", Decimal("0.1"))
+
+        exchange_instance.set_sandbox_mode.assert_not_called()
+        exchange_instance.create_order.assert_called_once_with(
+            "BTC/EUR", "market", "buy", 0.1, None, {"validate": True}
+        )
+
+    def test_sandbox_false_never_sets_validate_flag(self):
+        exchange_instance = MagicMock()
+        exchange_instance.urls = {"api": "https://api.kraken.com"}
+        exchange_instance.create_order.return_value = {
+            "id": "1",
+            "side": "buy",
+            "type": "market",
+            "status": "closed",
+            "amount": "0.1",
+        }
+
+        client = self._make_client(self._mock_ccxt_module(exchange_instance), exchange="kraken", sandbox=False)
+        client.place_order("BTCEUR", "buy", "market", Decimal("0.1"))
+
+        exchange_instance.create_order.assert_called_once_with("BTC/EUR", "market", "buy", 0.1, None, {})
 
     def test_get_balances_filters_zero_amounts(self):
         exchange_instance = MagicMock()
@@ -106,7 +161,7 @@ class TestCcxtClient:
 
         result = client.place_order("BTCEUR", "buy", "market", Decimal("0.1"))
 
-        exchange_instance.create_order.assert_called_once_with("BTC/EUR", "market", "buy", 0.1, None)
+        exchange_instance.create_order.assert_called_once_with("BTC/EUR", "market", "buy", 0.1, None, {})
         assert result.order_id == "123"
         assert result.symbol == "BTCEUR"
         assert result.quantity == Decimal("0.1")
@@ -213,12 +268,53 @@ class TestFactory:
         from src.market.clients.factory import from_user_settings
 
         mock_settings = MagicMock()
+        mock_settings.get_active_mode.return_value = "live"
         mock_settings.get_api_key.return_value = "decrypted_key"
         mock_settings.get_api_secret.return_value = "decrypted_secret"
 
         with patch.dict("sys.modules", {"ccxt": MagicMock()}):
             client = from_user_settings(mock_settings, "kraken")
 
-        mock_settings.get_api_key.assert_called_once_with("kraken")
-        mock_settings.get_api_secret.assert_called_once_with("kraken")
+        mock_settings.get_api_key.assert_called_once_with("kraken", mode="live")
+        mock_settings.get_api_secret.assert_called_once_with("kraken", mode="live")
         assert isinstance(client, CcxtClient)
+
+    def test_from_user_settings_passes_sandbox_flag_when_mode_is_sandbox(self):
+        from src.market.clients.factory import from_user_settings
+
+        mock_settings = MagicMock()
+        mock_settings.get_active_mode.return_value = "sandbox"
+        mock_settings.get_api_key.return_value = "sandbox_key"
+        mock_settings.get_api_secret.return_value = "sandbox_secret"
+
+        with patch("src.market.clients.factory.get_exchange_client") as mock_get_client:
+            from_user_settings(mock_settings, "binance")
+
+        mock_settings.get_api_key.assert_called_once_with("binance", mode="sandbox")
+        mock_get_client.assert_called_once_with(
+            "binance", api_key="sandbox_key", api_secret="sandbox_secret", sandbox=True
+        )
+
+    def test_from_user_settings_falls_back_to_live_credentials_for_kraken_style_sandbox(self):
+        """Kraken n'a pas de cles sandbox : mode actif = sandbox mais les cles live doivent
+        etre utilisees (le CcxtClient applique alors validate=true, pas un jeu de cles different)."""
+        from src.market.clients.factory import from_user_settings
+
+        mock_settings = MagicMock()
+        mock_settings.get_active_mode.return_value = "sandbox"
+
+        def fake_get_api_key(exchange, mode=None):
+            return None if mode == "sandbox" else "live_key"
+
+        def fake_get_api_secret(exchange, mode=None):
+            return None if mode == "sandbox" else "live_secret"
+
+        mock_settings.get_api_key.side_effect = fake_get_api_key
+        mock_settings.get_api_secret.side_effect = fake_get_api_secret
+
+        with patch("src.market.clients.factory.get_exchange_client") as mock_get_client:
+            from_user_settings(mock_settings, "kraken")
+
+        mock_get_client.assert_called_once_with(
+            "kraken", api_key="live_key", api_secret="live_secret", sandbox=True
+        )

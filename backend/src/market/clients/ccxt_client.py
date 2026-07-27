@@ -15,10 +15,25 @@ logger = logging.getLogger(__name__)
 class CcxtClient(ExchangeClient):
     """Client d'execution pour tout exchange supporte par ccxt."""
 
-    def __init__(self, exchange: str, api_key: str, api_secret: str):
+    def __init__(self, exchange: str, api_key: str, api_secret: str, sandbox: bool = False):
         self.source = exchange
         self._ccxt_id = CCXT_IDS.get(exchange, exchange)
         self._client = self._build_client(api_key, api_secret)
+
+        # Deux mecanismes selon ce que l'exchange permet reellement (cf.
+        # docs/testnet-simulation-modes.md) : bascule sur l'URL testnet si possible, sinon
+        # le mode "sandbox" se traduit uniquement par validate=true au moment de l'ordre
+        # (cf. _order_params). Jamais les deux, jamais une erreur si l'exchange n'a pas de
+        # testnet -- c'est un cas normal (Kraken), pas une mauvaise configuration.
+        self._validate_only = False
+        if sandbox:
+            # cf. utils/connectors/exchanges/registry.py::supports_sandbox_credentials : la cle
+            # "test" peut exister avec une valeur None (ex. Kraken) -- il faut verifier la
+            # valeur, pas juste la presence de la cle, sinon set_sandbox_mode() plante.
+            if self._client.urls.get("test") is not None:
+                self._client.set_sandbox_mode(True)
+            else:
+                self._validate_only = True
 
     def _build_client(self, api_key: str, api_secret: str):
         import ccxt  # import paresseux : les modules qui n'executent pas d'ordres n'ont pas besoin de ccxt
@@ -61,12 +76,14 @@ class CcxtClient(ExchangeClient):
         price: Decimal | None = None,
     ) -> OrderResult:
         native_symbol = CcxtDriver.to_native_symbol(symbol)
+        params = {"validate": True} if self._validate_only else {}
         raw = self._client.create_order(
             native_symbol,
             order_type.lower(),
             side.lower(),
             float(quantity),
             float(price) if price is not None else None,
+            params,
         )
         return self._to_order_result(symbol, raw)
 

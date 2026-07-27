@@ -36,7 +36,11 @@ from market.schemas import (
     TradingPair,
 )
 from market.service import MarketDataService
-from utils.connectors.exchanges.registry import get_market_data_driver, list_configured_exchanges
+from utils.connectors.exchanges.registry import (
+    get_market_data_driver,
+    list_configured_exchanges,
+    supports_sandbox_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +76,11 @@ async def list_public_exchanges() -> ExchangeListResponse:
     ids = list_configured_exchanges()
     return ExchangeListResponse(
         data=[
-            ExchangeOption(id=exchange_id, label=EXCHANGE_LABELS.get(exchange_id, exchange_id.capitalize()))
+            ExchangeOption(
+                id=exchange_id,
+                label=EXCHANGE_LABELS.get(exchange_id, exchange_id.capitalize()),
+                supports_sandbox=supports_sandbox_credentials(exchange_id),
+            )
             for exchange_id in ids
         ]
     )

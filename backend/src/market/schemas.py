@@ -243,6 +243,7 @@ class ExchangeOption(BaseModel):
 
     id: str
     label: str
+    supports_sandbox: bool = False
 
 
 class ExchangeListResponse(BaseResponse):

@@ -76,6 +76,7 @@ class UserSettingsUpdate(BaseModel):
     exchange: str | None = None
     api_key: str | None = None
     api_secret: str | None = None
+    mode: str | None = Field(None, pattern="^(live|sandbox)$", description="Slot cible: live ou sandbox")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -90,6 +91,7 @@ class UserSettingsUpdate(BaseModel):
                 "exchange": "kraken",
                 "api_key": "your_api_key",
                 "api_secret": "your_api_secret",
+                "mode": "live",
             }
         }
     )

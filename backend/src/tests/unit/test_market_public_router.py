@@ -27,6 +27,14 @@ def test_list_public_exchanges_returns_configured_exchanges(client: TestClient) 
     assert {"binance", "kraken"}.issubset(ids)
 
 
+def test_list_public_exchanges_reports_sandbox_support_per_exchange(client: TestClient) -> None:
+    response = client.get("/market/exchanges")
+
+    by_id = {item["id"]: item["supports_sandbox"] for item in response.json()["data"]}
+    assert by_id["binance"] is True
+    assert by_id["kraken"] is False  # pas de testnet Spot self-service
+
+
 def test_list_public_exchanges_requires_no_authentication(client: TestClient) -> None:
     response = client.get("/market/exchanges")  # aucun header Authorization envoyé
 

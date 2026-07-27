@@ -18,9 +18,10 @@ from components.prerequisites import render_exchange_prerequisite_state
 from components.tables import render_dataframe
 from layouts.page_shell import setup_page
 from prerequisites.exchange import evaluate_exchange_prerequisite
+from services.account_service import AccountService
 from services.base import ServiceError
 from services.portfolio_service import PortfolioService
-from state.session import get_theme_mode
+from state.session import get_selected_exchange, get_theme_mode, set_selected_exchange
 from theme.plotly import pie_color_sequence, themed_layout
 from utils.formatters import format_currency, format_datetime
 from utils.selectors import models_to_dataframe, top_assets_with_others
@@ -50,6 +51,36 @@ def _to_df(items: list) -> pd.DataFrame:
     return models_to_dataframe(items)
 
 
+def _render_portfolio_list(store, service: PortfolioService) -> None:
+    configured = AccountService(store).list_configured_exchanges()
+    if len(configured) <= 1:
+        return  # rien a comparer avec un seul exchange configure
+
+    render_section_title("Mes portefeuilles")
+    snapshots = service.list_snapshots(configured)
+    current = get_selected_exchange()
+
+    columns = st.columns(len(configured))
+    for column, exchange_id in zip(columns, configured, strict=True):
+        snapshot = snapshots[exchange_id]
+        with column:
+            st.metric(
+                label=exchange_id.capitalize(),
+                value=format_currency(snapshot.total_value_usdt),
+            )
+            if not snapshot.system_status.exchange_ok:
+                st.caption(":orange[Cles invalides ou non configurees]")
+            if exchange_id == current:
+                st.caption("**Actif**")
+            elif compat_button(
+                f"Voir {exchange_id.capitalize()}", key=f"select_portfolio_{exchange_id}"
+            ):
+                set_selected_exchange(exchange_id)
+                st.rerun()
+
+    st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+
+
 def main() -> None:
     store, user = setup_page(title="Portefeuille Spot", icon="💼", page_key="portfolio")
     render_page_header(
@@ -63,6 +94,8 @@ def main() -> None:
         return
 
     service = PortfolioService(store)
+    _render_portfolio_list(store, service)
+
     theme_mode = get_theme_mode()
     try:
         with st.spinner("Chargement du portefeuille..."):

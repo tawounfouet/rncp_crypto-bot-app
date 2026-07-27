@@ -122,7 +122,7 @@ verify: ## Verifier que tous les services installes sont presents et healthy (pl
 	cd ../crypto-bot-infra/ansible && ansible-playbook verify.yml -i inventories/dev
 
 test-backend: ## Lancer les tests unitaires backend
-	PYTHONPATH=backend/src $(VENV_PYTHON) -m pytest backend/src/tests -v
+	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest backend/src/tests -v
 
 test-frontend: ## Lancer les tests frontend mock-first
 	cd frontend && ../$(VENV_PYTHON) -m pytest tests -q
@@ -130,8 +130,13 @@ test-frontend: ## Lancer les tests frontend mock-first
 test-utils: ## Lancer les tests de la couche connecteurs partagee (utils/)
 	PYTHONPATH=. $(VENV_PYTHON) -m pytest utils/tests -q -o cache_dir=/tmp/utils-pytest-cache
 
-test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils)
-	PYTHONPATH=backend/src $(VENV_PYTHON) -m pytest --cov=backend/src --cov=utils --cov-report=term-missing backend/src/tests utils/tests frontend/tests
+test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils, un rapport par couche)
+# NB: backend/utils et frontend ne peuvent PAS partager un seul process pytest : les deux ont
+# chacun leur propre package "utils" (utils/ a la racine vs frontend/src/utils/), qui se
+# marchent dessus des que les deux repertoires sont sur le meme PYTHONPATH. D'ou 2 invocations
+# separees, comme test-backend/test-frontend/test-utils.
+	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest --cov=backend/src --cov=utils --cov-report=term-missing backend/src/tests utils/tests
+	cd frontend && PYTHONPATH=src ../$(VENV_PYTHON) -m pytest --cov=src --cov-report=term-missing tests
 
 test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
 	PYTHONPATH=. $(VENV_PYTHON) -m pytest jobs/tests -q -o cache_dir=/tmp/utils-pytest-cache
