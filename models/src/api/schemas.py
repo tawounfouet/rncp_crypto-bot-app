@@ -37,3 +37,28 @@ class SignalResponse(BaseModel):
     generated_at: str
     latency_ms: float
     warnings: list[str]
+
+
+class BuildFeaturesRequest(BaseModel):
+    symbols: list[str]
+    interval: str
+    config: str = "config.yaml"
+
+
+class BuildFeaturesResult(BaseModel):
+    symbol: str
+    interval: str
+    rows: int
+
+
+class BuildFeaturesResponse(BaseModel):
+    results: list[BuildFeaturesResult]
+
+
+class TrainRandomForestRequest(BaseModel):
+    dataset: str
+    config: str = "config.yaml"
+
+
+class TrainRandomForestResponse(BaseModel):
+    artifact_dir: str

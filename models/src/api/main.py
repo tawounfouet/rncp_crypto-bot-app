@@ -6,10 +6,22 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 
-from src.api.schemas import HealthResponse, ModelInfo, ModelsResponse, SignalResponse
+from src.api.schemas import (
+    BuildFeaturesRequest,
+    BuildFeaturesResponse,
+    BuildFeaturesResult,
+    HealthResponse,
+    ModelInfo,
+    ModelsResponse,
+    SignalResponse,
+    TrainRandomForestRequest,
+    TrainRandomForestResponse,
+)
 from src.config.config_loader import load_config
 from src.data.storage import read_dataset
+from src.features.build import build_symbol_features
 from src.inference.signal import predict_random_forest_signal
+from src.training.train_random_forest import train_from_processed_dataset
 
 
 app = FastAPI(title="CryptoBot Models Training API", version="0.1.0")
@@ -64,3 +76,39 @@ def latest_signal(
     features = read_dataset(features_path)
     prediction = predict_random_forest_signal(artifact_path, features, symbol=symbol, interval=interval)
     return SignalResponse(**prediction.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# Pipeline interne (declenche par le DAG Airflow cryptobot_ml_pipeline).
+#
+# Ces routes existent pour que l'orchestrateur (Airflow) n'ait jamais besoin
+# d'installer torch/mlflow/scikit-learn dans son propre environnement Python :
+# ce conteneur (crypto-bot-ml-api) a deja ces dependances qui fonctionnent,
+# le DAG se contente d'un appel HTTP. Pas d'authentification car ces routes ne
+# sont joignables que depuis le reseau Docker interne (pas de port expose pour
+# elles specifiquement, /app/... est deja publie mais reserve a un usage
+# orchestrateur -> reseau interne dans ce projet).
+# ---------------------------------------------------------------------------
+
+
+@app.post("/internal/pipeline/features", response_model=BuildFeaturesResponse)
+def build_features(request: BuildFeaturesRequest) -> BuildFeaturesResponse:
+    results = []
+    for symbol in request.symbols:
+        try:
+            frame = build_symbol_features(symbol, request.interval, request.config)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500, detail=f"build_symbol_features failed for {symbol}: {exc}"
+            ) from exc
+        results.append(BuildFeaturesResult(symbol=symbol.upper(), interval=request.interval, rows=len(frame)))
+    return BuildFeaturesResponse(results=results)
+
+
+@app.post("/internal/pipeline/train-rf", response_model=TrainRandomForestResponse)
+def train_random_forest_endpoint(request: TrainRandomForestRequest) -> TrainRandomForestResponse:
+    try:
+        artifact_dir = train_from_processed_dataset(request.dataset, request.config)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"train_random_forest failed: {exc}") from exc
+    return TrainRandomForestResponse(artifact_dir=str(artifact_dir))

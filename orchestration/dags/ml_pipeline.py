@@ -15,6 +15,15 @@ ingérées par le DAG ``ingest_ohlcv_binance_to_minio`` :
 
 Planning : quotidien à 06:00 UTC (après les runs d'ingestion nocturnes).
 
+Les étapes ``build_features_*`` et ``train_random_forest`` sont déclenchées via un
+appel HTTP au conteneur ``crypto-bot-ml-api`` (routes ``/internal/pipeline/...``),
+plutôt que d'exécuter ``python -m src.main`` dans l'environnement Python d'Airflow.
+Raison : ml-api a déjà torch/mlflow/scikit-learn qui fonctionnent ; les installer
+en plus dans l'image Airflow (qui a son propre arbre de dépendances, providers
+compris) provoque des conflits de versions (ex: email-validator/pydantic requis
+par Flask-AppBuilder vs. celui tiré par une version récente de mlflow). Airflow
+orchestre, il n'a pas besoin d'héberger la stack ML.
+
 Prérequis Docker (docker-compose.yml) :
     Ajouter sous ``x-airflow-common > volumes`` :
         - ./models:/opt/airflow/models
@@ -23,14 +32,14 @@ Prérequis Docker (docker-compose.yml) :
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
+import requests
 from airflow import DAG
-from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
 logger = logging.getLogger(__name__)
@@ -41,7 +50,6 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.environ.get("PROJECT_ROOT", "/opt/airflow")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
-UTILS_DIR = os.path.join(PROJECT_ROOT, "utils")
 
 # Les jobs/ sont déjà montés dans Airflow → on peut importer deploy_model
 JOBS_PATH = os.path.join(PROJECT_ROOT, "jobs")
@@ -60,59 +68,87 @@ except ImportError:
 
 SYMBOLS = ["BTCUSDT", "ETHUSDT"]
 INTERVAL = "1h"
-CONFIG_PATH = os.path.join(MODELS_DIR, "config.yaml")
 
-# Dataset processed (output de build_features, input de train-rf)
-PROCESSED_DIR = os.path.join(MODELS_DIR, "data", "processed")
+# Dataset processed (output de build_features, input de train-rf). Chemin relatif au
+# cwd de crypto-bot-ml-api (/app), PAS a MODELS_DIR (bind-mount cote Airflow) : ml-api
+# execute ces routes dans son propre conteneur, dont /app/data pointe vers ./data a la
+# racine du repo (cf. docker-compose.yml), pas vers ./models/data (qui n'existe pas).
+PROCESSED_DIR = os.path.join("data", "processed")
 
-BACKEND_HEALTH_URL = os.environ.get(
-    "BACKEND_HEALTH_URL", "http://crypto-bot-backend:8009/health"
-)
 INFERENCE_URL = os.environ.get(
     "INFERENCE_URL", "http://crypto-bot-backend:8009/api/v1/inference"
 )
+ML_API_URL = os.environ.get("ML_API_URL", "http://crypto-bot-ml-api:8010")
+
+# Le training peut prendre plusieurs minutes sur le jeu de donnees complet.
+PIPELINE_HTTP_TIMEOUT_SECONDS = 900
 
 # ---------------------------------------------------------------------------
 # Utilitaires
 # ---------------------------------------------------------------------------
 
 
-def _python_env() -> dict[str, str]:
-    """Variables d'environnement pour les commandes Python du projet."""
-    env = os.environ.copy()
-    env.setdefault("PYTHONPATH", f"{UTILS_DIR}:{MODELS_DIR}")
-    return env
-
-
 def _feature_path(symbol: str) -> str:
     return os.path.join(PROCESSED_DIR, symbol.upper(), f"{INTERVAL}_features.parquet")
 
 
-def _feature_cmd(symbol: str) -> str:
-    """Commande Bash pour construire les features d'un symbole."""
-    return (
-        f"cd {MODELS_DIR} && python -m src.main features "
-        f"--config {CONFIG_PATH} "
-        f"--symbols {symbol} "
-        f"--interval {INTERVAL}"
+def _build_features_callable(symbol: str) -> None:
+    """Appelle POST /internal/pipeline/features sur crypto-bot-ml-api."""
+    response = requests.post(
+        f"{ML_API_URL}/internal/pipeline/features",
+        json={"symbols": [symbol], "interval": INTERVAL, "config": "config.yaml"},
+        timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
     )
+    response.raise_for_status()
+    logger.info("build_features %s: %s", symbol, response.json())
 
 
-def _train_cmd() -> str:
-    """Commande Bash pour entraîner le Random Forest."""
+def _train_random_forest_callable() -> None:
+    """Appelle POST /internal/pipeline/train-rf sur crypto-bot-ml-api."""
     dataset = _feature_path(SYMBOLS[0])
-    return (
-        f"cd {MODELS_DIR} && python -m src.main train-rf "
-        f"--config {CONFIG_PATH} "
-        f"--dataset {dataset}"
+    response = requests.post(
+        f"{ML_API_URL}/internal/pipeline/train-rf",
+        json={"dataset": dataset, "config": "config.yaml"},
+        timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
     )
+    response.raise_for_status()
+    logger.info("train_random_forest: %s", response.json())
+
+
+def _verify_inference_callable() -> None:
+    """Appelle /inference/predict avec un vrai vecteur de features (derniere ligne du
+    dataset traite), pas un features factice — un vecteur incomplet echoue en 400,
+    jamais en 200 (piege trouve dans la version initiale de ce DAG, jamais verifiee
+    en conditions reelles avant ce diagnostic)."""
+    import pandas as pd
+
+    feature_columns = requests.get(f"{INFERENCE_URL}/model", timeout=30).json()["feature_columns"]
+    dataset_path = os.path.join("/app", _feature_path(SYMBOLS[0]))
+    row = pd.read_parquet(dataset_path).iloc[-1]
+    features = {col: float(row[col]) for col in feature_columns}
+
+    response = requests.post(
+        f"{INFERENCE_URL}/predict",
+        json={"symbol": SYMBOLS[0], "interval": INTERVAL, "features": features},
+        timeout=60,
+    )
+    response.raise_for_status()
+    logger.info("verify_inference: %s", response.json())
 
 
 def _deploy_callable() -> None:
-    """Appelle le job de déploiement (importé depuis jobs/)."""
+    """Appelle le job de déploiement (importé depuis jobs/).
+
+    ``registry_root`` doit être explicite : le registre local est écrit par
+    crypto-bot-ml-api sous son propre cwd (/app/artifacts/registry), ce qui
+    correspond cote host a ``models/artifacts/registry``. Le defaut de
+    deploy_model.py ("artifacts/registry", relatif au cwd du process Airflow)
+    pointe vers un tout autre dossier -- jamais le bon.
+    """
     if not _DEPLOY_AVAILABLE:
         raise RuntimeError("deploy_model.py non disponible dans jobs/")
-    ok = _deploy(model_name="random_forest")
+    registry_root = Path(MODELS_DIR) / "artifacts" / "registry"
+    ok = _deploy(model_name="random_forest", registry_root=registry_root)
     if not ok:
         raise RuntimeError("Échec du déploiement du modèle random_forest")
 
@@ -143,25 +179,22 @@ with DAG(
     tags=["ml", "training", "deployment", "inference"],
 ) as dag:
 
-    # -- 1. Build features pour chaque symbole ---------------------------------
+    # -- 1. Build features pour chaque symbole (appel HTTP a crypto-bot-ml-api) ---
     build_tasks = []
     for symbol in SYMBOLS:
-        task = BashOperator(
+        task = PythonOperator(
             task_id=f"build_features_{symbol}_{INTERVAL}",
-            bash_command=_feature_cmd(symbol),
-            env=_python_env(),
-            cwd=MODELS_DIR,
+            python_callable=_build_features_callable,
+            op_kwargs={"symbol": symbol},
             retries=2,
             retry_delay=timedelta(minutes=2),
         )
         build_tasks.append(task)
 
-    # -- 2. Entraînement Random Forest -----------------------------------------
-    train_rf = BashOperator(
+    # -- 2. Entraînement Random Forest (appel HTTP a crypto-bot-ml-api) --------
+    train_rf = PythonOperator(
         task_id="train_random_forest",
-        bash_command=_train_cmd(),
-        env=_python_env(),
-        cwd=MODELS_DIR,
+        python_callable=_train_random_forest_callable,
         retries=1,
         retry_delay=timedelta(minutes=5),
     )
@@ -173,16 +206,9 @@ with DAG(
     )
 
     # -- 4. Vérification de l'API d'inférence -----------------------------------
-    verify = BashOperator(
+    verify = PythonOperator(
         task_id="verify_inference",
-        bash_command=(
-            f"curl -s -o /dev/null -w '%{{http_code}}' "
-            f"-X POST {INFERENCE_URL}/predict "
-            f"-H 'Content-Type: application/json' "
-            f"-d '{{\"symbol\": \"{SYMBOLS[0]}\", \"interval\": \"{INTERVAL}\", "
-            f"\"features\": {{\"rsi_14\": 50}}}}' "
-            f"| grep -q 200 || exit 1"
-        ),
+        python_callable=_verify_inference_callable,
     )
 
     # -- Ordonnancement ---------------------------------------------------------

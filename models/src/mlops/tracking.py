@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -89,7 +90,12 @@ def start_run(settings: AppSettings, model_name: str, run_id: str | None = None)
         json.dumps(dump_config_snapshot(settings), indent=2, default=str), encoding="utf-8"
     )
 
-    mlflow.set_tracking_uri(settings.mlops.tracking_uri)
+    # MLFLOW_TRACKING_URI (defini par docker-compose pour crypto-bot-ml-api, pointe
+    # vers le Postgres partage avec mlflow-ui) prime sur le sqlite local de
+    # config.yaml quand present -- sinon les runs restent invisibles depuis l'UI
+    # web, qui lit exclusivement ce Postgres.
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI") or settings.mlops.tracking_uri
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(settings.mlops.experiment_name)
 
     logger.info(

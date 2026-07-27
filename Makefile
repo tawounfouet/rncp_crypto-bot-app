@@ -33,7 +33,14 @@ generate-requirements: ## Generer les fichiers requirements.txt a partir de vers
 # Dev
 # ===========================================================================
 
-dev-up: generate-requirements ## Demarrer l'environnement dev (retry auto + backoff si le pull echoue)
+prepare-dirs: ## Corriger les permissions des dossiers bind-montes ecrits par des conteneurs non-root (uid different de l'hote)
+	@mkdir -p data models/logs models/artifacts
+	@for d in data models/logs models/artifacts; do \
+		chmod -R o+w "$$d" 2>/dev/null && echo ">>> prepare-dirs : $$d ouvert en ecriture (o+w)." || \
+		echo ">>> prepare-dirs : ATTENTION, impossible de chmod $$d (pas proprietaire) -- relancer avec 'sudo chmod -R o+w $$d' si un conteneur plante en PermissionError dessus." ; \
+	done
+
+dev-up: generate-requirements prepare-dirs ## Demarrer l'environnement dev (retry auto + backoff si le pull echoue)
 	@n=5; d=5; for i in $$(seq 1 $$n); do \
 		echo ">>> dev-up : tentative $$i/$$n" ; \
 		docker compose up -d && exit 0 ; \
