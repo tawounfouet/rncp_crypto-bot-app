@@ -60,7 +60,14 @@ class TestCcxtClient:
         client = self._make_client(mock_ccxt)
 
         assert client.source == "kraken"
-        mock_ccxt.kraken.assert_called_once_with({"apiKey": "key", "secret": "secret", "enableRateLimit": True})
+        mock_ccxt.kraken.assert_called_once_with(
+            {
+                "apiKey": "key",
+                "secret": "secret",
+                "enableRateLimit": True,
+                "options": {"defaultType": "spot", "fetchMarkets": ["spot"]},
+            }
+        )
 
     def test_sandbox_true_activates_ccxt_sandbox_mode_when_exchange_supports_it(self):
         exchange_instance = MagicMock()

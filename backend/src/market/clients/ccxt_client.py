@@ -38,7 +38,19 @@ class CcxtClient(ExchangeClient):
     def _build_client(self, api_key: str, api_secret: str):
         import ccxt  # import paresseux : les modules qui n'executent pas d'ordres n'ont pas besoin de ccxt
 
-        return getattr(ccxt, self._ccxt_id)({"apiKey": api_key, "secret": api_secret, "enableRateLimit": True})
+        return getattr(ccxt, self._ccxt_id)(
+            {
+                "apiKey": api_key,
+                "secret": api_secret,
+                "enableRateLimit": True,
+                # Bot Spot uniquement : evite que ccxt charge aussi les marches futures/inverse
+                # au demarrage (options.fetchMarkets par defaut de binance). En sandbox, le
+                # testnet futures (testnet.binancefuture.com) est un systeme distinct du testnet
+                # spot (testnet.binance.vision) et son indisponibilite fait echouer
+                # load_markets() pour TOUS les types, spot y compris.
+                "options": {"defaultType": "spot", "fetchMarkets": ["spot"]},
+            }
+        )
 
     def get_balances(self) -> list[Balance]:
         raw = self._client.fetch_balance()
