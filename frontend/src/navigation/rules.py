@@ -20,6 +20,13 @@ class NavPage:
 
 
 PAGES: dict[str, NavPage] = {
+    "market": NavPage(
+        key="market",
+        label="Marché",
+        path="pages/01_Marche.py",
+        show_when_anonymous=True,
+        show_when_authenticated=True,
+    ),
     "login": NavPage(
         key="login",
         label="Connexion",
@@ -87,9 +94,9 @@ def get_page(page_key: str) -> NavPage:
 
 def allowed_page_keys_in_sidebar(user: MockUser | None) -> list[str]:
     if user is None:
-        return ["login", "signup"]
+        return ["market", "login", "signup"]
 
-    keys = ["portfolio", "performance", "bot_control", "bot_config", "account"]
+    keys = ["market", "portfolio", "performance", "bot_control", "bot_config", "account"]
     if user.role == UserRole.ADMIN:
         keys.append("admin")
     return keys

@@ -204,3 +204,25 @@ class BackendApiClient(AuthApiClient):
             f"{API_PREFIX}/strategies/deployments/{deployment_id}/stop",
             access_token=access_token,
         )
+
+    # ─── Marché public (pas d'authentification) ────────────────────────────────
+
+    def get_public_exchanges(self) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/market/exchanges")
+
+    def get_public_prices(self, *, exchange: str, symbols: list[str] | None = None) -> ApiResponse:
+        params: dict[str, str] = {"exchange": exchange}
+        if symbols:
+            params["symbols"] = ",".join(symbols)
+        return self._request("GET", f"{API_PREFIX}/market/public/prices", query_params=params)
+
+    def get_public_klines(
+        self, *, exchange: str, symbol: str, interval: str = "1h", limit: int = 24
+    ) -> ApiResponse:
+        params: dict[str, str] = {
+            "exchange": exchange,
+            "symbols": symbol,
+            "interval": interval,
+            "limit": str(limit),
+        }
+        return self._request("GET", f"{API_PREFIX}/market/public/klines", query_params=params)

@@ -88,6 +88,7 @@ THEME_PALETTES: dict[ThemeMode, dict[str, str]] = {
         "badge_error_bg": "rgba(255, 90, 122, 0.15)",
         "badge_error_txt": "#FF9DB4",
         "badge_error_border": "rgba(255, 90, 122, 0.35)",
+        "chart_transparent": "rgba(0, 0, 0, 0)",
     },
     "light": {
         "bg_main": "#F6F8FC",
@@ -162,6 +163,7 @@ THEME_PALETTES: dict[ThemeMode, dict[str, str]] = {
         "badge_error_bg": "rgba(214, 66, 102, 0.12)",
         "badge_error_txt": "#A52C4B",
         "badge_error_border": "rgba(214, 66, 102, 0.3)",
+        "chart_transparent": "rgba(0, 0, 0, 0)",
     },
 }
 

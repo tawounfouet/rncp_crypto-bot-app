@@ -75,6 +75,49 @@ def _get_store_user():
 def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
     """Route les reponses stub selon le path et la methode."""
 
+    # ── /market/exchanges (public, pas d'auth) ───────────────────────────────
+    if "/market/exchanges" in path:
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {"id": "binance", "label": "Binance"},
+                {"id": "kraken", "label": "Kraken"},
+            ],
+        })
+
+    # ── /market/public/prices (public, pas d'auth) ───────────────────────────
+    if "/market/public/prices" in path:
+        exchange = (kwargs.get("query_params") or {}).get("exchange", "binance")
+        # Prix en string : le backend serialise ses champs Decimal en chaine JSON
+        # (comme le fait reellement FastAPI/pydantic), pas en nombre natif.
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {"symbol": "BTCUSDT", "exchange": exchange, "price": "65000.0", "as_of": "2024-01-01T00:00:00Z"},
+                {"symbol": "ETHUSDT", "exchange": exchange, "price": "3200.0", "as_of": "2024-01-01T00:00:00Z"},
+            ],
+            "warnings": [],
+        })
+
+    # ── /market/public/klines (public, pas d'auth) ───────────────────────────
+    if "/market/public/klines" in path:
+        exchange = (kwargs.get("query_params") or {}).get("exchange", "binance")
+        symbol = (kwargs.get("query_params") or {}).get("symbols", "BTCUSDT")
+        interval = (kwargs.get("query_params") or {}).get("interval", "1h")
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {
+                    "symbol": symbol, "exchange": exchange, "interval": interval,
+                    "open_time": "2024-01-01T00:00:00Z",
+                    "open": "100.0", "high": "110.0", "low": "95.0", "close": "105.0", "volume": "12.5",
+                },
+                {
+                    "symbol": symbol, "exchange": exchange, "interval": interval,
+                    "open_time": "2024-01-01T01:00:00Z",
+                    "open": "105.0", "high": "115.0", "low": "100.0", "close": "108.0", "volume": "9.0",
+                },
+            ],
+            "warnings": [],
+        })
+
     # ── /users/me/settings (GET ou PUT) ──────────────────────────────────────
     if "/users/me/settings" in path:
         _, user = _get_store_user()

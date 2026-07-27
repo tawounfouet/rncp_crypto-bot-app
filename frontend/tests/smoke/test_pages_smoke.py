@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -62,12 +63,119 @@ def _sidebar_captions(at: AppTest) -> list[str]:
     "relative_path",
     [
         "app.py",
+        "pages/01_Marche.py",
         "pages/02_Inscription.py",
     ],
 )
 def test_public_pages_render(relative_path: str) -> None:
     at = _run_app(relative_path)
     _assert_no_exception(at)
+
+
+def test_market_page_renders_for_anonymous_user() -> None:
+    at = _run_app("pages/01_Marche.py")
+    _assert_no_exception(at)
+    assert any(selectbox.label == "Plateforme" for selectbox in at.selectbox)
+    metric_labels = [metric.label for metric in at.metric]
+    assert "BTCUSDT" in metric_labels
+    assert "ETHUSDT" in metric_labels
+
+
+def test_market_page_has_no_error_or_warning_banner_for_anonymous_user() -> None:
+    at = _run_app("pages/01_Marche.py")
+    _assert_no_exception(at)
+    assert len(at.error) == 0
+    assert len(at.warning) == 0
+    orange_captions = [caption.value for caption in at.caption if ":orange[" in caption.value]
+    assert orange_captions == []
+
+
+def test_market_page_has_no_error_or_warning_banner_for_authenticated_user() -> None:
+    at = _run_app("pages/01_Marche.py", auth_email="alice@cryptobot.dev")
+    _assert_no_exception(at)
+    assert len(at.error) == 0
+    assert len(at.warning) == 0
+    orange_captions = [caption.value for caption in at.caption if ":orange[" in caption.value]
+    assert orange_captions == []
+
+
+def test_market_page_renders_one_candlestick_chart_per_pair() -> None:
+    at = _run_app("pages/01_Marche.py")
+    _assert_no_exception(at)
+    subheaders = [subheader.value for subheader in at.subheader]
+    assert "BTCUSDT" in subheaders
+    assert "ETHUSDT" in subheaders
+    assert any(radio.label == "Période" for radio in at.radio)
+    charts = at.get("plotly_chart")
+    assert len(charts) == 2
+    chart_titles = [json.loads(chart.proto.spec)["layout"]["title"]["text"] for chart in charts]
+    assert chart_titles == ["Binance", "Binance"]  # nom de la plateforme dans le titre de chaque graphique
+
+
+def test_market_page_compare_mode_defaults_to_none() -> None:
+    at = _run_app("pages/01_Marche.py")
+    _assert_no_exception(at)
+    compare_select = next(sb for sb in at.selectbox if sb.label == "Comparer avec")
+    assert compare_select.value == "__none__"
+
+
+def test_market_page_compare_mode_shows_charts_for_both_platforms() -> None:
+    at = _run_app("pages/01_Marche.py")
+    _assert_no_exception(at)
+    compare_select = next(sb for sb in at.selectbox if sb.label == "Comparer avec")
+
+    at = compare_select.set_value("kraken").run(timeout=20)
+    _assert_no_exception(at)
+    charts = at.get("plotly_chart")
+    assert len(charts) == 4  # 2 paires x 2 plateformes
+    chart_titles = [json.loads(chart.proto.spec)["layout"]["title"]["text"] for chart in charts]
+    assert chart_titles.count("Binance") == 2
+    assert chart_titles.count("Kraken") == 2
+    # une seule periode partagee par paire en mode comparaison, pas une par plateforme
+    assert sum(1 for radio in at.radio if radio.label == "Période") == 2
+
+
+def test_market_page_compare_mode_has_no_error_or_warning_banner() -> None:
+    at = _run_app("pages/01_Marche.py")
+    _assert_no_exception(at)
+    compare_select = next(sb for sb in at.selectbox if sb.label == "Comparer avec")
+
+    at = compare_select.set_value("kraken").run(timeout=20)
+    _assert_no_exception(at)
+    assert len(at.error) == 0
+    assert len(at.warning) == 0
+
+
+def test_market_page_timeframe_choice_is_independent_per_pair() -> None:
+    at = _run_app("pages/01_Marche.py")
+    _assert_no_exception(at)
+    btc_radio = next(r for r in at.radio if r.key == "timeframe_BTCUSDT")
+    eth_radio_before = next(r for r in at.radio if r.key == "timeframe_ETHUSDT").value
+
+    at = btc_radio.set_value("Dernier jour").run(timeout=20)
+    _assert_no_exception(at)
+    eth_radio_after = next(r for r in at.radio if r.key == "timeframe_ETHUSDT").value
+    assert eth_radio_after == eth_radio_before
+
+
+def test_market_page_renders_for_authenticated_user() -> None:
+    at = _run_app("pages/01_Marche.py", auth_email="alice@cryptobot.dev")
+    _assert_no_exception(at)
+    assert any(selectbox.label == "Plateforme" for selectbox in at.selectbox)
+
+
+def test_market_page_listed_in_anonymous_sidebar() -> None:
+    at = _run_app("pages/03_Portefeuille_Spot.py")
+    _assert_no_exception(at)
+    captions = _sidebar_captions(at)
+    assert "Marché" in captions
+
+
+def test_market_page_listed_in_authenticated_sidebar() -> None:
+    at = _run_app("pages/03_Portefeuille_Spot.py", auth_email="alice@cryptobot.dev")
+    _assert_no_exception(at)
+    captions = _sidebar_captions(at)
+    assert "Marché" in captions
 
 
 @pytest.mark.parametrize(
