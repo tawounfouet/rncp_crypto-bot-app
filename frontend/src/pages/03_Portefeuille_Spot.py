@@ -52,7 +52,8 @@ def _to_df(items: list) -> pd.DataFrame:
 
 
 def _render_portfolio_list(store, service: PortfolioService) -> None:
-    configured = AccountService(store).list_configured_exchanges()
+    account_service = AccountService(store)
+    configured = account_service.list_configured_exchanges()
     if len(configured) <= 1:
         return  # rien a comparer avec un seul exchange configure
 
@@ -60,12 +61,14 @@ def _render_portfolio_list(store, service: PortfolioService) -> None:
     snapshots = service.list_snapshots(configured)
     current = get_selected_exchange()
 
+    active_modes = account_service.get_active_modes(configured)
     columns = st.columns(len(configured))
     for column, exchange_id in zip(columns, configured, strict=True):
         snapshot = snapshots[exchange_id]
+        mode_label = "Simulation" if active_modes.get(exchange_id) == "sandbox" else "Reel"
         with column:
             st.metric(
-                label=exchange_id.capitalize(),
+                label=f"{exchange_id.capitalize()} ({mode_label})",
                 value=format_currency(snapshot.total_value_usdt),
             )
             if not snapshot.system_status.exchange_ok:

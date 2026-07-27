@@ -50,6 +50,7 @@ class BackendApiClient(AuthApiClient):
         exchange: str | None = None,
         api_key: str | None = None,
         api_secret: str | None = None,
+        mode: str | None = None,
         theme: str | None = None,
         risk_profile: str | None = None,
     ) -> ApiResponse:
@@ -60,6 +61,8 @@ class BackendApiClient(AuthApiClient):
             payload["api_key"] = api_key
         if api_secret is not None:
             payload["api_secret"] = api_secret
+        if mode is not None:
+            payload["mode"] = mode
         if theme is not None:
             payload["theme"] = theme
         if risk_profile is not None:

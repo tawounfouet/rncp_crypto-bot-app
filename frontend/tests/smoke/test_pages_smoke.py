@@ -396,8 +396,8 @@ def test_portfolio_shows_a_card_per_configured_exchange_when_multiple_are_config
 
     _assert_no_exception(at)
     metric_labels = [metric.label for metric in at.metric]
-    assert "Binance" in metric_labels
-    assert "Kraken" in metric_labels
+    assert any(label.startswith("Binance") for label in metric_labels)
+    assert any(label.startswith("Kraken") for label in metric_labels)
     orange_captions = [caption.value for caption in at.caption if ":orange[" in caption.value]
     assert len(orange_captions) == 1  # seul Kraken (exchange_ok=False) doit afficher l'avertissement
 
