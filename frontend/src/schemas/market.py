@@ -10,6 +10,7 @@ from pydantic import BaseModel
 class ExchangeOption(BaseModel):
     id: str
     label: str
+    supports_sandbox: bool = False
 
 
 class PublicPrice(BaseModel):
