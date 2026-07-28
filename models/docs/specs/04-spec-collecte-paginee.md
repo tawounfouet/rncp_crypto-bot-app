@@ -1,8 +1,11 @@
 # Spécification — Collecte paginée Binance
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 **Statut :** À implémenter — itération v1
 **Priorité :** Bloquante
-**Contexte :** [04-diagnostic-premiers-resultats.md](../analyse/04-diagnostic-premiers-resultats.md) — 1 000 lignes sont insuffisantes pour l'apprentissage ML.
+**Contexte :** [04-diagnostic-premiers-resultats.md](../../../docs/_archive/models-analyse/04-diagnostic-premiers-resultats.md) — 1 000 lignes sont insuffisantes pour l'apprentissage ML.
 
 ---
 

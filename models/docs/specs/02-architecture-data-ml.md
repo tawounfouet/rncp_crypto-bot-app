@@ -1,5 +1,8 @@
 # Architecture data et ML
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Vue logique
 
 ```text

@@ -43,7 +43,7 @@ Le projet est structuré en **5 domaines métier** clairement séparés, orchest
 
 ### Services Docker
 
-Ports détaillés (dev/staging/prod) : voir [docs/SETUP.md](docs/SETUP.md#services-par-environnement-vm-aws).
+Ports détaillés (dev/staging/prod) : voir [docs/01-setup.md](docs/01-setup.md#services-par-environnement-vm-aws).
 
 | Service | Technologie | Rôle |
 |---------|-------------|------|

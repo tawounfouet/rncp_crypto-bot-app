@@ -1,5 +1,8 @@
 # Architecture Data / ML — CryptoBot
 
+Statut: référence
+Derniere revision: 2026-06-12
+
 > **Vision :** Les données brutes sont collectées une seule fois par les **jobs**,
 > stockées dans **MinIO**, et chaque couche (ML, backend, frontend) les consomme
 > depuis là où elles se trouvent — sans duplication ni appel direct aux APIs externes.

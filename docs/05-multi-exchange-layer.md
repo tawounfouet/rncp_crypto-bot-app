@@ -1,5 +1,8 @@
 # Couche multi-exchange — clients, API backend, consommation frontend
 
+Statut: référence
+Derniere revision: 2026-07-27
+
 > Contexte : issue [#13](https://gitlab.com/dst_crypto/Crypto-bot-app/-/issues/13) — sortie de
 > Binance du périmètre MiCA (échéance 01/07/2026). Ce document explique **comment fonctionne
 > l'abstraction déjà en place** et **comment l'utiliser** (backend ET frontend), pas pourquoi elle

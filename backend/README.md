@@ -1,5 +1,8 @@
 # Crypto-Bot Backend
 
+Statut: référence
+Derniere revision: 2026-07-27
+
 Backend FastAPI pour le projet de trading automatise de cryptomonnaies.
 
 ## Architecture
@@ -150,6 +153,13 @@ Prefix : `/api/v1`
 | POST | `/strategies/deployments/{id}/stop` | Oui | Arreter un deploiement |
 | POST | `/strategies/validate` | Non | Valider des parametres |
 
+### Inference (`/inference`)
+
+| Methode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| POST | `/inference/predict` | Non | Prediction a partir d'un vecteur de features pre-calcule |
+| GET | `/inference/model` | Non | Metadonnees du modele ML deploye |
+
 ### Infra
 
 | Methode | Route | Description |
@@ -245,4 +255,4 @@ Le backend fait partie du monorepo `Crypto-bot-app`. La CI est definie dans `.gi
 | test | `test:integration` | Tests avec vrais services (Postgres) |
 | deploy | `deploy:staging`, `deploy:production` | Deploy VM AWS + GitOps K8s |
 
-Voir `docs/SETUP.md` pour le detail du workflow et des commandes Makefile.
+Voir `docs/01-setup.md` pour le detail du workflow et des commandes Makefile.

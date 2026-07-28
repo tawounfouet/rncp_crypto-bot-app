@@ -1,5 +1,8 @@
 # Architecture de la Base de Données - Crypto Trading Bot
 
+Statut: référence
+Derniere revision: 2026-04-03
+
 ## 📋 Vue d'Ensemble
 
 Cette documentation présente l'architecture complète de la base de données du bot de trading crypto. L'architecture suit une approche modulaire organisée par domaines métier, optimisée pour les performances et la scalabilité.

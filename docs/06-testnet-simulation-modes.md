@@ -1,5 +1,8 @@
 # Mode simulation vs réel par plateforme — comparatif et design retenu
 
+Statut: proposition (décision ouverte)
+Derniere revision: 2026-07-27
+
 > Contexte : préparation de la preuve fonctionnelle "portefeuille réel Binance + Kraken"
 > (cf. plan `testnet-portfolio-verification.md`). Réflexion menée le 2026-07-24, **avant tout
 > codage** — ce document fige les constats et le design ; l'implémentation suit dans une étape
@@ -19,7 +22,7 @@ changent la donne :
    vise le Spot).
 2. **Binance n'a plus l'agrément pour servir des clients en France depuis le 30/06/2026**
    (fin de la période transitoire PSAN, cf. issue [#13](https://gitlab.com/dst_crypto/Crypto-bot-app/-/issues/13)
-   déjà référencée dans `multi-exchange-layer.md`). Le testnet Binance reste techniquement
+   déjà référencée dans `05-multi-exchange-layer.md`). Le testnet Binance reste techniquement
    utilisable (bac à sable de développement, pas un service à des clients réels), mais Binance
    n'est plus un choix pertinent comme référence produit long terme pour un public français.
 

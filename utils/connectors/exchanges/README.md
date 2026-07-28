@@ -1,5 +1,8 @@
 # `utils.connectors.exchanges` — drivers de données de marché multi-exchange
 
+Statut: référence
+Derniere revision: 2026-07-02
+
 Couche **pluggable** pour collecter des données de marché (OHLCV) depuis n'importe quel
 exchange, via une **interface commune**. Données **publiques** uniquement (prix/klines) :
 aucune clé API requise. Réutilisable par tous les niveaux (`jobs`, `models`, backend) —

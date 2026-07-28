@@ -1,8 +1,11 @@
 # Architecture bot — ce que l'utilisateur configure vs ce qui est fixé par le modèle
 
+Statut: proposition (décision ouverte)
+Derniere revision: 2026-07-27
+
 > Réflexion menée le 2026-07-24, **avant tout codage**. Décide comment un "bot" combine
 > plateforme, mode simulé/réel, modèle ML et paramètres de risque. Complète
-> `testnet-simulation-modes.md` (qui traite exchange/mode simulé) sur le volet stratégie/ML.
+> `06-testnet-simulation-modes.md` (qui traite exchange/mode simulé) sur le volet stratégie/ML.
 
 ---
 
@@ -22,7 +25,7 @@ d'exécution**, dont l'effet est compréhensible et borné sans culture ML/finan
 | Réglé par l'utilisateur (par bot) | Fixé par l'équipe (par modèle, pas par bot) |
 |---|---|
 | Plateforme (exchange) | Fenêtre RSI, paramètres MACD/Bollinger (features) |
-| Mode simulé / réel (cf. `testnet-simulation-modes.md`) | Hyperparamètres d'entraînement (`n_estimators`, `hidden_size`, ...) |
+| Mode simulé / réel (cf. `06-testnet-simulation-modes.md`) | Hyperparamètres d'entraînement (`n_estimators`, `hidden_size`, ...) |
 | Paire tradée | Quel modèle existe pour quel exchange (dépend des données dispo) |
 | Stratégie = **quel modèle ML utiliser** (liste des modèles entraînés disponibles) | Le contenu même du modèle (poids/arbres appris) |
 | Stop-loss, take-profit, budget, risque par trade, cooldown, max positions ouvertes | — |
@@ -57,14 +60,14 @@ existants à vérifier avant suppression, cf. §5) ?
 3. **Avec clé(s) → liste de ses portefeuilles, un seul actif à la fois** — partiellement
    existant (`configured_exchanges`, sélecteur d'exchange en session) ; manque : présentation
    "liste" au lieu de sélecteur simple, et le mode simulé/réel par plateforme (cf.
-   `testnet-simulation-modes.md`).
+   `06-testnet-simulation-modes.md`).
 4. **Configure un bot** : plateforme + mode simulé/réel + **modèle ML disponible pour cette
    plateforme** + paramètres de risque (stop-loss, take-profit, budget, risque par trade,
    cooldown). Existant partiellement : `StrategyDeployment` (exchange/paire/paramètres JSON),
    page `06_Parametrage_Bot_Spot.py` (champs de risque déjà présents). Manquant : le sélecteur
    de modèle ML lui-même (n'existe pas), et la liste de modèles doit être filtrée par
    plateforme (cf. gap "registre de modèles pas scopé par exchange", déjà documenté dans
-   `testnet-simulation-modes.md` §4).
+   `06-testnet-simulation-modes.md` §4).
 5. **Active le bot** — **le plus gros trou identifié** : `backend/src/trading/service.py`
    contient des `TODO` non résolus sur l'essentiel (soumission d'ordre réelle, annulation,
    P&L, suivi de position) et `strategy/service.py::execute_strategy` n'est branché à aucun
@@ -77,7 +80,7 @@ existants à vérifier avant suppression, cf. §5) ?
 - Où et comment brancher `inference/service.py` (ML) dans `strategy/service.py::execute_strategy`
   pour que "activer un bot" utilise réellement un modèle ML, pas une règle fixe.
 - Modélisation exacte du "modèle ML disponible pour cet exchange" (dépend du registre
-  scopé-par-exchange, point ouvert de `testnet-simulation-modes.md`).
+  scopé-par-exchange, point ouvert de `06-testnet-simulation-modes.md`).
 - Portée réaliste vs calendrier (fin août) : ce document décrit la cible sans contrainte de
   délai, à la demande explicite de l'utilisatrice le 2026-07-24 — réduction de portée à faire
   séparément avant de lancer le code.

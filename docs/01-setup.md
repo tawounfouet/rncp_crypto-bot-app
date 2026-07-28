@@ -1,5 +1,8 @@
 # Guide d'installation - Crypto-Bot App
 
+Statut: référence
+Derniere revision: 2026-07-28
+
 ## Architecture du projet
 
 ```
@@ -12,7 +15,7 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   └── requirements-dev.txt    # Dependances de dev/test (inclut requirements.txt)
 ├── frontend/                   # Code Streamlit (mock-first multi-pages)
 │   ├── src/                    # app.py + pages/ + components/ + services/ + ...
-│   ├── tests/                  # unit + integration + smoke (135 tests)
+│   ├── tests/                  # unit + integration + smoke
 │   ├── Dockerfile
 │   ├── pyproject.toml          # Config pytest + ruff specifique frontend
 │   └── requirements.txt        # Deps runtime (streamlit, plotly, pandas, pydantic)
@@ -207,14 +210,19 @@ Services disponibles (dev local) :
 ### Lancer les tests
 
 ```bash
-# Tous les tests (backend + frontend)
+# Tous les tests (backend + frontend + utils + jobs + models)
 make test
 
 # Backend uniquement
 make test-backend
 
-# Frontend uniquement (tests mock-first Streamlit)
+# Frontend uniquement (Streamlit)
 make test-frontend
+
+# Autres composants
+make test-utils
+make test-jobs
+make test-models
 ```
 
 Equivalents manuels (remplacer `<python-venv>` par le chemin du tableau de
@@ -410,7 +418,7 @@ Taper `make` pour afficher toutes les commandes disponibles.
 | `make prod-init` | Creer les buckets MinIO (prod) |
 | `make prod-debug-up` | Activer Adminer en prod |
 | `make prod-debug-down` | Desactiver Adminer en prod |
-| `make test` | Tous les tests (backend + frontend) |
+| `make test` | Tous les tests (backend + frontend + utils + jobs + models) |
 | `make test-backend` | Tests unitaires backend |
 | `make test-frontend` | Tests frontend mock-first (Streamlit) |
 | `make lint` | Ruff check + format |

@@ -1,5 +1,8 @@
 # RFC — Mutualisation de la couche data (clients, collecte, schémas OHLCV)
 
+Statut: proposition (décision ouverte)
+Derniere revision: 2026-07-27
+
 > **Statut : PROPOSITION — à trancher en équipe** (Nath, Thomas, Lô, Ben)
 > Date : 2026-06-09
 > Contexte déclencheur : ajout de la couche d'orchestration Airflow (`jobs/` + `orchestration/`),
