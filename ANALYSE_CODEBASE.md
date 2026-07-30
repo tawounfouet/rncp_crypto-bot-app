@@ -43,7 +43,7 @@ Le projet est structuré en **5 domaines métier** clairement séparés, orchest
 
 ### Services Docker
 
-Ports détaillés (dev/staging/prod) : voir [docs/SETUP.md](docs/SETUP.md#services-par-environnement-vm-aws).
+Ports détaillés (dev/staging/prod) : voir [docs/01-setup.md](docs/01-setup.md#services-par-environnement-vm-aws).
 
 | Service | Technologie | Rôle |
 |---------|-------------|------|
@@ -318,15 +318,14 @@ staging → build + deploy staging automatique
 tag vX.Y → build + deploy production (manuel) + release
 ```
 
-### Scripts (8 scripts)
+### Scripts (4 scripts)
 
 | Script | Rôle |
 |--------|------|
-| `check-infra.sh` | Validation cohérence versions/Dockerfiles/CI |
-| `dev-deploy.sh` | Déploiement local automatisé |
+| `check-infra.sh` | Validation cohérence versions/Dockerfiles/CI (10 checks) |
+| `dev-deploy.sh` | Déploiement K8s namespace dev (outil perso, Tailscale + kubectl requis) |
 | `generate-requirements.py` | Compilation des requirements depuis versions.env |
-| `run_tests.sh` / `run-lint.sh` | Exécution tests/lint |
-| `push.sh` | Push avec hooks |
+| `run-tests-if-needed.sh` | Hook pre-commit : lint + tests ciblés sur les zones modifiées (`make lint`/`make test-*` couvrent l'exécution manuelle) |
 
 `make verify` (vérification de santé de tous les services) délègue désormais au playbook
 Ansible `crypto-bot-infra/ansible/verify.yml -i inventories/dev` — l'ancien

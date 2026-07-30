@@ -36,7 +36,7 @@ def parse_and_report(xml_file, txt_file):
         suite_name = suite.get("name", "unknown")
 
         # Extraire le nom du module depuis le classname pytest
-        # ex: "src.tests.unit.test_health" → "test_health"
+        # ex: "tests.unit.test_health" → "test_health"
         module_name = suite_name.rsplit(".", 1)[-1] if "." in suite_name else suite_name
 
         if module_name not in modules_dict:

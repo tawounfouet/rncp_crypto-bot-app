@@ -2,6 +2,8 @@
 title: Construire le MVP models-training du CryptoBot
 description: Guide pour implémenter la collecte BTC, le preprocessing, Random Forest, LSTM et l'API de signal.
 nav_title: Guide MVP
+status: référence
+updated: 2026-06-10
 ---
 
 Ce guide décrit l'ordre d'implémentation recommandé pour obtenir un MVP démontrable. L'objectif est de faire fonctionner une chaîne complète avant d'ajouter de l'infrastructure.

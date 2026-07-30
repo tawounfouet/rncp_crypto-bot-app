@@ -28,6 +28,10 @@ def sample_ohlcv(rows: int = 80) -> pd.DataFrame:
                 "close": close_price,
                 "volume": 1000 + index,
                 "close_time": start + timedelta(hours=index, minutes=59),
+                "quote_asset_volume": (1000 + index) * close_price,
+                "number_of_trades": 100 + index,
+                "taker_buy_base_volume": (1000 + index) * 0.5,
+                "taker_buy_quote_volume": (1000 + index) * close_price * 0.5,
                 "source": "fixture",
             }
         )

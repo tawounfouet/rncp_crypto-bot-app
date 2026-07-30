@@ -54,7 +54,7 @@ COPY backend/ .
 COPY utils/ ./utils
 COPY backend/ci/parse_test_report.py /usr/local/bin/parse_test_report.py
 
-CMD ["pytest", "src/tests", "-v"]
+CMD ["pytest", "tests", "-v"]
 
 
 # Stage 3: Runtime (image de production, legere, user non-root)

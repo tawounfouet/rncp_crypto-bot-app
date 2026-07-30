@@ -9,24 +9,8 @@ from schemas.portfolio import BalanceRow, OpenOrder, PortfolioSnapshot, SpotTrad
 from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token, get_selected_exchange
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
-
-
-def _float(value: object, default: float = 0.0) -> float:
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
+from utils.dates import parse_dt_or_now
+from utils.numeric import to_float as _float
 
 
 class PortfolioService:
@@ -34,16 +18,16 @@ class PortfolioService:
         self.store = store
         self.client = client or BackendApiClient()
 
-    def get_snapshot(self) -> PortfolioSnapshot:
+    def get_snapshot(self, exchange: str | None = None) -> PortfolioSnapshot:
         token = get_access_token()
         if not token:
             raise ServiceError("Non authentifie.")
 
         now = datetime.now(UTC)
-        exchange = get_selected_exchange()
+        exchange = exchange or get_selected_exchange()
 
         # --- Portfolio (balances) ---
-        portfolio_resp = self.client.get_portfolio(token)
+        portfolio_resp = self.client.get_portfolio(token, exchange=exchange)
         backend_ok = portfolio_resp.success
         balances: list[BalanceRow] = []
         total_value_usdt = 0.0
@@ -88,7 +72,7 @@ class PortfolioService:
                         price=_float(o.get("price")),
                         amount=_float(o.get("quantity")),
                         status=o.get("status", ""),
-                        created_at=_parse_dt(o.get("created_at")),
+                        created_at=parse_dt_or_now(o.get("created_at")),
                     )
                 )
 
@@ -113,7 +97,7 @@ class PortfolioService:
                         quantity=_float(t.get("amount")),
                         pnl_realized=0.0,
                         fee_usdt=_float(t.get("fee_amount")),
-                        executed_at=_parse_dt(t.get("timestamp")),
+                        executed_at=parse_dt_or_now(t.get("timestamp")),
                     )
                 )
 
@@ -136,6 +120,9 @@ class PortfolioService:
             open_orders=open_orders,
             recent_trades=recent_trades,
         )
+
+    def list_snapshots(self, exchanges: list[str]) -> dict[str, PortfolioSnapshot]:
+        return {exchange: self.get_snapshot(exchange) for exchange in exchanges}
 
     def cancel_order(self, order_id: str) -> tuple[bool, str]:
         token = get_access_token()

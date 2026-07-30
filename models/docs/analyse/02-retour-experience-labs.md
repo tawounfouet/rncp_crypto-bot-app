@@ -1,5 +1,8 @@
 # Retour d'expérience des labs précédents
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 Ce document synthétise ce qu'il faut reprendre des travaux antérieurs et ce qu'il faut volontairement écarter pour le MVP models-training.
 
 ## Sources analysées

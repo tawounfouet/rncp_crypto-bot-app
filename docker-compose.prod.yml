@@ -151,9 +151,13 @@ services:
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
-      - BINANCE_API_KEY=${BINANCE_API_KEY}
-      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
       - MLFLOW_TRACKING_URI=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+      # MinIO — requis par build_symbol_features (lecture des OHLCV bruts ingérés par Airflow)
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
     depends_on:
       postgres:
         condition: service_healthy
@@ -173,6 +177,7 @@ services:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
     container_name: prod-mlflow-ui
     restart: always
+    mem_limit: 1g
     ports:
       - "5002:5001"
     volumes:

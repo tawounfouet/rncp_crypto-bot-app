@@ -1,5 +1,8 @@
 # 05 — Architecture Decision Records (ADR)
 
+Statut: référence
+Derniere revision: 2026-06-09
+
 Les ADR documentent les **décisions d'architecture importantes**, leurs contextes, et les alternatives écartées.
 Chaque décision est immutable — si elle évolue, un nouvel ADR est créé.
 

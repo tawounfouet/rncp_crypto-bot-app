@@ -50,6 +50,7 @@ class BackendApiClient(AuthApiClient):
         exchange: str | None = None,
         api_key: str | None = None,
         api_secret: str | None = None,
+        mode: str | None = None,
         theme: str | None = None,
         risk_profile: str | None = None,
     ) -> ApiResponse:
@@ -60,6 +61,8 @@ class BackendApiClient(AuthApiClient):
             payload["api_key"] = api_key
         if api_secret is not None:
             payload["api_secret"] = api_secret
+        if mode is not None:
+            payload["mode"] = mode
         if theme is not None:
             payload["theme"] = theme
         if risk_profile is not None:
@@ -101,10 +104,12 @@ class BackendApiClient(AuthApiClient):
 
     # ─── Trading ─────────────────────────────────────────────────────────────
 
-    def get_portfolio(self, access_token: str) -> ApiResponse:
+    def get_portfolio(self, access_token: str, *, exchange: str | None = None) -> ApiResponse:
+        params = {"exchange": exchange} if exchange else None
         return self._request(
             "GET",
             f"{API_PREFIX}/trading/portfolio",
+            query_params=params,
             access_token=access_token,
         )
 
@@ -154,6 +159,26 @@ class BackendApiClient(AuthApiClient):
         )
 
     # ─── Strategies ──────────────────────────────────────────────────────────
+    def create_strategy(
+        self,
+        access_token: str,
+        *,
+        name: str,
+        strategy_type: str,
+        asset_class: str = "crypto",
+        parameters: dict[str, Any] | None = None,
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/",
+            json_body={
+                "name": name,
+                "strategy_type": strategy_type,
+                "asset_class": asset_class,
+                "parameters": parameters or {},
+            },
+            access_token=access_token,
+        )
 
     def list_strategies(self, access_token: str) -> ApiResponse:
         return self._request(
@@ -204,3 +229,55 @@ class BackendApiClient(AuthApiClient):
             f"{API_PREFIX}/strategies/deployments/{deployment_id}/stop",
             access_token=access_token,
         )
+
+    def get_available_models(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/strategies/available-models",
+            access_token=access_token,
+        )
+
+    def deploy_strategy(
+        self,
+        access_token: str,
+        strategy_id: str,
+        *,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        amount: str,
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/{strategy_id}/deploy",
+            json_body={
+                "strategy_id": strategy_id,
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "amount": amount,
+            },
+            access_token=access_token,
+        )
+
+    # ─── Marché public (pas d'authentification) ────────────────────────────────
+
+    def get_public_exchanges(self) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/market/exchanges")
+
+    def get_public_prices(self, *, exchange: str, symbols: list[str] | None = None) -> ApiResponse:
+        params: dict[str, str] = {"exchange": exchange}
+        if symbols:
+            params["symbols"] = ",".join(symbols)
+        return self._request("GET", f"{API_PREFIX}/market/public/prices", query_params=params)
+
+    def get_public_klines(
+        self, *, exchange: str, symbol: str, interval: str = "1h", limit: int = 24
+    ) -> ApiResponse:
+        params: dict[str, str] = {
+            "exchange": exchange,
+            "symbols": symbol,
+            "interval": interval,
+            "limit": str(limit),
+        }
+        return self._request("GET", f"{API_PREFIX}/market/public/klines", query_params=params)

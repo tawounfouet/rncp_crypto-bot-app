@@ -2,38 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from mocks.db import MockStore
 from schemas.bot import BotConfig, BotConfigUpdate
 from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
-
-
-def _float(value: object, default: float = 0.0) -> float:
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-
-
-def _int(value: object, default: int = 0) -> int:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
+from utils.dates import parse_dt_or_now
+from utils.numeric import to_float as _float
+from utils.numeric import to_int as _int
 
 
 def _extract_strategy(response_data: object) -> dict | None:
@@ -80,7 +56,7 @@ class BotConfigService:
         return BotConfig(
             bot_id=strategy.get("id", bot_id),
             version=_int(params.get("version"), 1),
-            updated_at=_parse_dt(strategy.get("updated_at")),
+            updated_at=parse_dt_or_now(strategy.get("updated_at")),
             strategy=strategy.get("strategy_type") or "custom",
             base_asset=base_asset,
             quote_asset=params.get("quote_asset") or "USDT",
@@ -137,7 +113,7 @@ class BotConfigService:
             "version": current_version + 1,
         }
 
-        payload = {"parameters": new_params}
+        payload = {"parameters": new_params, "strategy_type": update.strategy}
         response = self.client.update_strategy(token, bot_id, payload)
         if not response.success:
             if response.error:
@@ -163,7 +139,7 @@ class BotConfigService:
         new_config = BotConfig(
             bot_id=bot_id,
             version=_int(updated_params.get("version"), current_version + 1),
-            updated_at=_parse_dt(updated_strategy.get("updated_at")),
+            updated_at=parse_dt_or_now(updated_strategy.get("updated_at")),
             strategy=updated_strategy.get("strategy_type") or update.strategy,
             base_asset=base_asset,
             quote_asset=updated_params.get("quote_asset") or "USDT",
@@ -179,3 +155,19 @@ class BotConfigService:
             cooldown_seconds=_int(updated_params.get("cooldown_seconds"), update.cooldown_seconds),
         )
         return True, "Configuration sauvegardee.", new_config
+
+    def create_bot(self, name, strategy_type):
+        token = self._token()
+        response = self.client.create_strategy(token, name=name, strategy_type=strategy_type)
+        if not response.success:
+            raise ServiceError("Impossible de créer une stratégie.")
+
+    def get_available_models(self) -> list[dict]:
+        token = self._token()
+        response = self.client.get_available_models(token)
+        if not response.success:
+            raise ServiceError("Impossible de charger les modeles disponibles.")
+        data = response.data
+        if isinstance(data, dict):
+            return data.get("data") or []
+        return data if isinstance(data, list) else []

@@ -19,6 +19,7 @@ from src.utils.visualization import plot_confusion_matrix, plot_training_history
 
 logger = get_logger(__name__)
 
+
 def ensure_torch_available() -> None:
     require_dependency("torch", "Run `pip install -r requirements.txt` before training LSTM.")
 
@@ -129,8 +130,7 @@ def prepare_lstm_datasets(data: pd.DataFrame, settings: AppSettings) -> dict[str
     x_test, y_test = create_sequences(test_features, test_labels, sequence_length)
     if len(x_train) == 0 or len(x_validation) == 0 or len(x_test) == 0:
         raise ValueError(
-            "Not enough rows to create LSTM sequences. "
-            f"Need at least {sequence_length} rows in each split."
+            f"Not enough rows to create LSTM sequences. Need at least {sequence_length} rows in each split."
         )
     logger.info(
         "lstm sequence preparation complete sequence_length=%s train_sequences=%s validation_sequences=%s test_sequences=%s feature_count=%s",
@@ -143,7 +143,7 @@ def prepare_lstm_datasets(data: pd.DataFrame, settings: AppSettings) -> dict[str
 
     # Close prices aligned with test sequences: each prediction corresponds to
     # the price at the end of its sequence window.
-    test_prices = test["close"].reset_index(drop=True).iloc[sequence_length - 1:].reset_index(drop=True)
+    test_prices = test["close"].reset_index(drop=True).iloc[sequence_length - 1 :].reset_index(drop=True)
 
     return {
         "feature_columns": feature_columns,
@@ -207,6 +207,7 @@ def train_lstm(data: pd.DataFrame, settings: AppSettings) -> dict[str, Any]:
     class_weights_tensor: torch.Tensor | None = None
     if training_cfg.use_class_weights:
         from sklearn.utils.class_weight import compute_class_weight
+
         classes = np.unique(prepared["y_train"])
         weights = compute_class_weight("balanced", classes=classes, y=prepared["y_train"])
         class_weights_tensor = torch.tensor(weights, dtype=torch.float32)
@@ -214,8 +215,11 @@ def train_lstm(data: pd.DataFrame, settings: AppSettings) -> dict[str, Any]:
 
     if training_cfg.loss == "focal":
         from src.models.losses import FocalLoss
+
         criterion = FocalLoss(gamma=training_cfg.focal_gamma, weight=class_weights_tensor)
-        logger.info("lstm loss=focal gamma=%s use_class_weights=%s", training_cfg.focal_gamma, training_cfg.use_class_weights)
+        logger.info(
+            "lstm loss=focal gamma=%s use_class_weights=%s", training_cfg.focal_gamma, training_cfg.use_class_weights
+        )
     else:
         criterion = torch.nn.CrossEntropyLoss(weight=class_weights_tensor)
         logger.info("lstm loss=cross_entropy use_class_weights=%s", training_cfg.use_class_weights)
@@ -299,7 +303,14 @@ def train_lstm(data: pd.DataFrame, settings: AppSettings) -> dict[str, Any]:
     logger.info("lstm evaluation complete metrics=%s", metrics)
 
     label_names = [settings.id_to_label[i] for i in sorted(settings.id_to_label)]
-    report = classification_report(y_test, predictions, labels=list(settings.label_to_id.values()), target_names=label_names, output_dict=True, zero_division=0)
+    report = classification_report(
+        y_test,
+        predictions,
+        labels=list(settings.label_to_id.values()),
+        target_names=label_names,
+        output_dict=True,
+        zero_division=0,
+    )
     for label in label_names:
         if label in report:
             logger.info(
@@ -314,6 +325,7 @@ def train_lstm(data: pd.DataFrame, settings: AppSettings) -> dict[str, Any]:
         logger.warning("lstm degenerate: 0 active signals (BUY/SELL) in test predictions — model predicts only HOLD")
 
     from src.backtesting.engine import BacktestConfig, run_backtest
+
     pred_labels = [settings.id_to_label[int(p)] for p in predictions]
     bt_result = run_backtest(
         prices=prepared["test_prices"],
@@ -358,9 +370,7 @@ def save_lstm_artifacts(result: dict[str, Any], output_dir: str | Path) -> None:
     logger.info("lstm artifact save start destination=%s", destination)
     torch.save(result["model"].state_dict(), destination / "model.pt")
     joblib.dump(result["scaler"], destination / "scaler.joblib")
-    (destination / "feature_columns.json").write_text(
-        json.dumps(result["feature_columns"], indent=2), encoding="utf-8"
-    )
+    (destination / "feature_columns.json").write_text(json.dumps(result["feature_columns"], indent=2), encoding="utf-8")
     (destination / "model_config.json").write_text(json.dumps(result["model_config"], indent=2), encoding="utf-8")
     (destination / "metrics.json").write_text(json.dumps(result["metrics"], indent=2), encoding="utf-8")
     (destination / "training_history.json").write_text(json.dumps(result["history"], indent=2), encoding="utf-8")

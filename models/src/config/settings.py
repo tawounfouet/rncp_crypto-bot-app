@@ -16,16 +16,6 @@ class ProjectSettings(BaseModel):
     random_state: int = 42
 
 
-class ExchangeSettings(BaseModel):
-    name: str = "binance"
-    testnet: bool = True
-    base_url: str
-    api_key_env: str
-    api_secret_env: str
-    request_timeout_seconds: int = 20
-    rate_limit_sleep_seconds: float = 0.25
-
-
 class DataPaths(BaseModel):
     raw: Path
     processed: Path
@@ -280,7 +270,6 @@ class LoggingSettings(BaseModel):
 
 class AppSettings(BaseModel):
     project: ProjectSettings
-    exchange: ExchangeSettings
     data: DataSettings
     features: FeaturesSettings
     labels: LabelSettings

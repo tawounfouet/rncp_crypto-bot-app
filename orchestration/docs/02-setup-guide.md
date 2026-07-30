@@ -1,5 +1,8 @@
 # 02 — Guide de mise en place
 
+Statut: référence
+Derniere revision: 2026-07-28
+
 ## Prérequis
 
 - Docker Desktop installé et actif
@@ -55,9 +58,8 @@ Ce fichier est chargé automatiquement par le `Makefile` avant tout `docker comp
 ## Étape 3 — Créer la structure de dossiers Airflow
 
 ```bash
-mkdir -p orchestration/dags orchestration/logs orchestration/plugins
+mkdir -p orchestration/dags orchestration/plugins
 touch orchestration/dags/.gitkeep
-touch orchestration/logs/.gitkeep
 touch orchestration/plugins/.gitkeep
 ```
 
@@ -65,10 +67,14 @@ touch orchestration/plugins/.gitkeep
 
 ```
 orchestration/
-├── dags/      → Montés sur /opt/airflow/dags    (lus par le scheduler)
-├── logs/      → Montés sur /opt/airflow/logs    (écrits par Airflow)
-└── plugins/   → Montés sur /opt/airflow/plugins (hooks/opérateurs custom)
+├── dags/      → Bind-monté sur /opt/airflow/dags    (lus par le scheduler)
+└── plugins/   → Bind-monté sur /opt/airflow/plugins (hooks/opérateurs custom)
 ```
+
+Les logs Airflow (`/opt/airflow/logs`) vivent dans un **volume Docker nommé**
+(`airflow_logs`), pas dans un dossier `orchestration/logs/` bind-monté — ça évite
+un `Permission denied` côté hôte, l'UID Airflow (50000) n'ayant pas les droits sur
+un dossier créé en root.
 
 ---
 
@@ -76,7 +82,7 @@ orchestration/
 
 ```dockerfile
 ARG AIRFLOW_IMAGE
-FROM ${AIRFLOW_IMAGE}
+FROM ${AIRFLOW_IMAGE} AS runtime
 
 USER root
 RUN apt-get update \
@@ -89,16 +95,30 @@ RUN apt-get update \
 
 USER airflow
 
-# IMPORTANT : épingler la même version qu'en base pour éviter une upgrade vers Airflow 3.x
-RUN pip install --no-cache-dir \
-    apache-airflow==2.8.1 \
-    apache-airflow-providers-postgres \
-    apache-airflow-providers-amazon \
-    pandas==2.3.3 \
-    numpy==2.4.3 \
-    minio==7.2.20 \
-    python-binance==1.0.35
+# Dépendances : versions.env + orchestration/requirements.txt (généré depuis
+# le .template), pas de pip install en dur — cf. docs/01-setup.md.
+COPY --chown=airflow:root jobs/requirements.txt /opt/airflow/jobs/requirements.txt
+COPY --chown=airflow:root orchestration/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Code applicatif copié en dur pour que l'image soit autonome en staging/prod
+# (bind-monté en dev via x-airflow-common, cf. étape 6)
+COPY --chown=airflow:root orchestration/dags/ /opt/airflow/dags/
+COPY --chown=airflow:root orchestration/plugins/ /opt/airflow/plugins/
+COPY --chown=airflow:root jobs/ /opt/airflow/jobs/
+COPY --chown=airflow:root models/ /opt/airflow/models/
+COPY --chown=airflow:root utils/ /opt/airflow/utils/
 ```
+
+`orchestration/requirements.txt` ré-épingle `apache-airflow==2.8.1` (même raison
+qu'avant : éviter une upgrade automatique vers Airflow 3.x) et inclut
+`apache-airflow-providers-postgres`, `apache-airflow-providers-amazon`, plus
+`-r jobs/requirements.txt` (dépendances des jobs d'ingestion, dont `ccxt`). Les
+dépendances lourdes de `models/` (torch, scikit-learn, mlflow) ne sont **pas**
+installées ici : le DAG `ml_pipeline` les appelle via HTTP sur `crypto-bot-ml-api`
+plutôt que de les exécuter dans le conteneur Airflow (cf. `04-troubleshooting.md`,
+Problème 8).
 
 ---
 
@@ -113,8 +133,14 @@ set -e
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     SELECT 'CREATE DATABASE airflow'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow')\gexec
+
+    SELECT 'CREATE DATABASE mlflow'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mlflow')\gexec
 EOSQL
 ```
+
+Le script crée aussi la base `mlflow` (utilisée par le tracking MLflow de `models/`),
+au passage et avec le même mécanisme idempotent que `airflow`.
 
 Ce script est exécuté **automatiquement** par l'image PostgreSQL au 1er démarrage
 grâce au montage de volume dans `docker-compose.yml` :
@@ -143,15 +169,30 @@ x-airflow-common: &airflow-common
       AIRFLOW_IMAGE: ${AIRFLOW_IMAGE}
   environment:
     - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - PYTHONPATH=/opt/airflow
     - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://...@postgres:5432/airflow
     - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
     - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
     - AIRFLOW__CORE__LOAD_EXAMPLES=false
     - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+    # MinIO — requis par les jobs d'ingestion
+    - MINIO_ENDPOINT=minio:9000
+    - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+    - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+    - MINIO_SECURE=0
+    - MINIO_BUCKET=crypto-bot-data
+    - BINANCE_BASE_URL=https://api.binance.com
   volumes:
     - ./orchestration/dags:/opt/airflow/dags
-    - ./orchestration/logs:/opt/airflow/logs
+    # Volume nommé (pas un bind-mount) : Docker gère l'ownership pour l'user
+    # airflow (UID 50000), évite un "Permission denied" sur un dossier hôte
+    # créé en root.
+    - airflow_logs:/opt/airflow/logs
     - ./orchestration/plugins:/opt/airflow/plugins
+    - ./jobs:/opt/airflow/jobs       # jobs batch importés par les DAGs
+    - ./models:/opt/airflow/models   # scripts ML — requis par le DAG ml_pipeline
+    - ./utils:/opt/airflow/utils     # package transverse partagé
+    - ./data:/app/data
   depends_on:
     postgres:
       condition: service_healthy
@@ -225,9 +266,10 @@ postgres ──(healthy)──► airflow-init ──(completed)──► airflo
 ```
 Créés :
 ├── orchestration/Dockerfile
+├── orchestration/requirements.txt(.template)
 ├── orchestration/dags/example_cryptobot.py
-├── orchestration/dags/.gitkeep
-├── orchestration/logs/.gitkeep
+├── orchestration/dags/ingest_ohlcv.py
+├── orchestration/dags/ml_pipeline.py
 ├── orchestration/plugins/.gitkeep
 └── init-scripts/init-user-db.sh
 

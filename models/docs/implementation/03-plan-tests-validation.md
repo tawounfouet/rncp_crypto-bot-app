@@ -1,5 +1,8 @@
 # Plan de tests et validation
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Objectif
 
 Prouver que le MVP fonctionne de bout en bout sans dépendre d'une démonstration fragile.

@@ -37,6 +37,37 @@ def main() -> None:
     except ServiceError as exc:
         show_feedback("error", str(exc))
         return
+
+    try:
+        available_models = [m for m in config_service.get_available_models() if m["available"]]
+    except ServiceError as exc:
+        show_feedback("error", str(exc))
+        return
+
+    with st.expander("Creer un bot", expanded=not bots):
+        if not available_models:
+            show_feedback("error", "Aucun modele ML disponible cote serveur pour le moment.")
+        else:
+            with st.form("create_bot_form"):
+                bot_name = st.text_input("Nom du bot")
+                model_name = st.selectbox(
+                    "Modele",
+                    options=[m["name"] for m in available_models],
+                )
+                create_clicked = compat_form_submit_button("Creer le bot", type="primary")
+
+            if create_clicked:
+                if not bot_name:
+                    show_feedback("error", "Le nom du bot est obligatoire.")
+                else:
+                    try:
+                        config_service.create_bot(name=bot_name, strategy_type=f"ml_{model_name}")
+                    except ServiceError as exc:
+                        show_feedback("error", str(exc))
+                    else:
+                        show_feedback("success", "Bot cree.")
+                        st.rerun()
+
     if not bots:
         show_feedback("warning", "Aucun bot disponible pour parametrage.")
         return
@@ -78,18 +109,7 @@ def main() -> None:
     with st.form("bot_config_form", clear_on_submit=False):
         strategy = st.selectbox(
             "Strategie",
-            options=["Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"],
-            index=max(
-                0,
-                (
-                    ["Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"].index(
-                        config.strategy
-                    )
-                    if config.strategy
-                    in {"Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"}
-                    else 0
-                ),
-            ),
+            options=[m["name"] for m in available_models],
             disabled=gate.actions_disabled,
         )
         c1, c2 = st.columns(2)
@@ -150,9 +170,8 @@ def main() -> None:
             disabled=gate.actions_disabled,
         )
     st.markdown("</div>", unsafe_allow_html=True)
-
     update = BotConfigUpdate(
-        strategy=strategy,
+        strategy=f"ml_{strategy}",
         budget_usdt=float(budget_usdt),
         max_open_positions=int(max_open_positions),
         risk_per_trade_pct=float(risk_per_trade),

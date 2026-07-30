@@ -235,3 +235,55 @@ class DepthUpdateMessage(BaseModel):
     bids: list[list[Decimal]]  # [price, quantity]
     asks: list[list[Decimal]]  # [price, quantity]
     timestamp: datetime
+
+
+# Public market endpoints (no authentication — accessible connecté ou non)
+class ExchangeOption(BaseModel):
+    """Une plateforme proposée par le backend pour la consultation des prix publics."""
+
+    id: str
+    label: str
+    supports_sandbox: bool = False
+
+
+class ExchangeListResponse(BaseResponse):
+    """Liste des exchanges configurés côté driver de données de marché."""
+
+    data: list[ExchangeOption]
+
+
+class PublicPriceInfo(BaseModel):
+    """Dernier prix connu pour une paire, sur une plateforme donnée (données publiques)."""
+
+    symbol: str
+    exchange: str
+    price: Decimal
+    as_of: datetime
+
+
+class PublicPriceListResponse(BaseResponse):
+    """Réponse de /market/public/prices — prix récupérés + avertissements par paire en échec."""
+
+    data: list[PublicPriceInfo]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class PublicKlineInfo(BaseModel):
+    """Une bougie (OHLCV) pour une paire, sur une plateforme donnée (données publiques)."""
+
+    symbol: str
+    exchange: str
+    interval: str
+    open_time: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+class PublicKlineListResponse(BaseResponse):
+    """Réponse de /market/public/klines — klines récupérés + avertissements par paire en échec."""
+
+    data: list[PublicKlineInfo]
+    warnings: list[str] = Field(default_factory=list)

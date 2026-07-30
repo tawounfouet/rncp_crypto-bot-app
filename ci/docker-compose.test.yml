@@ -48,7 +48,7 @@ services:
       - |
         mkdir -p /tmp/test-results &&
         echo '=== Running tests ===' &&
-        pytest src/tests -v --junitxml=/tmp/test-results/report.xml --cov=src --cov-report=term-missing --cov-report=xml:/tmp/test-results/coverage.xml ;
+        pytest tests -v --junitxml=/tmp/test-results/report.xml --cov=src --cov-report=term-missing --cov-report=xml:/tmp/test-results/coverage.xml ;
         TEST_EXIT=$$? ;
         echo '=== Generating report ===' &&
         python /app/ci/parse_test_report.py /tmp/test-results/report.xml /tmp/test-results/test_report.txt || echo 'WARN: report generation failed (non-blocking)' ;

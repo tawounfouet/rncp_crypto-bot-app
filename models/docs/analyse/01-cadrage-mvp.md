@@ -1,5 +1,8 @@
 # Cadrage MVP — CryptoBot Models Training
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 Date : 2026-06-01
 
 ## Hypothèse à valider

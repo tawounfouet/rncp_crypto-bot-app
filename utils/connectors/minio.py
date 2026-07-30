@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
 from io import BytesIO
 
 import pandas as pd
@@ -31,14 +30,10 @@ class MinioClient:
     ):
         self.endpoint = endpoint or os.environ.get("MINIO_ENDPOINT", "localhost:9000")
         self.access_key = (
-            access_key
-            or os.environ.get("MINIO_ACCESS_KEY")
-            or os.environ.get("MINIO_USER_ADMIN", "miniouser")
+            access_key or os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("MINIO_USER_ADMIN", "miniouser")
         )
         self.secret_key = (
-            secret_key
-            or os.environ.get("MINIO_SECRET_KEY")
-            or os.environ.get("MINIO_PWD_ADMIN", "miniopassword")
+            secret_key or os.environ.get("MINIO_SECRET_KEY") or os.environ.get("MINIO_PWD_ADMIN", "miniopassword")
         )
         if secure is not None:
             self.secure = secure
@@ -127,7 +122,9 @@ class MinioClient:
             logger.error("DataFrame upload failed bucket=%s key=%s: %s", bucket, object_name, exc)
             return False
 
-    def download_dataframe(self, object_name: str, bucket: str | None = None, fmt: str = "parquet") -> pd.DataFrame | None:
+    def download_dataframe(
+        self, object_name: str, bucket: str | None = None, fmt: str = "parquet"
+    ) -> pd.DataFrame | None:
         bucket = bucket or self.default_bucket
         buffer = BytesIO()
 

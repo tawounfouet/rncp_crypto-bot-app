@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -29,14 +28,6 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppSettings:
         return AppSettings.model_validate(raw)
     except ValidationError as exc:
         raise ConfigurationError(str(exc)) from exc
-
-
-def get_exchange_credentials(settings: AppSettings) -> tuple[str | None, str | None]:
-    """Resolve exchange credentials from environment variables."""
-    return (
-        os.getenv(settings.exchange.api_key_env),
-        os.getenv(settings.exchange.api_secret_env),
-    )
 
 
 def dump_config_snapshot(settings: AppSettings) -> dict[str, Any]:

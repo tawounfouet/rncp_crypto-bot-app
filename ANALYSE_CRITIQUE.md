@@ -261,7 +261,13 @@ Ce pattern try/except silencieux est répété dans quasiment toutes les pages. 
 
 ### 6.1 Tests backend quasi absents
 
-Le dossier `backend/src/tests/` existe avec une belle structure :
+> **✅ Résolu (2026-07-27)** — Constat périmé : ce n'est plus le cas. Le dossier
+> `backend/tests/` contient désormais 113 tests réels (auth, chiffrement des clés API,
+> exécution multi-exchange, endpoints publics...), en plus de 171 côté frontend, 32 côté
+> `utils/` et 3 côté `jobs/` (319 au total). Constat original conservé ci-dessous pour
+> mémoire, ne reflète plus l'état du code.
+
+Le dossier `backend/tests/` existe avec une belle structure :
 ```
 tests/
 ├── conftest.py
@@ -273,6 +279,14 @@ tests/
 Mais les fichiers sont vides ou squelettiques. Pour un backend avec ~2000 lignes de code métier (auth, database, settings, error handling), c'est un **vide critique**. Aucune garantie que le login, le refresh token, ou le fallback SQLite fonctionnent.
 
 ### 6.2 Pre-commit hook exécute les tests à chaque commit
+
+> **✅ Partiellement résolu (2026-07-27)** — `scripts/run-tests-if-needed.sh` ne lance plus
+> systématiquement toute la suite : il cible désormais les suites concernées par les zones
+> modifiées (`backend/`, `frontend/`, `utils/`, `jobs/`), avec prise en compte des
+> dépendances (`utils/` relance aussi `backend`/`jobs`, qui en dépendent). Le déclenchement
+> du hook lui-même reste sur tout fichier `.py` modifié (pas de granularité par fichier de
+> test précis) — la remarque garde donc une part de validité, mais l'attente "toute la
+> suite à chaque commit" décrite ci-dessous n'est plus exacte.
 
 **Fichier :** `.pre-commit-config.yaml:53-58`
 ```yaml

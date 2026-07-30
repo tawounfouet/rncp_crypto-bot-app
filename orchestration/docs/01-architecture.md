@@ -1,5 +1,8 @@
 # 01 — Architecture de l'orchestration
 
+Statut: référence
+Derniere revision: 2026-07-28
+
 ## Vue d'ensemble
 
 Apache Airflow est intégré comme couche d'orchestration dans le projet `_dst-crypto-bot_v2`. Il coordonne les pipelines de données entre le backend FastAPI, PostgreSQL, et MinIO.
@@ -88,42 +91,49 @@ app/
 │
 ├── orchestration/                 # Tout ce qui est Airflow
 │   ├── Dockerfile                 # Image personnalisée
+│   ├── requirements.txt(.template) # Dépendances Airflow (généré depuis versions.env)
 │   ├── dags/                      # Logique métier planifiée
-│   │   ├── .gitkeep
-│   │   └── example_cryptobot.py   # DAG d'exemple / healthcheck
-│   ├── logs/                      # Logs d'exécution (monté en volume)
-│   │   └── .gitkeep
+│   │   ├── example_cryptobot.py   # DAG d'exemple / healthcheck
+│   │   ├── ingest_ohlcv.py        # Ingestion OHLCV multi-exchange -> MinIO -> PostgreSQL
+│   │   └── ml_pipeline.py         # Features -> training -> déploiement -> vérification (via crypto-bot-ml-api)
+│   ├── logs/                      # Logs d'exécution (volume nommé airflow_logs)
 │   └── plugins/                   # Opérateurs / hooks custom
 │       └── .gitkeep
 │
 └── init-scripts/                  # Bootstrap PostgreSQL
-    └── init-user-db.sh            # Crée la base 'airflow' si absente
+    └── init-user-db.sh            # Crée les bases 'airflow' et 'mlflow' si absentes
 ```
 
 ---
 
 ## L'image Docker personnalisée
 
-L'image de base est `apache/airflow:2.8.1-python3.11`.  
-Un `Dockerfile` dédié la surcharge pour ajouter les dépendances métier :
+L'image de base est `apache/airflow:2.8.1-python3.11` (version fixée dans `versions.env`,
+injectée via `build.args`). Le `Dockerfile` (`orchestration/Dockerfile`) la surcharge :
 
 ```
 apache/airflow:2.8.1-python3.11  (image de base officielle)
          │
          │ build-essential, git (apt)
          │
-         └── providers & libs pip :
-               ├── apache-airflow==2.8.1          (version épinglée !)
-               ├── apache-airflow-providers-postgres
-               ├── apache-airflow-providers-amazon
-               ├── pandas==2.3.3
-               ├── numpy==2.4.3
-               ├── minio==7.2.20
-               └── python-binance==1.0.35
+         ├── pip install -r orchestration/requirements.txt
+         │     ├── apache-airflow==2.8.1                 (version épinglée !)
+         │     ├── apache-airflow-providers-postgres
+         │     ├── apache-airflow-providers-amazon
+         │     └── -r jobs/requirements.txt               (dépendances des jobs, dont ccxt)
+         │
+         └── COPY en dur : dags/, plugins/, jobs/, models/, utils/
+               (bind-montés en dev, copiés dans l'image pour que le conteneur
+               soit autonome en staging/production)
 ```
 
-> ⚠️ La version `apache-airflow==2.8.1` est **ré-épinglée** dans le `pip install` pour
-> empêcher une mise à niveau automatique vers Airflow 3.x qui casserait les binaires.
+Les versions et dépendances ne sont pas codées en dur dans le Dockerfile : elles
+viennent de `versions.env` et de `orchestration/requirements.txt` (généré depuis
+`orchestration/requirements.txt.template`), conformément à la convention du monorepo
+(source unique de vérité, cf. `docs/01-setup.md`).
+
+> ⚠️ La version `apache-airflow==2.8.1` est **ré-épinglée** dans `orchestration/requirements.txt`
+> pour empêcher une mise à niveau automatique vers Airflow 3.x qui casserait les binaires.
 
 ---
 

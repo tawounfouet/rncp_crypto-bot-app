@@ -5,7 +5,7 @@ from navigation.rules import allowed_page_keys_in_sidebar, can_access, sidebar_e
 
 def test_sidebar_entries_when_anonymous() -> None:
     labels = [entry.label for entry in sidebar_entries(None)]
-    assert labels == ["Connexion", "Inscription"]
+    assert labels == ["Marché", "Connexion", "Inscription"]
 
 
 def test_sidebar_entries_when_authenticated_standard_user(store) -> None:
@@ -13,7 +13,7 @@ def test_sidebar_entries_when_authenticated_standard_user(store) -> None:
     keys = allowed_page_keys_in_sidebar(user)
     assert "signup" not in keys
     assert "admin" not in keys
-    assert keys == ["portfolio", "performance", "bot_control", "bot_config", "account"]
+    assert keys == ["market", "portfolio", "performance", "bot_control", "bot_config", "account"]
 
 
 def test_sidebar_entries_when_authenticated_admin(store) -> None:

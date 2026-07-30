@@ -19,6 +19,11 @@ class PredictRequest(BaseModel):
     )
 
 
+class PredictLiveRequest(BaseModel):
+    symbol: str = Field(..., description="Trading pair (e.g. BTCUSDT)")
+    interval: str = Field("1h", description="Kline interval")
+
+
 class PredictResponse(BaseModel):
     """Inference result."""
 

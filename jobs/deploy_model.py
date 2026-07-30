@@ -17,12 +17,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 from pathlib import Path
-
-from minio.error import S3Error
 
 from utils.connectors.minio import MinioClient
 from utils.logging import configure_logging
@@ -69,7 +66,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Deploy trained model to MinIO")
     parser.add_argument(
-        "--model", default=None,
+        "--model",
+        default=None,
         help="Model name to deploy (default: deploy all enabled models)",
     )
     parser.add_argument("--registry", default=str(REGISTRY_ROOT), help="Path to model registry root")
@@ -94,10 +92,7 @@ def _detect_models(registry_root: Path) -> list[str]:
     """Auto-detect model directories in the registry."""
     if not registry_root.exists():
         return []
-    return sorted(
-        entry.name for entry in registry_root.iterdir()
-        if entry.is_dir() and (entry / "best").exists()
-    )
+    return sorted(entry.name for entry in registry_root.iterdir() if entry.is_dir() and (entry / "best").exists())
 
 
 if __name__ == "__main__":

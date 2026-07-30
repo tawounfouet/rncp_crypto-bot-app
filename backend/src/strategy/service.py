@@ -3,15 +3,21 @@ Strategy service for managing strategy execution and lifecycle.
 """
 
 import logging
-from datetime import UTC, datetime
+import os
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pandas as pd
+import requests
+from inference.live_features import build_live_feature_frame
+from inference.service import InferenceService
 from market.service import MarketDataService
 from shared.core.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from shared.database import get_db_session
 from sqlalchemy import and_, or_
+from trading.schemas import OrderCreate, OrderSideEnum, OrderTypeEnum
+from trading.service import TradingService
 
 from strategy.engine import get_strategy, registry
 from strategy.models import Strategy, StrategyDeployment, StrategyState
@@ -22,8 +28,10 @@ from strategy.schemas import (
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
     StrategyResponse,
+    StrategyTypeEnum,
     StrategyUpdate,
 )
+from utils.trading.signals import VALUE_TO_SIGNAL
 
 logger = logging.getLogger(__name__)
 
@@ -52,18 +60,21 @@ class StrategyService:
         Raises:
             ValidationError: If strategy data is invalid
         """
-        # Validate strategy type exists in registry
-        if strategy_data.strategy_type not in registry.list_strategies():
-            available_strategies = registry.list_strategies()
-            raise ValidationError(
-                f"Unknown strategy type '{strategy_data.strategy_type}'. "
-                f"Available strategies: {', '.join(available_strategies)}"
-            )
+        # Les strategy_type ML (ml_random_forest, futur ml_lstm) ne passent pas par le
+        # registre de regles techniques (strategy/engine/) -- celui-ci n'est conserve que
+        # pour un usage futur eventuel, plus expose comme choix produit (decision du
+        # 2026-07-24 : seuls les modeles ML sont selectionnables par l'utilisateur).
+        if not strategy_data.strategy_type.startswith("ml_"):
+            if strategy_data.strategy_type not in registry.list_strategies():
+                available_strategies = registry.list_strategies()
+                raise ValidationError(
+                    f"Unknown strategy type '{strategy_data.strategy_type}'. "
+                    f"Available strategies: {', '.join(available_strategies)}"
+                )
 
-        # Validate strategy parameters
-        is_valid, error_msg = registry.validate_strategy(strategy_data.strategy_type, strategy_data.parameters)
-        if not is_valid:
-            raise ValidationError(f"Invalid strategy parameters: {error_msg}")
+            is_valid, error_msg = registry.validate_strategy(strategy_data.strategy_type, strategy_data.parameters)
+            if not is_valid:
+                raise ValidationError(f"Invalid strategy parameters: {error_msg}")
 
         # Create strategy in database
         with get_db_session() as session:
@@ -132,8 +143,8 @@ class StrategyService:
             for field, value in update_data.items():
                 setattr(strategy, field, value)
 
-            # Validate parameters if updated
-            if strategy_data.parameters is not None:
+            # Validate parameters if updated (types ML : cf. remarque dans create_strategy)
+            if strategy_data.parameters is not None and not strategy.strategy_type.startswith("ml_"):
                 is_valid, error_msg = registry.validate_strategy(strategy.strategy_type, strategy_data.parameters)
                 if not is_valid:
                     raise ValidationError(f"Invalid strategy parameters: {error_msg}")
@@ -249,13 +260,14 @@ class StrategyService:
             logger.info(f"Deployed strategy {deployment_data.strategy_id} as deployment {deployment.id}")
             return deployment_response
 
-    async def execute_strategy(self, deployment_id: str, data: pd.DataFrame) -> dict[str, Any]:
+    async def execute_strategy(self, deployment_id: str, data: pd.DataFrame | None = None) -> dict[str, Any]:
         """
         Execute a strategy on market data.
 
         Args:
             deployment_id: Deployment identifier
-            data: Market data DataFrame
+            data: Market data DataFrame, requis uniquement pour le moteur de règles fixes
+                (la branche ML_RANDOM_FOREST va chercher ses propres données live)
 
         Returns:
             Execution results with signals and metadata
@@ -277,50 +289,66 @@ class StrategyService:
             strategy_model = deployment.strategy
 
             try:
-                # Create strategy instance
-                strategy_params = {**strategy_model.parameters}
-                if deployment.parameters:
-                    strategy_params.update(deployment.parameters)
+                if strategy_model.strategy_type == StrategyTypeEnum.ML_RANDOM_FOREST:
+                    df = build_live_feature_frame(deployment.symbol, deployment.timeframe)
+                    latest_row = df.iloc[-1]
+                    svc = InferenceService()
+                    features = {col: latest_row[col] for col in svc.feature_columns}
+                    result = svc.predict(features)
+                    latest_signal = result["signal_value"]
+                    signal_info = {
+                        "timestamp": (latest_row.name if hasattr(latest_row, "name") else None),
+                        "price": float(latest_row.get("close", 0)),
+                        "confidence": result["confidence"],
+                        "probabilities": result["probabilities"],
+                    }
+                    data_points = len(df)
+                else:
+                    # Create strategy instance
+                    strategy_params = {**strategy_model.parameters}
+                    if deployment.parameters:
+                        strategy_params.update(deployment.parameters)
 
-                strategy = get_strategy(strategy_model.strategy_type, strategy_params)
+                    strategy = get_strategy(strategy_model.strategy_type, strategy_params)
 
-                # Execute strategy
-                results = strategy.run(data)
+                    # Execute strategy
+                    results = strategy.run(data)
+                    data_points = len(results)
 
-                # Get the latest signal
-                latest_signal = 0
-                signal_info = {}
+                    # Get the latest signal
+                    latest_signal = 0
+                    signal_info = {}
 
-                if not results.empty and "signal" in results.columns:
-                    # Get the last non-zero signal
-                    non_zero_signals = results[results["signal"] != 0]
-                    if not non_zero_signals.empty:
-                        latest_row = non_zero_signals.iloc[-1]
-                        latest_signal = latest_row["signal"]
-                        signal_info = {
-                            "timestamp": (latest_row.name if hasattr(latest_row, "name") else None),
-                            "price": float(latest_row.get("close", 0)),
-                            "indicators": {
-                                col: float(latest_row[col])
-                                for col in latest_row.index
-                                if col
-                                not in [
-                                    "signal",
-                                    "open",
-                                    "high",
-                                    "low",
-                                    "close",
-                                    "volume",
-                                ]
-                                and pd.notna(latest_row[col])
-                            },
-                        }
+                    if not results.empty and "signal" in results.columns:
+                        # Get the last non-zero signal
+                        non_zero_signals = results[results["signal"] != 0]
+                        if not non_zero_signals.empty:
+                            latest_row = non_zero_signals.iloc[-1]
+                            latest_signal = latest_row["signal"]
+                            signal_info = {
+                                "timestamp": (latest_row.name if hasattr(latest_row, "name") else None),
+                                "price": float(latest_row.get("close", 0)),
+                                "indicators": {
+                                    col: float(latest_row[col])
+                                    for col in latest_row.index
+                                    if col
+                                    not in [
+                                        "signal",
+                                        "open",
+                                        "high",
+                                        "low",
+                                        "close",
+                                        "volume",
+                                    ]
+                                    and pd.notna(latest_row[col])
+                                },
+                            }
 
                 # Update strategy state
                 state = deployment.state
                 if state:
-                    state.last_execution = datetime.now(UTC)
-                    state.last_signal = latest_signal
+                    state.last_signal_time = datetime.now(UTC)
+                    state.last_signal = VALUE_TO_SIGNAL.get(latest_signal, "HOLD")
                     session.commit()
 
                 execution_result = {
@@ -328,7 +356,7 @@ class StrategyService:
                     "strategy_type": strategy_model.strategy_type,
                     "latest_signal": latest_signal,
                     "signal_info": signal_info,
-                    "data_points": len(results),
+                    "data_points": data_points,
                     "execution_time": datetime.now(UTC).isoformat(),
                 }
 
@@ -346,6 +374,65 @@ class StrategyService:
 
                 session.commit()
                 raise BusinessLogicError(f"Strategy execution failed: {e!s}") from None
+
+    async def execute_active_deployments(self) -> list[dict[str, Any]]:
+        response = list()
+        with get_db_session() as session:
+            deployments = session.query(StrategyDeployment).filter(StrategyDeployment.status == "active").all()
+            for deployment in deployments:
+                state = deployment.state
+                if state and state.last_signal_time:
+                    cooldown = deployment.strategy.parameters.get("cooldown_seconds", 300)
+                    last_signal_time = state.last_signal_time
+                    if last_signal_time.tzinfo is None:
+                        # SQLite (tests, dev) stocke la colonne DateTime sans tzinfo : on
+                        # sait qu'elle est toujours ecrite en UTC (cf. plus haut, ligne 347).
+                        last_signal_time = last_signal_time.replace(tzinfo=UTC)
+                    if timedelta(seconds=cooldown) > (datetime.now(UTC) - last_signal_time):
+                        response.append(
+                            {
+                                "deployment_id": deployment.id,
+                                "action": "skipped_cooldown",
+                            }
+                        )
+                        continue
+                if state and state.position not in (None, "NEUTRAL"):
+                    response.append(
+                        {
+                            "deployment_id": deployment.id,
+                            "action": "skipped_open_position",
+                        }
+                    )
+                    continue
+                result = await self.execute_strategy(deployment.id)
+
+                if result and "latest_signal" in result and result["latest_signal"] != 0:
+                    price = Decimal(str(result["signal_info"]["price"]))
+                    quantity = deployment.amount / price
+                    side = OrderSideEnum.BUY if result["latest_signal"] == 1 else OrderSideEnum.SELL
+                    order_data = OrderCreate(
+                        deployment_id=deployment.id,
+                        symbol=deployment.symbol,
+                        order_type=OrderTypeEnum.MARKET,
+                        side=side,
+                        quantity=quantity,
+                    )
+                    trading_service = TradingService(session)
+                    await trading_service.create_order(deployment.user_id, order_data)
+                    response.append(
+                        {
+                            "deployment_id": deployment.id,
+                            "action": "order_submitted",
+                        }
+                    )
+                else:
+                    response.append(
+                        {
+                            "deployment_id": deployment.id,
+                            "action": "hold",
+                        }
+                    )
+        return response
 
     def stop_deployment(self, user_id: str, deployment_id: str, reason: str = None) -> StrategyDeploymentResponse:
         """
@@ -509,3 +596,14 @@ class StrategyService:
             Tuple of (is_valid, error_message)
         """
         return registry.validate_strategy(strategy_type, parameters)
+
+    def get_available_models(self) -> list[dict[str, Any]]:
+        ML_API_URL = os.environ.get("ML_API_URL", "http://crypto-bot-ml-api:8010")
+
+        response = requests.get(
+            f"{ML_API_URL}/models",
+            timeout=30,
+        )
+        response.raise_for_status()
+        logger.info("get_available_models: %s", response.json())
+        return response.json()["models"]

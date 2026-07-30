@@ -40,6 +40,7 @@ MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "crypto-bot-data")
 # Récupération MinIO
 # ---------------------------------------------------------------------------
 
+
 def download_parquet_dataframe(object_key: str, bucket: str = MINIO_BUCKET) -> pd.DataFrame:
     """Télécharge un fichier Parquet depuis MinIO et le charge en DataFrame."""
     client = MinioClient()
@@ -113,7 +114,8 @@ def transform_and_load(df: pd.DataFrame, db_url: str | None = None) -> None:
     except Exception as exc:
         logger.error(
             "La table 'market_data' n'existe pas ou n'est pas accessible. "
-            "Assurez-vous que le backend a initialisé la base de données : %s", exc
+            "Assurez-vous que le backend a initialisé la base de données : %s",
+            exc,
         )
         raise
 
@@ -143,6 +145,7 @@ def transform_and_load(df: pd.DataFrame, db_url: str | None = None) -> None:
 # Point d'entrée principal
 # ---------------------------------------------------------------------------
 
+
 def run_loading(object_key: str, bucket: str = MINIO_BUCKET, db_url: str | None = None) -> None:
     """Télécharge le fichier de MinIO et le charge dans PostgreSQL."""
     df = download_parquet_dataframe(object_key, bucket)
@@ -151,9 +154,7 @@ def run_loading(object_key: str, bucket: str = MINIO_BUCKET, db_url: str | None 
 
 def main() -> None:
     configure_logging(name="transform.load_ohlcv", level="INFO")
-    parser = argparse.ArgumentParser(
-        description="Charge les données OHLCV depuis MinIO dans PostgreSQL."
-    )
+    parser = argparse.ArgumentParser(description="Charge les données OHLCV depuis MinIO dans PostgreSQL.")
     parser.add_argument("--object-key", required=True, help="Clé de l'objet Parquet dans MinIO")
     parser.add_argument("--bucket", default=MINIO_BUCKET, help="Bucket MinIO source")
     parser.add_argument("--db-url", default=None, help="URL de connexion à la base de données")
@@ -162,7 +163,7 @@ def main() -> None:
     try:
         run_loading(object_key=args.object_key, bucket=args.bucket, db_url=args.db_url)
         print("✓ Données chargées avec succès dans la base de données.")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("Échec du chargement : %s", exc)
         sys.exit(1)
 

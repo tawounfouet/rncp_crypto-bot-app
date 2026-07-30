@@ -68,14 +68,22 @@ def _render_exchange_status_card(
         if credential_status.updated_at
         else "Aucune cle enregistree"
     )
-    st.write(f"API key masque: `{credential_status.api_key_masked or 'non configuree'}`")
-    st.write(f"API secret masque: `{credential_status.api_secret_masked or 'non configure'}`")
+    if credential_status.configured:
+        mode_label = "Simulation" if credential_status.active_mode == "sandbox" else "Reel"
+        st.write(f"Mode actif : **{mode_label}**")
+    st.write(f"Cles reelles : {'configurees' if credential_status.live_configured else 'absentes'}")
+    if credential_status.supports_sandbox:
+        st.write(
+            f"Cles simulation : {'configurees' if credential_status.sandbox_configured else 'absentes'}"
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _render_exchange_credentials_form(service: AccountService, exchange: str, title: str) -> None:
+def _render_exchange_credentials_form(
+    service: AccountService, exchange: str, mode: str, title: str
+) -> None:
     render_section_title(title)
-    with st.form(f"exchange_form_{exchange}", clear_on_submit=True):
+    with st.form(f"exchange_form_{exchange}_{mode}", clear_on_submit=True):
         api_key = st.text_input("API key")
         api_secret = st.text_input("API secret", type="password")
         save_keys = compat_form_submit_button(
@@ -90,8 +98,45 @@ def _render_exchange_credentials_form(service: AccountService, exchange: str, ti
                 exchange=exchange,
                 api_key=api_key,
                 api_secret=api_secret,
+                mode=mode,
             )
         )
+        show_feedback("success" if ok else "error", message)
+        if ok:
+            st.rerun()
+
+
+def _render_mode_selector(
+    service: AccountService, exchange: str, credential_status: ExchangeCredentialStatus
+) -> None:
+    render_section_title("Mode actif")
+    if not credential_status.live_configured:
+        st.caption(
+            "Enregistrez d'abord vos cles reelles pour pouvoir choisir le mode "
+            "(reel ou simulation)."
+        )
+        return
+
+    if not credential_status.supports_sandbox:
+        st.caption(
+            f"{EXCHANGE_CATALOG.get(exchange, exchange)} n'a pas de testnet : en mode "
+            "simulation, le solde reste reel, seuls les ordres sont simules."
+        )
+
+    options = ["live", "sandbox"]
+    labels = {"live": "Reel", "sandbox": "Simulation"}
+    selected = st.radio(
+        "Mode",
+        options=options,
+        format_func=lambda opt: labels[opt],
+        index=options.index(credential_status.active_mode)
+        if credential_status.active_mode in options
+        else 0,
+        horizontal=True,
+        key=f"mode_selector_{exchange}",
+    )
+    if selected != credential_status.active_mode:
+        ok, message = service.set_active_mode(exchange, selected)
         show_feedback("success" if ok else "error", message)
         if ok:
             st.rerun()
@@ -153,10 +198,6 @@ def main() -> None:
         )
         st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
-        _render_exchange_credentials_form(
-            service, selected_exchange, f"Configuration {exchange_label} (prioritaire)"
-        )
-        st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
 
     left, right = st.columns([1.1, 1], gap="large")
     with left:
@@ -164,11 +205,24 @@ def main() -> None:
     with right:
         _render_exchange_status_card(selected_exchange, credential_status)
 
-    if credential_status.configured:
-        st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+    st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+    if credential_status.supports_sandbox:
+        keys_left, keys_right = st.columns(2, gap="large")
+        with keys_left:
+            _render_exchange_credentials_form(
+                service, selected_exchange, "live", f"Cles reelles {exchange_label}"
+            )
+        with keys_right:
+            _render_exchange_credentials_form(
+                service, selected_exchange, "sandbox", f"Cles simulation {exchange_label}"
+            )
+    else:
         _render_exchange_credentials_form(
-            service, selected_exchange, f"Mettre a jour les credentials {exchange_label}"
+            service, selected_exchange, "live", f"Cles reelles {exchange_label}"
         )
+
+    st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+    _render_mode_selector(service, selected_exchange, credential_status)
 
 
 if __name__ == "__main__":

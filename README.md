@@ -1,5 +1,8 @@
 # Crypto-Bot App
 
+Statut: référence
+Derniere revision: 2026-07-28
+
 Projet de trading automatise de cryptomonnaies — monorepo applicatif (backend + frontend).
 
 ## Architecture
@@ -20,12 +23,9 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
 ├── scripts/
 │   ├── check-infra.sh          # Validation coherence versions.env / Dockerfiles
-│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests si code modifie
-│   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev
-│   ├── push.sh                 # Push sur le remote
-│   ├── run_lint.sh             # Linting local (legacy, preferer make lint)
-│   ├── run_tests.sh            # Tests locaux (legacy, preferer make test)
-│   └── docker_status.sh        # Statut des containers Docker
+│   ├── run-tests-if-needed.sh  # Pre-commit : lint + tests cibles si code modifie
+│   ├── dev-deploy.sh           # Build + push + restart K8s namespace dev (outil perso)
+│   └── generate-requirements.py # Compilation des requirements depuis versions.env
 ├── .semgrep/                   # Regles de securite Semgrep
 ├── init-scripts/               # Scripts d'init PostgreSQL
 ├── docker-compose.yml          # Developpement local
@@ -41,142 +41,27 @@ Crypto-bot-app/                 # Monorepo applicatif
 
 Le repo d'infrastructure Kubernetes est separe : `dst_crypto/Crypto-bot-infra` (Kustomize, overlays, ArgoCD).
 
-## Installation
+## Demarrage rapide
 
 ```bash
-# Cloner le projet
 git clone git@gitlab.com:dst_crypto/Crypto-bot-app.git
 cd Crypto-bot-app
+cp .env.example .env   # puis editer .env avec vos valeurs
 
-# Configurer l'environnement
-cp .env.example .env
-# Editer .env avec vos valeurs
+make dev-up            # demarre tous les services (charge versions.env + .env)
+make dev-init           # premiere fois : cree les buckets MinIO
+make health             # verifie la sante du backend
 ```
 
-## Environnement de developpement local
-
-### Venv Python (lint + tests)
-
-```bash
-# Creer le venv a la racine du projet (Python 3.11 requis)
-python3.11 -m venv .venv
-
-# Activer le venv
-source .venv/bin/activate
-
-# Installer les dependances
-pip install -r backend/requirements-dev.txt
-
-# Installer les hooks pre-commit
-pre-commit install
-```
-
-Le `.venv` est utilise par `make lint`, `make test` et le hook pre-commit.
-
-### Lancer l'application
-
-```bash
-# Demarrer tous les services (charge automatiquement versions.env + .env)
-make dev-up
-
-# Verifier la sante du backend
-make health
-
-# Initialiser les buckets MinIO (premiere fois)
-make dev-init
-
-# Voir les logs
-make dev-logs
-
-# Arreter
-make dev-down
-```
-
-> **Important** : le `Makefile` charge `versions.env` (versions d'images, tracke dans git)
-> et `.env` (secrets, gitignore) via `include` + `export`. Utiliser `make` plutot que
-> `docker compose` directement pour garantir la resolution de toutes les variables.
+Guide d'installation complet (venv, hooks pre-commit, tests, lint, workflow Git/CI,
+depannage) : **[docs/01-setup.md](docs/01-setup.md)**.
 
 ## Services (developpement local)
 
 Backend : http://localhost:8009/api/v1/docs — Frontend : http://localhost:8501
 
 Liste complete des ports (dev/staging/prod, VM AWS, port-forward K8s) : voir
-[docs/SETUP.md](docs/SETUP.md#services-par-environnement-vm-aws).
-
-## Tests et qualite
-
-```bash
-make test              # Tests unitaires (venv local)
-make lint              # Verifier le code (ruff check + format)
-make lint-fix          # Corriger automatiquement les erreurs ruff
-make check-infra       # Valider coherence versions.env / Dockerfiles / docker-compose
-make health            # Verifier la sante du backend (PORT=8010 make health pour prod VM)
-```
-
-### Pre-commit hooks
-
-Les hooks sont configures dans `.pre-commit-config.yaml` :
-
-| Hook | Declencheur | Action |
-|------|------------|--------|
-| trailing-whitespace, end-of-file, check-yaml/toml/json | Tous fichiers | Qualite basique |
-| ruff check + format | `backend/src/` ou `frontend/src/` | Lint Python |
-| semgrep | Fichiers Python | Scan securite |
-| check-infra | Dockerfile, docker-compose, Makefile, versions.env, requirements, pyproject.toml | Validation infra (8 checks) |
-| run-tests | `backend/src/**/*.py` ou `frontend/src/**/*.py` | `make lint` + `make test` |
-
-## Workflow CI/CD
-
-### Branches et merge requests
-
-```
-feature/* ou dev_*                                   Branches de travail
-    |
-    |  push --> CI : lint seul (feedback rapide)
-    |
-    |  MR (0 approbation requise)
-    v
-staging                                              Integration
-    |
-    |  MR --> CI : lint + build + test
-    |  push --> CI : build + test + deploy VM AWS
-    |
-    |  MR (1+ approbation requise)
-    v
-main                                                 Branche stable (pas de pipeline)
-    |
-    |  tag vX.X --> CI : build + deploy production (manuel)
-    v
-tag vX.X                                             Release
-```
-
-### Stages du pipeline
-
-| Stage | Jobs | Declencheur |
-|-------|------|-------------|
-| lint | `lint:versions`, `lint:python`, `lint:dockerfile:*`, `semgrep_sast` | MR, dev_\*, feature/\* |
-| build | `build:docker`, `scan:images`, `validate_tag` | MR, staging, tag vX.X |
-| test | `test:integration` | MR, staging, tag vX.X |
-| deploy | `deploy:staging`, `deploy:production`, `create_release`, `update:manifests` | staging / tag vX.X |
-
-### Tags des images Docker
-
-| Declencheur | Tags pushes |
-|-------------|-------------|
-| MR | `:test-<pipeline_id>` + `:latest` |
-| Branche `staging` | `:staging` + `:latest` |
-| Tag `vX.X` | `:vX.X` + `:production` + `:latest` |
-
-Les images sont pushees sur `registry.gitlab.com/dst_crypto/crypto-bot-app/backend` et `.../frontend`.
-
-### Variables CI/CD requises
-
-| Variable | Niveau | Description |
-|----------|--------|-------------|
-| `GROUP_PAT_TOKEN` | Groupe dst_crypto | PAT avec scope `write_repository` |
-| `SSH_PRIVATE_KEY` | Projet Crypto-bot-app | Cle SSH privee pour deployer sur la VM AWS |
-| `VM_HOST` | Projet Crypto-bot-app | IP de la VM AWS |
-| `SSH_USER` | Projet Crypto-bot-app | Utilisateur SSH |
+[docs/01-setup.md](docs/01-setup.md#services-par-environnement-vm-aws).
 
 ## Infrastructure Kubernetes (Talos / ArgoCD)
 
@@ -217,7 +102,7 @@ sur la VM et sur le cluster K8s.
 | Staging | `/opt/crypto-bot-staging` | `docker-compose.staging.yml` |
 | Production | `/opt/crypto-bot-prod` | `docker-compose.prod.yml` |
 
-Ports detailles : voir [docs/SETUP.md](docs/SETUP.md#services-par-environnement-vm-aws).
+Ports detailles : voir [docs/01-setup.md](docs/01-setup.md#services-par-environnement-vm-aws).
 En production, Adminer est sous le profile `debug` et ne demarre pas par defaut.
 Pour les activer ponctuellement : `make prod-debug-up` / `make prod-debug-down`.
 
@@ -225,40 +110,10 @@ Pour les activer ponctuellement : `make prod-debug-up` / `make prod-debug-down`.
 
 | Script | Description |
 |--------|-------------|
-| `scripts/check-infra.sh` | Validation coherence infra (8 checks) |
-| `scripts/run-tests-if-needed.sh` | Pre-commit : lint + tests si code Python modifie |
-| `scripts/dev-deploy.sh` | Build + push + restart K8s namespace dev |
-| `scripts/docker_status.sh` | Statut des containers Docker |
-
-## Commandes Makefile
-
-Taper `make` pour afficher toutes les commandes disponibles.
-
-| Commande | Description |
-|----------|-------------|
-| `make dev-up` | Demarrer l'env dev |
-| `make dev-down` | Arreter l'env dev |
-| `make dev-logs` | Suivre les logs dev |
-| `make dev-config` | Valider la config dev |
-| `make dev-build` | Rebuild les images dev (sans cache) |
-| `make dev-init` | Creer les buckets MinIO (dev) |
-| `make staging-up` | Demarrer staging |
-| `make staging-down` | Arreter staging |
-| `make staging-config` | Valider la config staging |
-| `make staging-logs` | Suivre les logs staging |
-| `make staging-init` | Creer les buckets MinIO (staging) |
-| `make prod-up` | Demarrer la prod |
-| `make prod-down` | Arreter la prod |
-| `make prod-config` | Valider la config prod |
-| `make prod-logs` | Suivre les logs prod |
-| `make prod-init` | Creer les buckets MinIO (prod) |
-| `make prod-debug-up` | Activer Adminer en prod |
-| `make prod-debug-down` | Desactiver Adminer en prod |
-| `make test` | Tests unitaires (venv local) |
-| `make lint` | Ruff check + format |
-| `make lint-fix` | Corriger automatiquement |
-| `make check-infra` | Valider coherence infra |
-| `make health` | Verifier la sante du backend |
+| `scripts/check-infra.sh` | Validation coherence infra (10 checks) |
+| `scripts/run-tests-if-needed.sh` | Pre-commit : lint + tests cibles sur les zones modifiees |
+| `scripts/dev-deploy.sh` | Build + push + restart K8s namespace dev (outil perso) |
+| `scripts/generate-requirements.py` | Compilation des requirements depuis versions.env |
 
 ## Monitoring
 
@@ -266,31 +121,12 @@ Loki, Promtail et Grafana sont deployes dans le namespace `monitoring` du cluste
 Promtail collecte les logs de tous les pods, Loki les stocke, et Grafana fournit une
 interface de visualisation et d'alerte.
 
-## Depannage
+## Pour aller plus loin
 
-### Erreur "No module named 'src'"
-
-```bash
-# Le PYTHONPATH est gere automatiquement par make test
-# Pour lancer pytest manuellement :
-PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
-```
-
-### Les containers ne demarrent pas
-
-```bash
-make dev-logs          # Voir les logs
-make dev-build         # Reconstruire les images
-make dev-up            # Relancer
-```
-
-### Le cluster K8s ne repond pas
-
-```bash
-# Verifier que Tailscale est connecte avec les routes acceptees
-tailscale status
-tailscale up --accept-routes
-
-# Tester la connexion au cluster
-kubectl --context admin@crypto-bot get nodes
-```
+| Document | Contenu |
+|----------|---------|
+| [docs/01-setup.md](docs/01-setup.md) | Installation complete, commandes Makefile, workflow Git/CI, gestion des versions, depannage |
+| [docs/02-interfaces.md](docs/02-interfaces.md) | Carte des interfaces et contrats entre services (frontend, backend, DB, exchanges, Airflow, ML, MinIO) |
+| [docs/03-architecture-data-ml.md](docs/03-architecture-data-ml.md) | Flux de donnees Binance -> MinIO -> ML -> backend |
+| [docs/04-architecture-db.md](docs/04-architecture-db.md) | Schema de la base de donnees (tables, vues, index) |
+| [docs/05-multi-exchange-layer.md](docs/05-multi-exchange-layer.md) | Abstraction multi-exchange (drivers de marche, clients d'execution) |

@@ -1,5 +1,8 @@
 # Roadmap et livrables
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Roadmap courte
 
 | Phase | Durée cible | Objectif | Livrable |
