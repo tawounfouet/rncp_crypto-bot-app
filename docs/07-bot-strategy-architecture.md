@@ -68,17 +68,34 @@ existants à vérifier avant suppression, cf. §5) ?
    de modèle ML lui-même (n'existe pas), et la liste de modèles doit être filtrée par
    plateforme (cf. gap "registre de modèles pas scopé par exchange", déjà documenté dans
    `06-testnet-simulation-modes.md` §4).
-5. **Active le bot** — **le plus gros trou identifié** : `backend/src/trading/service.py`
+5. **Active le bot** — **le plus gros trou restant** : `backend/src/trading/service.py`
    contient des `TODO` non résolus sur l'essentiel (soumission d'ordre réelle, annulation,
-   P&L, suivi de position) et `strategy/service.py::execute_strategy` n'est branché à aucun
-   modèle ML aujourd'hui (seulement au moteur de règles fixes, cf. §3).
+   P&L, suivi de position). En revanche `strategy/service.py::execute_strategy` est
+   maintenant branché sur un modèle ML (`ML_RANDOM_FOREST`, cf. mise à jour ci-dessous) —
+   le moteur de règles fixes (§3) reste utilisé pour les autres `strategy_type`.
+
+## 4bis. Mise à jour 2026-07-29 — branchement ML fait pour Random Forest
+
+Une partie du §5 (point 2) est résolue : `StrategyTypeEnum` a une valeur
+`ML_RANDOM_FOREST`, `StrategyUpdate.strategy_type` permet de la persister, et
+`execute_strategy` bascule dessus vers `backend/src/inference/live_features.py::
+build_live_feature_frame` + `InferenceService` local (nouvelle route
+`POST /inference/predict-live`). Le moteur de règles fixes (§3) n'est pas supprimé —
+toujours utilisé pour les `strategy_type` autres que `ML_RANDOM_FOREST` — la question de
+sa suppression (§5, point 1) reste ouverte. Ce chantier s'arrête volontairement avant la
+soumission d'ordre réelle (Phase 3 du plan `boucle d'exécution du bot`, point d'arrêt en
+attente de feu vert) : "activer un bot" produit déjà un signal ML mais ne passe pas encore
+d'ordre. LSTM reste hors périmètre (cf. `models/src/models/lstm.py`, jamais câblé, aucune
+inférence écrite).
 
 ## 5. Points ouverts à trancher avant de coder
 
 - Supprimer ou geler `backend/src/strategy/engine/` (règles fixes) — vérifier les tests qui en
   dépendent avant de décider.
-- Où et comment brancher `inference/service.py` (ML) dans `strategy/service.py::execute_strategy`
-  pour que "activer un bot" utilise réellement un modèle ML, pas une règle fixe.
+- ~~Où et comment brancher `inference/service.py` (ML) dans
+  `strategy/service.py::execute_strategy`~~ — fait le 2026-07-29 pour Random Forest, cf.
+  §4bis. Reste ouvert pour un futur modèle LSTM (branchement `ML_LSTM` séparé, prévu comme
+  chantier futur).
 - Modélisation exacte du "modèle ML disponible pour cet exchange" (dépend du registre
   scopé-par-exchange, point ouvert de `06-testnet-simulation-modes.md`).
 - Portée réaliste vs calendrier (fin août) : ce document décrit la cible sans contrainte de

@@ -21,6 +21,7 @@ class StrategyTypeEnum(str, Enum):
     GRID_TRADING = "grid_trading"
     MEAN_REVERSION = "mean_reversion"
     MOMENTUM = "momentum"
+    ML_RANDOM_FOREST = "ml_random_forest"
     CUSTOM = "custom"
 
 
@@ -89,6 +90,7 @@ class StrategyUpdate(BaseModel):
     parameters: dict[str, Any] | None = None
     is_public: bool | None = None
     is_active: bool | None = None
+    strategy_type: StrategyTypeEnum | None = None
 
 
 # Strategy Deployment

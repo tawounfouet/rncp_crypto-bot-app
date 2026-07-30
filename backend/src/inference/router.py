@@ -4,7 +4,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from inference.schemas import ModelInfoResponse, PredictRequest, PredictResponse
+from inference.live_features import build_live_feature_frame
+from inference.schemas import ModelInfoResponse, PredictLiveRequest, PredictRequest, PredictResponse
 from inference.service import InferenceError, InferenceService
 
 logger = logging.getLogger(__name__)
@@ -66,4 +67,25 @@ def model_info():
         feature_columns=columns,
         artifact_path=str(svc.cache_dir),
         loaded=loaded,
+    )
+
+
+@router.post("/predict-live", response_model=PredictResponse)
+def predict_live(payload: PredictLiveRequest):
+    svc = get_service()
+    try:
+        df = build_live_feature_frame(payload.symbol, payload.interval)
+        last_row = df.iloc[-1]
+        features = {col: last_row[col] for col in svc.feature_columns}
+        result = svc.predict(features)
+
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return PredictResponse(
+        symbol=payload.symbol.upper(),
+        interval=payload.interval,
+        model_name=svc.model_name,
+        model_version=svc.model_version,
+        **result,
     )

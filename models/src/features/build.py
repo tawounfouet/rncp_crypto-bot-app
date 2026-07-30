@@ -10,7 +10,7 @@ import pandas as pd
 from src.config.config_loader import load_config
 from src.data.binance import apply_symbol_mapping
 from src.data.storage import read_raw_ohlcv_from_minio, write_dataset, write_json
-from src.features.indicators import (
+from utils.features.indicators import (
     add_bollinger_bands,
     add_ema,
     add_macd,

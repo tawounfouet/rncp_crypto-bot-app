@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Any
 
 import pandas as pd
+from inference.live_features import build_live_feature_frame
+from inference.service import InferenceService
 from market.service import MarketDataService
 from shared.core.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from shared.database import get_db_session
@@ -22,6 +24,7 @@ from strategy.schemas import (
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
     StrategyResponse,
+    StrategyTypeEnum,
     StrategyUpdate,
 )
 
@@ -249,7 +252,7 @@ class StrategyService:
             logger.info(f"Deployed strategy {deployment_data.strategy_id} as deployment {deployment.id}")
             return deployment_response
 
-    async def execute_strategy(self, deployment_id: str, data: pd.DataFrame) -> dict[str, Any]:
+    async def execute_strategy(self, deployment_id: str, data: pd.DataFrame | None = None) -> dict[str, Any]:
         """
         Execute a strategy on market data.
 
@@ -277,44 +280,60 @@ class StrategyService:
             strategy_model = deployment.strategy
 
             try:
-                # Create strategy instance
-                strategy_params = {**strategy_model.parameters}
-                if deployment.parameters:
-                    strategy_params.update(deployment.parameters)
+                if strategy_model.strategy_type == StrategyTypeEnum.ML_RANDOM_FOREST:
+                    df = build_live_feature_frame(deployment.symbol, deployment.timeframe)
+                    latest_row = df.iloc[-1]
+                    svc = InferenceService()
+                    features = {col: latest_row[col] for col in svc.feature_columns}
+                    result = svc.predict(features)
+                    latest_signal = result["signal_value"]
+                    signal_info = {
+                        "timestamp": (latest_row.name if hasattr(latest_row, "name") else None),
+                        "price": float(latest_row.get("close", 0)),
+                        "confidence": result["confidence"],
+                        "probabilities": result["probabilities"],
+                    }
+                    data_points = len(df)
+                else:
+                    # Create strategy instance
+                    strategy_params = {**strategy_model.parameters}
+                    if deployment.parameters:
+                        strategy_params.update(deployment.parameters)
 
-                strategy = get_strategy(strategy_model.strategy_type, strategy_params)
+                    strategy = get_strategy(strategy_model.strategy_type, strategy_params)
 
-                # Execute strategy
-                results = strategy.run(data)
+                    # Execute strategy
+                    results = strategy.run(data)
+                    data_points = len(results)
 
-                # Get the latest signal
-                latest_signal = 0
-                signal_info = {}
+                    # Get the latest signal
+                    latest_signal = 0
+                    signal_info = {}
 
-                if not results.empty and "signal" in results.columns:
-                    # Get the last non-zero signal
-                    non_zero_signals = results[results["signal"] != 0]
-                    if not non_zero_signals.empty:
-                        latest_row = non_zero_signals.iloc[-1]
-                        latest_signal = latest_row["signal"]
-                        signal_info = {
-                            "timestamp": (latest_row.name if hasattr(latest_row, "name") else None),
-                            "price": float(latest_row.get("close", 0)),
-                            "indicators": {
-                                col: float(latest_row[col])
-                                for col in latest_row.index
-                                if col
-                                not in [
-                                    "signal",
-                                    "open",
-                                    "high",
-                                    "low",
-                                    "close",
-                                    "volume",
-                                ]
-                                and pd.notna(latest_row[col])
-                            },
-                        }
+                    if not results.empty and "signal" in results.columns:
+                        # Get the last non-zero signal
+                        non_zero_signals = results[results["signal"] != 0]
+                        if not non_zero_signals.empty:
+                            latest_row = non_zero_signals.iloc[-1]
+                            latest_signal = latest_row["signal"]
+                            signal_info = {
+                                "timestamp": (latest_row.name if hasattr(latest_row, "name") else None),
+                                "price": float(latest_row.get("close", 0)),
+                                "indicators": {
+                                    col: float(latest_row[col])
+                                    for col in latest_row.index
+                                    if col
+                                    not in [
+                                        "signal",
+                                        "open",
+                                        "high",
+                                        "low",
+                                        "close",
+                                        "volume",
+                                    ]
+                                    and pd.notna(latest_row[col])
+                                },
+                            }
 
                 # Update strategy state
                 state = deployment.state
@@ -328,7 +347,7 @@ class StrategyService:
                     "strategy_type": strategy_model.strategy_type,
                     "latest_signal": latest_signal,
                     "signal_info": signal_info,
-                    "data_points": len(results),
+                    "data_points": data_points,
                     "execution_time": datetime.now(UTC).isoformat(),
                 }
 
