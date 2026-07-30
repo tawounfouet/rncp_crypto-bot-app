@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from mocks.db import MockStore
 from schemas.performance import (
     EquityPoint,
@@ -14,26 +12,10 @@ from schemas.performance import (
 from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token
+from utils.dates import parse_dt_or_now
+from utils.numeric import to_float as _float
 
 _PERIOD_MAP = {7: "7d", 14: "30d", 30: "30d", 90: "90d", 365: "1y"}
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
-
-
-def _float(value: object, default: float = 0.0) -> float:
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
 
 
 class PerformanceService:
@@ -97,7 +79,7 @@ class PerformanceService:
                             pnl_usdt=0.0,
                             fee_usdt=_float(t.get("fee_amount")),
                             duration_min=0,
-                            closed_at=_parse_dt(t.get("timestamp")),
+                            closed_at=parse_dt_or_now(t.get("timestamp")),
                         )
                     )
 

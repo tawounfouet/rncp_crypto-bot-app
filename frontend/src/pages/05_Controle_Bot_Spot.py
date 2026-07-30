@@ -12,11 +12,15 @@ from components.headers import render_page_header, render_section_title
 from components.prerequisites import render_exchange_prerequisite_state
 from layouts.page_shell import setup_page
 from prerequisites.exchange import evaluate_exchange_prerequisite
+from schemas.common import BotRuntimeStatus
 from services.base import ServiceError
 from services.bot_control_service import BotControlService
-from utils.constants import ACTION_PAUSE, ACTION_START, ACTION_STOP
+from utils.constants import ACTION_PAUSE, ACTION_STOP, DEFAULT_EXCHANGE, EXCHANGE_CATALOG
 from utils.formatters import format_datetime
 from utils.streamlit_compat import button as compat_button
+from utils.streamlit_compat import form_submit_button as compat_form_submit_button
+
+DEPLOY_TIMEFRAME = "1h"
 
 
 def _heartbeat_label(heartbeat_at: datetime) -> str:
@@ -83,11 +87,9 @@ def main() -> None:
                     "Start",
                     key=f"start_{bot.id}",
                     width="stretch",
-                    disabled=gate.actions_disabled,
+                    disabled=gate.actions_disabled or bot.status != BotRuntimeStatus.STOPPED,
                 ):
-                    result = service.apply_action(bot.id, ACTION_START)
-                    show_feedback("success" if result.success else "error", result.message)
-                    st.rerun()
+                    st.session_state[f"show_start_form_{bot.id}"] = True
             with btn_col2:
                 if compat_button(
                     "Pause",
@@ -97,7 +99,8 @@ def main() -> None:
                 ):
                     result = service.apply_action(bot.id, ACTION_PAUSE)
                     show_feedback("success" if result.success else "error", result.message)
-                    st.rerun()
+                    if result.success:
+                        st.rerun()
             with btn_col3:
                 if compat_button(
                     "Stop",
@@ -113,12 +116,56 @@ def main() -> None:
             with c1:
                 if st.button("Confirmer stop", key=f"confirm_{bot.id}", type="primary"):
                     result = service.apply_action(bot.id, ACTION_STOP)
-                    st.session_state[f"confirm_stop_{bot.id}"] = False
                     show_feedback("success" if result.success else "error", result.message)
-                    st.rerun()
+                    if result.success:
+                        st.session_state[f"confirm_stop_{bot.id}"] = False
+                        st.rerun()
             with c2:
                 if st.button("Annuler", key=f"cancel_{bot.id}"):
                     st.session_state[f"confirm_stop_{bot.id}"] = False
+                    st.rerun()
+
+        if (not gate.actions_disabled) and st.session_state.get(f"show_start_form_{bot.id}", False):
+            with st.form(f"start_form_{bot.id}"):
+                exchange = st.selectbox(
+                    "Exchange",
+                    options=list(EXCHANGE_CATALOG.keys()),
+                    format_func=lambda eid: EXCHANGE_CATALOG.get(eid, eid),
+                    index=list(EXCHANGE_CATALOG.keys()).index(DEFAULT_EXCHANGE),
+                    key=f"start_exchange_{bot.id}",
+                )
+                symbol = st.text_input("Symbole", value="BTCUSDT", key=f"start_symbol_{bot.id}")
+                st.caption(f"Timeframe: {DEPLOY_TIMEFRAME} (fixe pour le MVP)")
+                amount = st.number_input(
+                    "Montant",
+                    min_value=0.0,
+                    value=100.0,
+                    step=10.0,
+                    key=f"start_amount_{bot.id}",
+                )
+                c1, c2 = st.columns(2)
+                with c1:
+                    confirm_start = compat_form_submit_button(
+                        "Confirmer le demarrage", type="primary"
+                    )
+                with c2:
+                    cancel_start = compat_form_submit_button("Annuler")
+
+            if cancel_start:
+                st.session_state[f"show_start_form_{bot.id}"] = False
+                st.rerun()
+
+            if confirm_start:
+                result = service.deploy(
+                    bot.id,
+                    exchange=exchange,
+                    symbol=symbol,
+                    timeframe=DEPLOY_TIMEFRAME,
+                    amount=str(amount),
+                )
+                show_feedback("success" if result.success else "error", result.message)
+                if result.success:
+                    st.session_state[f"show_start_form_{bot.id}"] = False
                     st.rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)

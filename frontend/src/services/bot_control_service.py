@@ -11,6 +11,7 @@ from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token
 from utils.constants import ACTION_START, ACTION_STOP
+from utils.dates import parse_dt_or_now
 
 _DEPLOY_STATUS_MAP: dict[str, BotRuntimeStatus] = {
     "active": BotRuntimeStatus.RUNNING,
@@ -18,17 +19,6 @@ _DEPLOY_STATUS_MAP: dict[str, BotRuntimeStatus] = {
     "stopped": BotRuntimeStatus.STOPPED,
     "error": BotRuntimeStatus.ERROR,
 }
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
 
 
 class BotControlService:
@@ -91,11 +81,11 @@ class BotControlService:
                 status = _DEPLOY_STATUS_MAP.get(
                     deployment.get("status", "stopped"), BotRuntimeStatus.STOPPED
                 )
-                heartbeat = _parse_dt(deployment.get("updated_at"))
+                heartbeat = parse_dt_or_now(deployment.get("updated_at"))
             else:
                 # Cherche le dernier deployment (pas forcement actif)
                 status = BotRuntimeStatus.STOPPED
-                heartbeat = _parse_dt(s.get("updated_at"))
+                heartbeat = parse_dt_or_now(s.get("updated_at"))
 
             bots.append(
                 BotInfo(
@@ -135,8 +125,8 @@ class BotControlService:
                 success=False,
                 message=(
                     "Le demarrage d'un deployment necessite de renseigner "
-                    "exchange, symbole, timeframe et capital. "
-                    "Utilisez l'API ou creez un deployment depuis le backend."
+                    "exchange, symbole, timeframe et capital -- utilisez le formulaire "
+                    "de demarrage (methode deploy)."
                 ),
             )
 
@@ -145,3 +135,30 @@ class BotControlService:
             success=False,
             message="La mise en pause n'est pas supportee par l'API backend.",
         )
+
+    def deploy(
+        self,
+        bot_id: str,
+        *,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        amount: str,
+    ) -> BotActionResult:
+        token = self._token()
+        response = self.client.deploy_strategy(
+            token,
+            bot_id,
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            amount=amount,
+        )
+        if not response.success:
+            msg = (
+                response.error
+                or (response.data.get("detail") if isinstance(response.data, dict) else None)
+                or f"Erreur backend ({response.status_code})."
+            )
+            return BotActionResult(success=False, message=msg)
+        return BotActionResult(success=True, message="Deployment demarre.")

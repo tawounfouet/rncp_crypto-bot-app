@@ -12,18 +12,8 @@ from state.session import (
     set_exchange_configured,
     sync_current_user_from_backend,
 )
+from utils.api_errors import extract_error as _extract_error
 from utils.validators import validate_email, validate_required
-
-
-def _extract_error(response) -> str:
-    if response.error:
-        return response.error
-    data = response.data
-    if isinstance(data, dict):
-        detail = data.get("detail")
-        if isinstance(detail, str) and detail:
-            return detail
-    return f"Erreur backend ({response.status_code})."
 
 
 class AccountService:

@@ -185,6 +185,89 @@ garde traite maintenant explicitement le cas `tzinfo is None` en le réinterpré
 502) + tests complets sur toutes les méthodes de `BackendApiClient` côté frontend
 (26 tests, dont les 2 nouvelles : `get_available_models`, `deploy_strategy`).
 
+## 4.5. Mise à jour 2026-07-30 — sélecteur de modèle + création de bot (Phase 5, frontend)
+
+`06_Parametrage_Bot_Spot.py` : le sélecteur "Strategie" (jusque-là une liste en dur jamais
+réellement envoyée au backend, cf. §4) est remplacé par un sélecteur peuplé via
+`GET /strategies/available-models`, filtré sur `available=True`. `BotConfigService.save()`
+envoie désormais `strategy_type` au niveau racine du payload d'update (auparavant absent :
+modifier la "stratégie" dans ce formulaire n'avait jamais eu d'effet réel).
+
+Ajout, dans un `st.expander` toujours visible (ouvert par défaut si aucun bot n'existe,
+replié sinon) : un formulaire minimal de création de bot (nom + modèle), gap identifié
+pendant cette session — aucune page frontend ne permettait de créer une `Strategy`
+(= "bot" côté vocabulaire produit), ce qui bloquait totalement le test de cette page sans
+passer par un appel API manuel.
+
+**Décision d'architecture actée à cette occasion** (clarifiait une question restée ouverte
+depuis le 2026-07-24, cf. [[project_bot_ml_architecture_reflection]] en mémoire) :
+`strategy/engine/` (registre + implémentations de règles techniques —
+`moving_average_crossover`/`rsi_reversal`/`bollinger_bands`/`multi_indicator`) est
+**archivé, pas supprimé** : code backend conservé tel quel pour un usage futur éventuel,
+mais plus aucun chemin produit ne doit pouvoir le solliciter — seuls les modèles ML
+entraînés (`ml_random_forest`, futur `ml_lstm`) sont sélectionnables par l'utilisateur.
+Raison non technique : le référentiel RNCP de la formation exige un bloc de compétence
+ML (C12) évalué à la soutenance — exposer aussi des stratégies à règles diluerait le fait
+que le choix de stratégie *est* un choix de modèle entraîné.
+
+Bug découvert en conséquence directe de ce flou : `StrategyService.create_strategy()` et
+`update_strategy()` validaient `strategy_type` contre `registry.list_strategies()` (le
+registre technique, qui n'a jamais connu le ML) — `POST /strategies/` avec
+`strategy_type="ml_random_forest"` échouait donc systématiquement en 400. Corrigé par un
+bypass explicite (`if not strategy_type.startswith("ml_")`) dans les deux méthodes ; le
+registre technique reste fonctionnel tel quel si jamais réactivé plus tard, mais n'est plus
+consulté pour les types ML. `StrategyTypeEnum` garde ses valeurs techniques inchangées
+(archivage, pas suppression) ; `GET /strategies/available` (liste ces stratégies
+techniques) n'est déjà appelé par aucune page frontend.
+
+Tests ajoutés : 5 tests `BotConfigService` (`get_available_models`, `create_bot`, propagation
+de `strategy_type` dans `save()`) ; mock smoke-test (`frontend/tests/smoke/conftest.py`)
+corrigé pour distinguer `/strategies/available-models` du catch-all `/strategies` (qui
+renvoyait par erreur les strategies stub, sans clé `available`, faisant planter la page en
+mode smoke-test).
+
+## 4.6. Mise à jour 2026-07-30 — formulaire Start + nettoyage duplication frontend (Phase 5)
+
+`05_Controle_Bot_Spot.py` + `BotControlService.deploy()` : le bouton "Start" (jusque-là un
+placeholder renvoyant "utilisez l'API") ouvre désormais un formulaire inline (exchange via
+`EXCHANGE_CATALOG`, symbole, timeframe fixé `1h` pour le MVP, montant) qui appelle
+`deploy_strategy`. Bouton désactivé si le bot a déjà un deployment actif
+(`bot.status != STOPPED`).
+
+Bug découvert pendant la vérif manuelle : cliquer sur "Pause" (non supporté par le backend)
+n'affichait aucun message d'erreur visible. Cause : le pattern `show_feedback(...)` suivi
+d'un `st.rerun()` **inconditionnel** — le rerun relance le script avant que le message
+rendu n'ait pu s'afficher côté navigateur. Corrigé dans les 3 endroits concernés de ce
+fichier (Pause, confirmation Stop, confirmation Start) : le rerun ne se déclenche plus
+qu'en cas de succès. Les autres pages (`06_Parametrage_Bot_Spot.py`, `07_Gestion_de_compte.py`,
+`08_Admin.py`) suivaient déjà le bon pattern — bug isolé à ce fichier.
+
+Deuxième bug de la même famille que celui de la Phase 4 (§4.3), trouvé en testant Start en
+conditions réelles : `_heartbeat_label()` plantait sur `datetime.now(UTC) - heartbeat_at`
+quand `heartbeat_at` (parsé depuis `updated_at` renvoyé par le backend) était naïf. En
+creusant, cette fonction de parsing de date (`_parse_dt`) était **dupliquée à l'identique
+dans 6 fichiers** (`bot_control_service.py`, `bot_config_service.py`, `admin_service.py`,
+`market_service.py`, `portfolio_service.py`, `performance_service.py`) — toutes les 6
+partageaient donc le même bug latent. Centralisées dans `frontend/src/utils/dates.py` :
+`parse_dt(value) -> datetime | None` (normalise en UTC si `tzinfo is None`, préserve `None`
+si absent/invalide) et `parse_dt_or_now(value) -> datetime` (fallback `datetime.now(UTC)`).
+`admin_service.py` utilise `parse_dt` directement (a besoin de préserver `None` : un
+utilisateur peut ne jamais s'être connecté) ; les 5 autres utilisent `parse_dt_or_now`.
+
+En vérifiant l'étendue de cette duplication, deux autres helpers dans le même cas ont été
+trouvés et centralisés à leur tour : `_float`/`_int` (conversion tolérante, dupliqués dans
+4 fichiers) → `frontend/src/utils/numeric.py` (`to_float`, `to_int`) ; `_extract_error`
+(lecture du message d'erreur d'une `ApiResponse`, dupliqué dans 3 fichiers) →
+`frontend/src/utils/api_errors.py` (`extract_error`). La variante plus riche
+`_extract_error_message` d'`auth_service.py` (gère aussi `message`/`details`, pas un doublon
+strict) n'a pas été touchée.
+
+Tests ajoutés : 2 `BotControlService.deploy` (succès, erreur backend). Vérification manuelle
+complète du parcours Phase 5 : bot créé, configuré (modèle + paramètres de risque), démarré
+(deployment actif créé), cycle Airflow `cryptobot_bot_execution` déclenché manuellement —
+signal `HOLD` retourné par le modèle (aucun ordre soumis, comportement normal, pas un bug :
+`execute_active_deployments` ne soumet un ordre que si le signal n'est pas HOLD).
+
 ## 5. Points ouverts à trancher avant de coder
 
 - Supprimer ou geler `backend/src/strategy/engine/` (règles fixes) — vérifier les tests qui en

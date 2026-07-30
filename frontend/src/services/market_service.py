@@ -2,40 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from schemas.market import ExchangeOption, PublicKline, PublicPrice
 from services.api_client import BackendApiClient
 from services.base import ServiceError
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
-
-
-def _float(value: object, default: float = 0.0) -> float:
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-
-
-def _extract_error(response) -> str:
-    if response.error:
-        return response.error
-    data = response.data
-    if isinstance(data, dict):
-        detail = data.get("detail")
-        if isinstance(detail, str) and detail:
-            return detail
-    return f"Erreur backend ({response.status_code})."
+from utils.api_errors import extract_error as _extract_error
+from utils.dates import parse_dt_or_now
+from utils.numeric import to_float as _float
 
 
 class MarketService:
@@ -61,7 +33,7 @@ class MarketService:
                 symbol=item.get("symbol", ""),
                 exchange=item.get("exchange", exchange),
                 price=_float(item.get("price")),
-                as_of=_parse_dt(item.get("as_of")),
+                as_of=parse_dt_or_now(item.get("as_of")),
             )
             for item in data.get("data", [])
         ]
@@ -82,7 +54,7 @@ class MarketService:
                 symbol=item.get("symbol", ""),
                 exchange=item.get("exchange", exchange),
                 interval=item.get("interval", interval),
-                open_time=_parse_dt(item.get("open_time")),
+                open_time=parse_dt_or_now(item.get("open_time")),
                 open=_float(item.get("open")),
                 high=_float(item.get("high")),
                 low=_float(item.get("low")),
