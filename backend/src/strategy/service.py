@@ -258,7 +258,8 @@ class StrategyService:
 
         Args:
             deployment_id: Deployment identifier
-            data: Market data DataFrame
+            data: Market data DataFrame, requis uniquement pour le moteur de règles fixes
+                (la branche ML_RANDOM_FOREST va chercher ses propres données live)
 
         Returns:
             Execution results with signals and metadata

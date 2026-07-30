@@ -18,6 +18,7 @@ from utils.features.indicators import (
 logger = logging.getLogger(__name__)
 
 
+# bars à 200: choix délibéré pour permettre au futur LSTM (sequence_length=128) de réutiliser la fonction sans la modifier
 def build_live_feature_frame(symbol: str, interval: str, bars: int = 200) -> pd.DataFrame:
     rows = fetch_klines(symbol, interval, limit=bars)
 
@@ -25,6 +26,7 @@ def build_live_feature_frame(symbol: str, interval: str, bars: int = 200) -> pd.
         logger.warning(f"No data received from Binance for {symbol}")
         return pd.DataFrame()
 
+    # Doit rester synchronisé manuellement avec models/config.yaml features.technical_indicators
     df = pd.DataFrame(rows)
     df = add_returns(df, [1, 3, 6])
     df = add_volatility(df, [20])
@@ -38,9 +40,3 @@ def build_live_feature_frame(symbol: str, interval: str, bars: int = 200) -> pd.
 
     df = df.dropna()
     return df
-
-
-if __name__ == "__main__":
-    df = build_live_feature_frame("BTCUSDT", "1h", 1)
-    print("toto")
-    print(df)

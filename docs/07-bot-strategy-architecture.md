@@ -68,11 +68,12 @@ existants à vérifier avant suppression, cf. §5) ?
    de modèle ML lui-même (n'existe pas), et la liste de modèles doit être filtrée par
    plateforme (cf. gap "registre de modèles pas scopé par exchange", déjà documenté dans
    `06-testnet-simulation-modes.md` §4).
-5. **Active le bot** — **le plus gros trou restant** : `backend/src/trading/service.py`
-   contient des `TODO` non résolus sur l'essentiel (soumission d'ordre réelle, annulation,
-   P&L, suivi de position). En revanche `strategy/service.py::execute_strategy` est
-   maintenant branché sur un modèle ML (`ML_RANDOM_FOREST`, cf. mise à jour ci-dessous) —
-   le moteur de règles fixes (§3) reste utilisé pour les autres `strategy_type`.
+5. **Active le bot** — `backend/src/trading/service.py::create_order`/`cancel_order`
+   soumettent et annulent maintenant réellement les ordres sur l'exchange (cf. mise à jour
+   2026-07-30 ci-dessous) ; il reste des `TODO` non résolus sur le suivi de statut temps
+   réel et le P&L. `strategy/service.py::execute_strategy` est branché sur un modèle ML
+   (`ML_RANDOM_FOREST`, cf. mise à jour 2026-07-29) — le moteur de règles fixes (§3) reste
+   utilisé pour les autres `strategy_type`.
 
 ## 4bis. Mise à jour 2026-07-29 — branchement ML fait pour Random Forest
 
@@ -82,11 +83,37 @@ Une partie du §5 (point 2) est résolue : `StrategyTypeEnum` a une valeur
 build_live_feature_frame` + `InferenceService` local (nouvelle route
 `POST /inference/predict-live`). Le moteur de règles fixes (§3) n'est pas supprimé —
 toujours utilisé pour les `strategy_type` autres que `ML_RANDOM_FOREST` — la question de
-sa suppression (§5, point 1) reste ouverte. Ce chantier s'arrête volontairement avant la
-soumission d'ordre réelle (Phase 3 du plan `boucle d'exécution du bot`, point d'arrêt en
-attente de feu vert) : "activer un bot" produit déjà un signal ML mais ne passe pas encore
-d'ordre. LSTM reste hors périmètre (cf. `models/src/models/lstm.py`, jamais câblé, aucune
-inférence écrite).
+sa suppression (§5, point 1) reste ouverte. LSTM reste hors périmètre (cf.
+`models/src/models/lstm.py`, jamais câblé, aucune inférence écrite).
+
+## 4ter. Mise à jour 2026-07-30 — soumission ET annulation d'ordre réelles (Phase 3, élargie)
+
+Le point d'arrêt mentionné ci-dessus est levé : `TradingService.create_order` appelle
+maintenant `from_user_settings` + `client.place_order` (même pattern que
+`get_user_portfolio`) après la création de la ligne `Order`, avec un adaptateur manuel
+`OrderResult` → `Order` (pas de réutilisation de `update_from_exchange_response`, qui
+attend un dict brut Binance, cf. §"Découvertes clés" du plan). En cas d'échec (clés
+absentes/invalides, erreur exchange) : statut `"REJECTED"` persisté, pas de crash de
+l'endpoint. Couvert par 4 tests unitaires (`test_trading_service_create_order.py`) qui
+mockent `from_user_settings`/`client.place_order` — jamais d'appel réel dans les tests.
+
+Phase 3 a été élargie en cours de route (décision du 2026-07-30) : avant de soumettre des
+ordres réels, il fallait aussi pouvoir les annuler et en suivre le statut. Seule
+l'annulation a été retenue pour cette phase — `cancel_order` appelle maintenant
+`client.cancel_order(order.symbol, order.exchange_order_id)` (`order.exchange` sert
+directement de cible, pas besoin de recharger le `StrategyDeployment`). Différence de
+sémantique volontaire avec `create_order` : un échec (clés absentes/invalides, erreur
+exchange) lève une `BusinessLogicError` plutôt que de marquer l'ordre `"REJECTED"` —
+l'ordre reste ouvert sur l'exchange, l'appelant doit pouvoir réessayer, pas de faux statut
+silencieux. Couvert par 4 tests unitaires (`test_trading_service_cancel_order.py`), même
+principe de mocks. Le suivi de statut temps réel (`get_order_status_from_exchange`) reste
+hors périmètre : `ExchangeClient` n'a aucune méthode pour interroger un ordre existant
+côté exchange, ça demanderait d'étendre le contrat et ses 2 implémentations
+(`binance_native.py`, `ccxt_client.py`) — chantier séparé, pas juste un branchement.
+
+"Activer un bot" ML_RANDOM_FOREST va donc désormais jusqu'à la soumission et l'annulation
+réelles d'un ordre testnet, mais rien ne déclenche encore ce cycle périodiquement
+(Phase 4, Airflow) ni depuis le frontend (Phase 5).
 
 ## 5. Points ouverts à trancher avant de coder
 
