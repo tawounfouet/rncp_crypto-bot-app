@@ -291,6 +291,7 @@ services:
         PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: mlflow-ui
     restart: always
+    mem_limit: 1g
     ports:
       - "5001:5001"
     volumes:

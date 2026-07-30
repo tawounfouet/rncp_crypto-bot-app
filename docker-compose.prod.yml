@@ -177,6 +177,7 @@ services:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
     container_name: prod-mlflow-ui
     restart: always
+    mem_limit: 1g
     ports:
       - "5002:5001"
     volumes:
