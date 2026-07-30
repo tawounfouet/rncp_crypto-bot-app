@@ -160,6 +160,15 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
     if "/users" in path and method == "GET":
         return ApiResponse(status_code=200, data=_STUB_ADMIN_USERS)
 
+    # ── /strategies/available-models ──────────────────────────────────────────
+    if "/strategies/available-models" in path:
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {"name": "random_forest", "path": "artifacts/registry/random_forest/best", "available": True},
+                {"name": "lstm", "path": "artifacts/registry/lstm/best", "available": False},
+            ]
+        })
+
     # ── /strategies/deployments ───────────────────────────────────────────────
     if "/strategies/deployments" in path:
         return ApiResponse(status_code=200, data=[])

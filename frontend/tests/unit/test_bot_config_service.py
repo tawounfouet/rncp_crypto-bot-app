@@ -7,8 +7,8 @@ import pytest
 from schemas.bot import BotConfigUpdate
 from services.api_client import BackendApiClient
 from services.auth_api_client import ApiResponse
+from services.base import ServiceError
 from services.bot_config_service import BotConfigService
-
 
 MOCK_STRATEGY = {
     "id": "strat_btc",
@@ -120,3 +120,68 @@ def test_bot_config_save_validation_failure_skips_backend(store) -> None:
     assert ok is False
     assert config is None
     client.update_strategy.assert_not_called()
+
+
+def test_bot_config_save_sends_strategy_type(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.get_strategy.return_value = _ok(MOCK_STRATEGY)
+    client.update_strategy.return_value = _ok(MOCK_STRATEGY)
+    service = BotConfigService(store, client=client)
+    service.save(
+        "strat_btc",
+        BotConfigUpdate(
+            strategy="ml_random_forest",
+            budget_usdt=8000.0,
+            max_open_positions=4,
+            risk_per_trade_pct=1.5,
+            take_profit_pct=3.0,
+            stop_loss_pct=1.8,
+            cooldown_seconds=90,
+        ),
+    )
+    _, _, payload = client.update_strategy.call_args.args
+    assert payload["strategy_type"] == "ml_random_forest"
+
+
+def test_get_available_models_returns_data_list(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    fake_models = [
+        {"name": "random_forest", "path": "/registry/rf/best", "available": True},
+        {"name": "lstm", "path": "/registry/lstm/best", "available": False},
+    ]
+    client.get_available_models.return_value = _ok({"success": True, "data": fake_models})
+    service = BotConfigService(store, client=client)
+
+    result = service.get_available_models()
+
+    assert result == fake_models
+
+
+def test_get_available_models_raises_on_backend_error(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.get_available_models.return_value = ApiResponse(status_code=502, error="ml-api down")
+    service = BotConfigService(store, client=client)
+
+    with pytest.raises(ServiceError):
+        service.get_available_models()
+
+
+def test_create_bot_calls_client_with_prefixed_strategy_type(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.create_strategy.return_value = _ok(MOCK_STRATEGY)
+    service = BotConfigService(store, client=client)
+
+    service.create_bot(name="Mon bot RF", strategy_type="ml_random_forest")
+
+    client.create_strategy.assert_called_once_with(
+        "fake-token", name="Mon bot RF", strategy_type="ml_random_forest"
+    )
+
+
+def test_create_bot_raises_on_backend_error(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.create_strategy.return_value = ApiResponse(status_code=400, error="Unknown strategy type")
+    service = BotConfigService(store, client=client)
+
+    with pytest.raises(ServiceError):
+        service.create_bot(name="Mon bot RF", strategy_type="ml_random_forest")

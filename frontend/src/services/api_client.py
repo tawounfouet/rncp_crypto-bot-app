@@ -159,6 +159,26 @@ class BackendApiClient(AuthApiClient):
         )
 
     # ─── Strategies ──────────────────────────────────────────────────────────
+    def create_strategy(
+        self,
+        access_token: str,
+        *,
+        name: str,
+        strategy_type: str,
+        asset_class: str = "crypto",
+        parameters: dict[str, Any] | None = None,
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/",
+            json_body={
+                "name": name,
+                "strategy_type": strategy_type,
+                "asset_class": asset_class,
+                "parameters": parameters or {},
+            },
+            access_token=access_token,
+        )
 
     def list_strategies(self, access_token: str) -> ApiResponse:
         return self._request(

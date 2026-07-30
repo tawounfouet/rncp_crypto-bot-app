@@ -60,18 +60,21 @@ class StrategyService:
         Raises:
             ValidationError: If strategy data is invalid
         """
-        # Validate strategy type exists in registry
-        if strategy_data.strategy_type not in registry.list_strategies():
-            available_strategies = registry.list_strategies()
-            raise ValidationError(
-                f"Unknown strategy type '{strategy_data.strategy_type}'. "
-                f"Available strategies: {', '.join(available_strategies)}"
-            )
+        # Les strategy_type ML (ml_random_forest, futur ml_lstm) ne passent pas par le
+        # registre de regles techniques (strategy/engine/) -- celui-ci n'est conserve que
+        # pour un usage futur eventuel, plus expose comme choix produit (decision du
+        # 2026-07-24 : seuls les modeles ML sont selectionnables par l'utilisateur).
+        if not strategy_data.strategy_type.startswith("ml_"):
+            if strategy_data.strategy_type not in registry.list_strategies():
+                available_strategies = registry.list_strategies()
+                raise ValidationError(
+                    f"Unknown strategy type '{strategy_data.strategy_type}'. "
+                    f"Available strategies: {', '.join(available_strategies)}"
+                )
 
-        # Validate strategy parameters
-        is_valid, error_msg = registry.validate_strategy(strategy_data.strategy_type, strategy_data.parameters)
-        if not is_valid:
-            raise ValidationError(f"Invalid strategy parameters: {error_msg}")
+            is_valid, error_msg = registry.validate_strategy(strategy_data.strategy_type, strategy_data.parameters)
+            if not is_valid:
+                raise ValidationError(f"Invalid strategy parameters: {error_msg}")
 
         # Create strategy in database
         with get_db_session() as session:
@@ -140,8 +143,8 @@ class StrategyService:
             for field, value in update_data.items():
                 setattr(strategy, field, value)
 
-            # Validate parameters if updated
-            if strategy_data.parameters is not None:
+            # Validate parameters if updated (types ML : cf. remarque dans create_strategy)
+            if strategy_data.parameters is not None and not strategy.strategy_type.startswith("ml_"):
                 is_valid, error_msg = registry.validate_strategy(strategy.strategy_type, strategy_data.parameters)
                 if not is_valid:
                     raise ValidationError(f"Invalid strategy parameters: {error_msg}")
