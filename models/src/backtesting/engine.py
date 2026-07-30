@@ -13,11 +13,10 @@ import numpy as np
 import pandas as pd
 
 from src.utils.logger import get_logger
+from utils.trading.signals import SIGNAL_TO_VALUE as SIGNAL_TO_POSITION
 
 
 logger = get_logger(__name__)
-
-SIGNAL_TO_POSITION = {"BUY": 1, "HOLD": 0, "SELL": -1}
 
 
 @dataclass

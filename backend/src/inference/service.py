@@ -10,6 +10,7 @@ import joblib
 import numpy as np
 
 from utils.connectors.minio import MinioClient
+from utils.trading.signals import SIGNAL_TO_VALUE
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ class InferenceService:
 
         return {
             "signal": signal,
-            "signal_value": {"BUY": 1, "SELL": -1, "HOLD": 0}.get(signal, 0),
+            "signal_value": SIGNAL_TO_VALUE.get(signal, 0),
             "confidence": probabilities[signal],
             "probabilities": probabilities,
             "latency_ms": round(latency_ms, 2),

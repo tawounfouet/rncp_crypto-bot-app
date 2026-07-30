@@ -115,6 +115,42 @@ côté exchange, ça demanderait d'étendre le contrat et ses 2 implémentations
 réelles d'un ordre testnet, mais rien ne déclenche encore ce cycle périodiquement
 (Phase 4, Airflow) ni depuis le frontend (Phase 5).
 
+## 4quater. Mise à jour 2026-07-30 — déclenchement périodique (Phase 4)
+
+`StrategyService.execute_active_deployments()` boucle sur tous les `StrategyDeployment`
+`status="active"` (tous utilisateurs confondus). Pour chacun : garde cooldown
+(`strategy.parameters.get("cooldown_seconds", 300)` comparé à `state.last_signal_time`),
+garde position (`state.position not in (None, "NEUTRAL")` — décision retenue : le
+périmètre de `max_open_positions` est **par deployment**, pas par utilisateur, faute de
+spec existante sur le sujet — non documenté, personne dans l'historique git n'a précisé
+cette intention). Si aucune garde ne bloque : appelle `execute_strategy(deployment.id)`,
+et si le signal n'est pas HOLD, calcule `quantity = deployment.amount / prix_courant`
+(`deployment.amount` est en devise de cotation, `create_order` attend une quantité en
+actif de base) puis appelle `TradingService.create_order`. Nouvel endpoint
+`POST /strategies/deployments/execute-active`, **sans authentification** (même principe
+que `/inference/predict-live` — appelé par Airflow, pas par un utilisateur). Nouveau DAG
+`orchestration/dags/bot_execution.py`, planifié horaire (`0 * * * *`), même principe que
+`ml_pipeline.py` (un appel HTTP, pas de logique métier côté Airflow).
+
+Corrige au passage un bug préexistant (antérieur à ce chantier) dans `execute_strategy` :
+`state.last_execution` n'était pas une colonne réelle de `StrategyState` (le vrai champ
+est `last_signal_time`) — la mise à jour ne persistait donc jamais, ce qui aurait rendu la
+garde cooldown de la Phase 4 inopérante. Corrige aussi un second bug lié : `state.last_signal`
+(colonne `String(10)`) recevait le code numérique du signal (1/-1/0) au lieu du label
+(`"BUY"/"SELL"/"HOLD"`) — extrait dans `utils/trading/signals.py`
+(`SIGNAL_TO_VALUE`/`VALUE_TO_SIGNAL`), partagé avec `inference/service.py` et
+`models/src/backtesting/engine.py` (qui avaient chacun leur propre mapping dupliqué,
+dans des composants qui ne peuvent pas s'importer entre eux — `models/` n'est pas copié
+dans l'image backend, même raison que le déplacement des indicateurs vers `utils/` en
+Phase 0).
+
+4 tests unitaires sur `execute_active_deployments` (gardes + soumission d'ordre, mocks
+uniquement), 19 tests sur `strategy/router.py` (toutes les routes, dont `execute-active`
+sans auth — jusque-là aucune route de ce fichier n'avait de test au niveau routeur).
+Vérification manuelle du DAG (`airflow tasks test`) pas encore faite au moment de ce
+commit — reportée, RAM insuffisante sur la machine de dev au moment d'écrire ce chantier
+(cf. `project_k3s_vm_idea` en mémoire).
+
 ## 5. Points ouverts à trancher avant de coder
 
 - Supprimer ou geler `backend/src/strategy/engine/` (règles fixes) — vérifier les tests qui en

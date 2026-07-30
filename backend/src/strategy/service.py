@@ -3,7 +3,7 @@ Strategy service for managing strategy execution and lifecycle.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -14,6 +14,8 @@ from market.service import MarketDataService
 from shared.core.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from shared.database import get_db_session
 from sqlalchemy import and_, or_
+from trading.schemas import OrderCreate, OrderSideEnum, OrderTypeEnum
+from trading.service import TradingService
 
 from strategy.engine import get_strategy, registry
 from strategy.models import Strategy, StrategyDeployment, StrategyState
@@ -27,6 +29,7 @@ from strategy.schemas import (
     StrategyTypeEnum,
     StrategyUpdate,
 )
+from utils.trading.signals import VALUE_TO_SIGNAL
 
 logger = logging.getLogger(__name__)
 
@@ -339,8 +342,8 @@ class StrategyService:
                 # Update strategy state
                 state = deployment.state
                 if state:
-                    state.last_execution = datetime.now(UTC)
-                    state.last_signal = latest_signal
+                    state.last_signal_time = datetime.now(UTC)
+                    state.last_signal = VALUE_TO_SIGNAL.get(latest_signal, "HOLD")
                     session.commit()
 
                 execution_result = {
@@ -366,6 +369,60 @@ class StrategyService:
 
                 session.commit()
                 raise BusinessLogicError(f"Strategy execution failed: {e!s}") from None
+
+    async def execute_active_deployments(self) -> list[dict[str, Any]]:
+        response = list()
+        with get_db_session() as session:
+            deployments = session.query(StrategyDeployment).filter(StrategyDeployment.status == "active").all()
+            for deployment in deployments:
+                state = deployment.state
+                if state and state.last_signal_time:
+                    cooldown = deployment.strategy.parameters.get("cooldown_seconds", 300)
+                    if timedelta(seconds=cooldown) > (datetime.now(UTC) - state.last_signal_time):
+                        response.append(
+                            {
+                                "deployment_id": deployment.id,
+                                "action": "skipped_cooldown",
+                            }
+                        )
+                        continue
+                if state and state.position not in (None, "NEUTRAL"):
+                    response.append(
+                        {
+                            "deployment_id": deployment.id,
+                            "action": "skipped_open_position",
+                        }
+                    )
+                    continue
+                result = await self.execute_strategy(deployment.id)
+
+                if result and "latest_signal" in result and result["latest_signal"] != 0:
+                    price = Decimal(str(result["signal_info"]["price"]))
+                    quantity = deployment.amount / price
+                    side = OrderSideEnum.BUY if result["latest_signal"] == 1 else OrderSideEnum.SELL
+                    order_data = OrderCreate(
+                        deployment_id=deployment.id,
+                        symbol=deployment.symbol,
+                        order_type=OrderTypeEnum.MARKET,
+                        side=side,
+                        quantity=quantity,
+                    )
+                    trading_service = TradingService(session)
+                    await trading_service.create_order(deployment.user_id, order_data)
+                    response.append(
+                        {
+                            "deployment_id": deployment.id,
+                            "action": "order_submitted",
+                        }
+                    )
+                else:
+                    response.append(
+                        {
+                            "deployment_id": deployment.id,
+                            "action": "hold",
+                        }
+                    )
+        return response
 
     def stop_deployment(self, user_id: str, deployment_id: str, reason: str = None) -> StrategyDeploymentResponse:
         """

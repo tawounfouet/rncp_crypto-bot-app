@@ -340,6 +340,24 @@ async def stop_deployment(
         ) from None
 
 
+@router.post("/deployments/execute-active", response_model=DataResponse[list[dict[str, Any]]])
+async def execute_active_deployments(strategy_service: StrategyService = Depends(get_strategy_service)):
+    """
+    Declenche l'execution de tous les deployments actifs (tous utilisateurs).
+
+    Appele par Airflow (bot_execution.py), pas par un utilisateur final -- pas
+    d'authentification, meme principe que POST /inference/predict-live.
+    """
+    try:
+        results = await strategy_service.execute_active_deployments()
+        return DataResponse(success=True, message=f"Executed {len(results)} deployments", data=results)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute active deployments: {e!s}",
+        ) from None
+
+
 @router.post("/validate", response_model=BaseResponse)
 async def validate_strategy_parameters(
     strategy_type: str,

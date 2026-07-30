@@ -10,7 +10,7 @@ import pytest
 import pandas as pd
 
 from auth.models import User
-from strategy.models import Strategy, StrategyDeployment
+from strategy.models import Strategy, StrategyDeployment, StrategyState
 from strategy.service import StrategyService
 
 
@@ -24,7 +24,6 @@ def _make_user(session) -> User:
     session.add(user)
     session.flush()
     return user
-
 
 def _make_ml_deployment(session, user: User) -> StrategyDeployment:
     strategy = Strategy(
@@ -53,10 +52,21 @@ def _make_ml_deployment(session, user: User) -> StrategyDeployment:
     return deployment
 
 
+def _make_state(session, deployment: StrategyDeployment) -> StrategyState:
+    state = StrategyState(
+        id=str(uuid.uuid4()),
+        deployment_id=deployment.id,
+        user_id=deployment.user_id,
+    )
+    session.add(state)
+    session.flush()
+    return state
+
 @pytest.mark.asyncio
 async def test_execute_strategy_ml_random_forest_calls_inference(patch_db_session) -> None:
     user = _make_user(patch_db_session)
     deployment = _make_ml_deployment(patch_db_session, user)
+    state = _make_state(patch_db_session, deployment)
 
     fake_features_df = pd.DataFrame([{"ema_12": 55.0, "macd_signal": 1.2}])
 
@@ -83,7 +93,13 @@ async def test_execute_strategy_ml_random_forest_calls_inference(patch_db_sessio
 
         result = await service.execute_strategy(deployment.id)
 
+        patch_db_session.refresh(state)
+
+
     assert result["latest_signal"] == fake_predict_result["signal_value"]
     assert result["signal_info"]["confidence"] == fake_predict_result["confidence"]
     assert result["signal_info"]["probabilities"] == fake_predict_result["probabilities"]
     assert result["data_points"] == len(fake_features_df)
+
+    assert state.last_signal_time is not None
+    assert state.last_signal == "SELL"
