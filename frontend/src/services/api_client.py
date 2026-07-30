@@ -210,6 +210,36 @@ class BackendApiClient(AuthApiClient):
             access_token=access_token,
         )
 
+    def get_available_models(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/strategies/available-models",
+            access_token=access_token,
+        )
+
+    def deploy_strategy(
+        self,
+        access_token: str,
+        strategy_id: str,
+        *,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        amount: str,
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/{strategy_id}/deploy",
+            json_body={
+                "strategy_id": strategy_id,
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "amount": amount,
+            },
+            access_token=access_token,
+        )
+
     # ─── Marché public (pas d'authentification) ────────────────────────────────
 
     def get_public_exchanges(self) -> ApiResponse:

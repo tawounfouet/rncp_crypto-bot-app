@@ -75,7 +75,7 @@ existants à vérifier avant suppression, cf. §5) ?
    (`ML_RANDOM_FOREST`, cf. mise à jour 2026-07-29) — le moteur de règles fixes (§3) reste
    utilisé pour les autres `strategy_type`.
 
-## 4bis. Mise à jour 2026-07-29 — branchement ML fait pour Random Forest
+## 4.1. Mise à jour 2026-07-29 — branchement ML fait pour Random Forest
 
 Une partie du §5 (point 2) est résolue : `StrategyTypeEnum` a une valeur
 `ML_RANDOM_FOREST`, `StrategyUpdate.strategy_type` permet de la persister, et
@@ -86,7 +86,7 @@ toujours utilisé pour les `strategy_type` autres que `ML_RANDOM_FOREST` — la 
 sa suppression (§5, point 1) reste ouverte. LSTM reste hors périmètre (cf.
 `models/src/models/lstm.py`, jamais câblé, aucune inférence écrite).
 
-## 4ter. Mise à jour 2026-07-30 — soumission ET annulation d'ordre réelles (Phase 3, élargie)
+## 4.2. Mise à jour 2026-07-30 — soumission ET annulation d'ordre réelles (Phase 3, élargie)
 
 Le point d'arrêt mentionné ci-dessus est levé : `TradingService.create_order` appelle
 maintenant `from_user_settings` + `client.place_order` (même pattern que
@@ -115,7 +115,7 @@ côté exchange, ça demanderait d'étendre le contrat et ses 2 implémentations
 réelles d'un ordre testnet, mais rien ne déclenche encore ce cycle périodiquement
 (Phase 4, Airflow) ni depuis le frontend (Phase 5).
 
-## 4quater. Mise à jour 2026-07-30 — déclenchement périodique (Phase 4)
+## 4.3. Mise à jour 2026-07-30 — déclenchement périodique (Phase 4)
 
 `StrategyService.execute_active_deployments()` boucle sur tous les `StrategyDeployment`
 `status="active"` (tous utilisateurs confondus). Pour chacun : garde cooldown
@@ -151,13 +151,47 @@ Vérification manuelle du DAG (`airflow tasks test`) pas encore faite au moment 
 commit — reportée, RAM insuffisante sur la machine de dev au moment d'écrire ce chantier
 (cf. `project_k3s_vm_idea` en mémoire).
 
+## 4.4. Mise à jour 2026-07-30 — route passthrough `available-models` (Phase 5, backend)
+
+Nouvel endpoint `GET /strategies/available-models`, **authentifié** (contrairement à
+`execute-active` : celui-ci est appelé par le frontend pour un utilisateur connecté, pas
+par Airflow). `StrategyService.get_available_models()` relaie en HTTP synchrone
+(`requests.get`, `ML_API_URL` en variable d'env, défaut `http://crypto-bot-ml-api:8010`,
+timeout 30s) la route `GET /models` de ml-api, qui renvoie une liste fixe des deux modèles
+connus (`random_forest`, `lstm`) avec `available` = existence du répertoire registry
+correspondant. C'est le premier appel HTTP interne backend → ml-api (jusque-là, seul
+Airflow appelait ml-api en HTTP ; le backend n'utilisait que l'inférence en process via
+`InferenceService`). Nouveau schéma `ModelInfo` (`strategy/schemas.py`), miroir du schéma
+ml-api du même nom.
+
+Piège rencontré et corrigé : la route avait été déclarée après `GET /{strategy_id}` dans
+`router.py` — FastAPI matche les routes dans l'ordre de déclaration, donc
+`/available-models` était interceptée par la route à paramètre de chemin
+(`strategy_id="available-models"`) et ne s'exécutait jamais en pratique. Remontée juste
+après `/available`, qui avait déjà ce problème résolu pour la même raison.
+
+Au passage : fixtures de test `strategy_service` (`_make_user`/`_make_ml_deployment`/
+`_make_state`, dupliquées entre plusieurs fichiers de test) factorisées en fixtures
+partagées (`make_user`/`make_deployment`/`make_state`) dans `backend/tests/conftest.py`,
+réutilisées aussi par les tests `trading_service`. `test_strategy_service_execute.py` et
+`test_strategy_service_execute_active.py` fusionnés en un seul `test_strategy_service.py`.
+Corrige aussi, à cette occasion, un bug latent dans la garde cooldown de la Phase 4
+(`execute_active_deployments`) : `state.last_signal_time` relu depuis SQLite perd son
+`tzinfo` (colonne `DateTime` sans `timezone=True`), ce qui faisait planter la comparaison
+avec `datetime.now(UTC)` (aware) dès qu'un test insérait un datetime timezone-aware — la
+garde traite maintenant explicitement le cas `tzinfo is None` en le réinterprétant en UTC.
+
+2 tests service (`get_available_models`, succès + erreur ml-api) + 2 tests routeur (200 +
+502) + tests complets sur toutes les méthodes de `BackendApiClient` côté frontend
+(26 tests, dont les 2 nouvelles : `get_available_models`, `deploy_strategy`).
+
 ## 5. Points ouverts à trancher avant de coder
 
 - Supprimer ou geler `backend/src/strategy/engine/` (règles fixes) — vérifier les tests qui en
   dépendent avant de décider.
 - ~~Où et comment brancher `inference/service.py` (ML) dans
   `strategy/service.py::execute_strategy`~~ — fait le 2026-07-29 pour Random Forest, cf.
-  §4bis. Reste ouvert pour un futur modèle LSTM (branchement `ML_LSTM` séparé, prévu comme
+  §4.1. Reste ouvert pour un futur modèle LSTM (branchement `ML_LSTM` séparé, prévu comme
   chantier futur).
 - Modélisation exacte du "modèle ML disponible pour cet exchange" (dépend du registre
   scopé-par-exchange, point ouvert de `06-testnet-simulation-modes.md`).

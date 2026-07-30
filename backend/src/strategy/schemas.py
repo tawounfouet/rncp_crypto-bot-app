@@ -352,3 +352,11 @@ class StrategyPerformanceResponse(BaseResponse):
     """Response for strategy performance."""
 
     performance: StrategyPerformance
+
+
+class ModelInfo(BaseModel):
+    """Response for available models."""
+
+    name: str
+    path: str
+    available: bool

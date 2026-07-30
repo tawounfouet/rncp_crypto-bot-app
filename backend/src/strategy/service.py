@@ -3,11 +3,13 @@ Strategy service for managing strategy execution and lifecycle.
 """
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pandas as pd
+import requests
 from inference.live_features import build_live_feature_frame
 from inference.service import InferenceService
 from market.service import MarketDataService
@@ -378,7 +380,12 @@ class StrategyService:
                 state = deployment.state
                 if state and state.last_signal_time:
                     cooldown = deployment.strategy.parameters.get("cooldown_seconds", 300)
-                    if timedelta(seconds=cooldown) > (datetime.now(UTC) - state.last_signal_time):
+                    last_signal_time = state.last_signal_time
+                    if last_signal_time.tzinfo is None:
+                        # SQLite (tests, dev) stocke la colonne DateTime sans tzinfo : on
+                        # sait qu'elle est toujours ecrite en UTC (cf. plus haut, ligne 347).
+                        last_signal_time = last_signal_time.replace(tzinfo=UTC)
+                    if timedelta(seconds=cooldown) > (datetime.now(UTC) - last_signal_time):
                         response.append(
                             {
                                 "deployment_id": deployment.id,
@@ -586,3 +593,14 @@ class StrategyService:
             Tuple of (is_valid, error_message)
         """
         return registry.validate_strategy(strategy_type, parameters)
+
+    def get_available_models(self) -> list[dict[str, Any]]:
+        ML_API_URL = os.environ.get("ML_API_URL", "http://crypto-bot-ml-api:8010")
+
+        response = requests.get(
+            f"{ML_API_URL}/models",
+            timeout=30,
+        )
+        response.raise_for_status()
+        logger.info("get_available_models: %s", response.json())
+        return response.json()["models"]

@@ -10,15 +10,17 @@ Le PYTHONPATH (backend/src + racine du repo pour `utils`) est fourni par l'appel
 (make test-backend, make test-coverage, CI) -- ce fichier ne manipule plus sys.path.
 """
 
+import uuid
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
-
+from auth.models import User
 from shared.models.base import Base
-
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session
+from strategy.models import Strategy, StrategyDeployment, StrategyState
 
 # =============================================================================
 # Fixtures communes (unit + integration)
@@ -33,7 +35,7 @@ def mock_settings():
     Les tests qui ont besoin de settings reels peuvent overrider cette fixture.
     """
     mock = MagicMock()
-    mock.SECRET_KEY.get_secret_value.return_value = "test-secret-key-for-testing"  # noqa: S106
+    mock.SECRET_KEY.get_secret_value.return_value = "test-secret-key-for-testing"
     mock.ALGORITHM = "HS256"
     mock.ACCESS_TOKEN_EXPIRE_MINUTES = 30
     mock.REFRESH_TOKEN_EXPIRE_DAYS = 7
@@ -129,3 +131,61 @@ def patch_db_session(db_session):
         with patch("auth.service.get_db_session", _get_test_session):
             with patch("strategy.service.get_db_session", _get_test_session):
                 yield db_session
+
+@pytest.fixture
+def make_user():
+    def _make(session) -> User:
+        user = User(
+            id=str(uuid.uuid4()),
+            email=f"{uuid.uuid4()}@test.dev",
+            username=f"user_{uuid.uuid4().hex[:8]}",
+            hashed_password="fake",
+        )
+        session.add(user)
+        session.flush()
+        return user
+    return _make
+
+@pytest.fixture
+def make_deployment():
+    def _make(session, user: User) -> StrategyDeployment:
+        strategy = Strategy(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            name="Bot test RF",
+            strategy_type="ml_random_forest",
+            parameters={},
+        )
+        session.add(strategy)
+        session.flush()
+
+        deployment = StrategyDeployment(
+            id=str(uuid.uuid4()),
+            strategy_id=strategy.id,
+            user_id=user.id,
+            exchange="binance",
+            symbol="BTCUSDT",
+            timeframe="1h",
+            amount=100,
+            status="active",
+            start_time=datetime.now(UTC),
+        )
+        session.add(deployment)
+        session.flush()
+        return deployment
+    return _make
+
+@pytest.fixture
+def make_state():
+    def _make(session, deployment: StrategyDeployment, position="NEUTRAL", last_signal_time=None) -> StrategyState:
+        state = StrategyState(
+            id=str(uuid.uuid4()),
+            deployment_id=deployment.id,
+            user_id=deployment.user_id,
+            position=position,
+            last_signal_time=last_signal_time
+        )
+        session.add(state)
+        session.flush()
+        return state
+    return _make

@@ -3,61 +3,19 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from auth.models import User, UserSettings
-from shared.core.exceptions import BusinessLogicError
 from market.clients.base import OrderResult
-from strategy.models import Strategy, StrategyDeployment
+from shared.core.exceptions import BusinessLogicError
 from trading.models import Order
-from trading.schemas import OrderCreate, OrderSideEnum, OrderTypeEnum
 from trading.service import TradingService
 
 # from_user_settings est importe localement dans create_order (import paresseux) :
 # il faut patcher le nom sur son module d'origine (market.clients.factory), pas sur
 # trading.service, sinon le patch ne matche jamais le nom réellement résolu à l'appel.
-
-
-def _make_user(session) -> User:
-    user = User(
-        id=str(uuid.uuid4()),
-        email=f"{uuid.uuid4()}@test.dev",
-        username=f"user_{uuid.uuid4().hex[:8]}",
-        hashed_password="fake",  # noqa: S106
-    )
-    session.add(user)
-    session.flush()
-    return user
-
-def _make_deployment(session, user: User) -> StrategyDeployment:
-    strategy = Strategy(
-        id=str(uuid.uuid4()),
-        user_id=user.id,
-        name="Bot test RF",
-        strategy_type="ml_random_forest",
-        parameters={},
-    )
-    session.add(strategy)
-    session.flush()
-
-    deployment = StrategyDeployment(
-        id=str(uuid.uuid4()),
-        strategy_id=strategy.id,
-        user_id=user.id,
-        exchange="binance",
-        symbol="BTCUSDT",
-        timeframe="1h",
-        amount=100,
-        status="active",
-        start_time=datetime.now(UTC),
-    )
-    session.add(deployment)
-    session.flush()
-    return deployment
 
 def _make_order(session, deployment, status="NEW", exchange_order_id="12345") -> Order:
     order = Order(
@@ -95,9 +53,14 @@ def mock_from_user_settings():
         yield mock
 
 @pytest.mark.asyncio
-async def test_trading_service_cancel_order_success(patch_db_session, mock_from_user_settings) -> None:
-    user = _make_user(patch_db_session)
-    deployment = _make_deployment(patch_db_session, user)
+async def test_trading_service_cancel_order_success(
+    patch_db_session,
+    make_user,
+    make_deployment,
+    mock_from_user_settings
+) -> None:
+    user = make_user(patch_db_session)
+    deployment = make_deployment(patch_db_session, user)
     _make_settings(patch_db_session, user)
     order = _make_order(patch_db_session, deployment)
 
@@ -123,9 +86,14 @@ async def test_trading_service_cancel_order_success(patch_db_session, mock_from_
 
 
 @pytest.mark.asyncio
-async def test_trading_service_cancel_order_without_api_keys(patch_db_session, mock_from_user_settings) -> None:
-    user = _make_user(patch_db_session)
-    deployment = _make_deployment(patch_db_session, user)
+async def test_trading_service_cancel_order_without_api_keys(
+    patch_db_session,
+    make_user,
+    make_deployment,
+    mock_from_user_settings
+) -> None:
+    user = make_user(patch_db_session)
+    deployment = make_deployment(patch_db_session, user)
     _make_settings(patch_db_session, user, api_keys={"kraken": {}})
     order = _make_order(patch_db_session, deployment)
 
@@ -137,9 +105,14 @@ async def test_trading_service_cancel_order_without_api_keys(patch_db_session, m
     mock_from_user_settings.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_trading_service_cancel_order_invalid_keys(patch_db_session, mock_from_user_settings) -> None:
-    user = _make_user(patch_db_session)
-    deployment = _make_deployment(patch_db_session, user)
+async def test_trading_service_cancel_order_invalid_keys(
+    patch_db_session,
+    make_user,
+    make_deployment,
+    mock_from_user_settings
+) -> None:
+    user = make_user(patch_db_session)
+    deployment = make_deployment(patch_db_session, user)
     _make_settings(patch_db_session, user)
     order = _make_order(patch_db_session, deployment)
 
@@ -152,9 +125,14 @@ async def test_trading_service_cancel_order_invalid_keys(patch_db_session, mock_
 
 
 @pytest.mark.asyncio
-async def test_trading_service_cancel_order_exchange_exception(patch_db_session, mock_from_user_settings) -> None:
-    user = _make_user(patch_db_session)
-    deployment = _make_deployment(patch_db_session, user)
+async def test_trading_service_cancel_order_exchange_exception(
+    patch_db_session,
+    make_user,
+    make_deployment,
+    mock_from_user_settings
+) -> None:
+    user = make_user(patch_db_session)
+    deployment = make_deployment(patch_db_session, user)
     _make_settings(patch_db_session, user)
     order = _make_order(patch_db_session, deployment)
 

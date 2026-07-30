@@ -12,6 +12,7 @@ from shared.core.exceptions import BusinessLogicError, NotFoundError, Validation
 from shared.schemas.common import BaseResponse
 
 from strategy.schemas import (
+    ModelInfo,
     StrategyCreate,
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
@@ -58,6 +59,35 @@ async def get_available_strategies(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get available strategies: {e!s}",
+        ) from None
+
+
+@router.get("/available-models", response_model=DataResponse[list[ModelInfo]])
+def get_available_models(
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """
+    Get all available-models for the current user.
+
+    Args:
+        current_user: Current authenticated user
+
+    Returns:
+        List of available models
+    """
+    try:
+        models = strategy_service.get_available_models()
+
+        return DataResponse(
+            success=True,
+            message=f"Retrieved {len(models)} deployments",
+            data=models,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to get available models: {e!s}",
         ) from None
 
 

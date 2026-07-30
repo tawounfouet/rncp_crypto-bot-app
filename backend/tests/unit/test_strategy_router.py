@@ -12,10 +12,9 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from auth.dependencies import get_current_user
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from auth.dependencies import get_current_user
 from shared.core.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from strategy.router import get_strategy_service, router
 from strategy.schemas import StrategyResponse
@@ -387,3 +386,35 @@ def test_execute_active_deployments_returns_500_on_service_error(client: TestCli
     response = client.post("/strategies/deployments/execute-active")
 
     assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# GET /strategies/available-models
+# ---------------------------------------------------------------------------
+
+
+def test_get_available_models_returns_200(client: TestClient) -> None:
+    fake_service = MagicMock()
+    fake_service.get_available_models.return_value = [
+        {"name": "random_forest", "path": "/registry/rf/best", "available": True},
+        {"name": "lstm", "path": "/registry/lstm/best", "available": False},
+    ]
+    _override_service(client, fake_service)
+
+    response = client.get("/strategies/available-models")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert len(data["data"]) == 2
+    assert data["data"][0] == {"name": "random_forest", "path": "/registry/rf/best", "available": True}
+
+
+def test_get_available_models_returns_502_on_ml_api_error(client: TestClient) -> None:
+    fake_service = MagicMock()
+    fake_service.get_available_models.side_effect = Exception("ml-api unreachable")
+    _override_service(client, fake_service)
+
+    response = client.get("/strategies/available-models")
+
+    assert response.status_code == 502
