@@ -6,7 +6,7 @@
 
 # Stage 1: Builder
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as builder
+FROM python:${PYTHON_VERSION}-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -32,7 +32,7 @@ RUN pip install --upgrade pip && \
 # Stage 2: Test (utilise par la CI pour les tests d'integration)
 # Build: docker build -f backend/Dockerfile --target test -t backend:test .
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as test
+FROM python:${PYTHON_VERSION}-slim AS test
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -59,7 +59,7 @@ CMD ["pytest", "tests", "-v"]
 
 # Stage 3: Runtime (image de production, legere, user non-root)
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as runtime
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
