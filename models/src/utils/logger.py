@@ -1,58 +1,16 @@
-"""Project logging utilities."""
+"""Project logging utilities — thin wrapper over the shared utils.logging package."""
 
 from __future__ import annotations
 
-import json
 import logging
-import sys
-from datetime import UTC, datetime
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
+from utils.logging.logger import configure_logging as _configure_logging
 
 from src.config.settings import AppSettings
 
-
 LOGGER_NAME = "cryptobot_models"
-
-_RESET = "\033[0m"
-_DIM = "\033[2m"
-_LEVEL_COLORS = {
-    "DEBUG": "\033[36m",  # cyan
-    "INFO": "\033[32m",  # green
-    "WARNING": "\033[33m",  # yellow
-    "ERROR": "\033[31m",  # red
-    "CRITICAL": "\033[1;31m",  # bold red
-}
-
-
-class ColoredFormatter(logging.Formatter):
-    """Console formatter that colorizes the log level badge."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        color = _LEVEL_COLORS.get(record.levelname, "")
-        record = logging.makeLogRecord(record.__dict__)
-        record.levelname = f"{color}{record.levelname:<8}{_RESET}"
-        record.asctime = self.formatTime(record, self.datefmt)
-        record.name = f"{_DIM}{record.name}{_RESET}"
-        return f"{_DIM}{record.asctime}{_RESET} {record.levelname} {record.name} {record.getMessage()}"
-
-
-class JsonFormatter(logging.Formatter):
-    """Format log records as one JSON object per line."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        payload = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-        }
-        if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
-        return json.dumps(payload, default=str)
+DEFAULT_LOG_FILE = "models-training.log"
 
 
 def setup_logger(
@@ -61,49 +19,19 @@ def setup_logger(
     level: str = "INFO",
     json_logs: bool = False,
     file_logging: bool = True,
-    log_file: str = "models-training.log",
+    log_file: str = DEFAULT_LOG_FILE,
     force: bool = False,
 ) -> logging.Logger:
     """Configure and return the project logger."""
-    logger = logging.getLogger(name)
-    logger.setLevel(getattr(logging, level.upper(), logging.INFO))
-    logger.propagate = False
-
-    if logger.handlers:
-        if not force:
-            return logger
-        for handler in list(logger.handlers):
-            logger.removeHandler(handler)
-            handler.close()
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logger.level)
-    use_colors = sys.stdout.isatty()
-    if use_colors:
-        console_handler.setFormatter(ColoredFormatter(datefmt="%Y-%m-%d %H:%M:%S"))
-    else:
-        console_format = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-        console_handler.setFormatter(logging.Formatter(console_format, datefmt="%Y-%m-%d %H:%M:%S"))
-    logger.addHandler(console_handler)
-
-    if file_logging:
-        log_path = Path(log_dir)
-        log_path.mkdir(parents=True, exist_ok=True)
-        file_handler = RotatingFileHandler(
-            log_path / log_file,
-            maxBytes=10 * 1024 * 1024,
-            backupCount=5,
-            encoding="utf-8",
-        )
-        file_handler.setLevel(logger.level)
-        if json_logs:
-            file_handler.setFormatter(JsonFormatter())
-        else:
-            file_format = "%(asctime)s - %(levelname)s - %(name)s - %(funcName)s:%(lineno)d - %(message)s"
-            file_handler.setFormatter(logging.Formatter(file_format, datefmt="%Y-%m-%d %H:%M:%S"))
-        logger.addHandler(file_handler)
-
-    return logger
+    return _configure_logging(
+        name=name,
+        level=level,
+        log_dir=log_dir,
+        log_file=log_file,
+        json_output=json_logs,
+        file_logging=file_logging,
+        force=force,
+    )
 
 
 def configure_logging(settings: AppSettings) -> logging.Logger:

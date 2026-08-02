@@ -230,7 +230,8 @@ pytest tests/integration -v
 
 | Variable | Description | Defaut |
 |----------|-------------|--------|
-| `SECRET_KEY` | Cle de signature JWT | - |
+| `JWT_SIGNING_KEY` | Cle de signature JWT | - |
+| `CORS_ORIGINS` | Origines autorisees a appeler l'API (liste separee par des virgules) | - |
 | `POSTGRES_HOST` | Host PostgreSQL | localhost |
 | `POSTGRES_PORT` | Port PostgreSQL | 5432 |
 | `POSTGRES_USER` | Utilisateur PostgreSQL | - |

@@ -161,6 +161,9 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - EXCHANGE_ENC_KEY=${EXCHANGE_ENC_KEY}
+      - JWT_SIGNING_KEY=${JWT_SIGNING_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
     depends_on:
       postgres:
         condition: service_healthy
@@ -292,11 +295,13 @@ services:
     container_name: mlflow-ui
     restart: always
     mem_limit: 1g
+    environment:
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
     ports:
       - "5001:5001"
     volumes:
       - ./models/artifacts:/app/artifacts
-    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001
+    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001 --workers 1
     # Le HEALTHCHECK du Dockerfile cible le port 8010 (crypto-bot-ml-api) : ce service
     # tourne sur 5001 (mlflow ui), d'ou ce healthcheck dedie.
     healthcheck:

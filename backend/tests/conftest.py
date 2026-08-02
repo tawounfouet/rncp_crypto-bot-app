@@ -35,10 +35,10 @@ def mock_settings():
     Les tests qui ont besoin de settings reels peuvent overrider cette fixture.
     """
     mock = MagicMock()
-    mock.SECRET_KEY.get_secret_value.return_value = "test-secret-key-for-testing"
-    mock.ALGORITHM = "HS256"
-    mock.ACCESS_TOKEN_EXPIRE_MINUTES = 30
-    mock.REFRESH_TOKEN_EXPIRE_DAYS = 7
+    mock.JWT_SIGNING_KEY.get_secret_value.return_value = "test-secret-key-for-testing"
+    mock.JWT_ALGORITHM = "HS256"
+    mock.JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
+    mock.JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7
     mock.IS_DOCKER = False
     mock.POSTGRES_HOST = "localhost"
     mock.POSTGRES_PORT = 5434
