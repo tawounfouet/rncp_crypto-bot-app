@@ -1,9 +1,9 @@
 # Rapport de couverture de test
 
-Snapshot du 2026-07-31 -- regenere a chaque `python3 scripts/track_coverage.py`
+Snapshot du 2026-08-02 -- regenere a chaque `python3 scripts/track_coverage.py`
 (ecrase le precedent, pas un historique -- voir `coverage_history.csv` pour l'evolution du %).
 
-## Backend + utils (56.5%)
+## Backend + utils (57.5%)
 
 | Fichier | Lignes | Manquantes | % | Lignes non couvertes |
 |---|---|---|---|---|
@@ -18,7 +18,6 @@ Snapshot du 2026-07-31 -- regenere a chaque `python3 scripts/track_coverage.py`
 | backend/src/market/clients/minio.py | 117 | 97 | 17% | 23, 26, 27, 29, 34, 36, 46, 47, 48, 54, 57, 58, 59, 60, 61, ... |
 | utils/connectors/minio.py | 107 | 88 | 18% | 31, 32, 35, 38, 39, 41, 42, 43, 47, 48, 54, 55, 56, 59, 60, ... |
 | backend/src/strategy/engine/implementations/bollinger_bands.py | 71 | 57 | 20% | 46, 49, 50, 51, 52, 53, 54, 55, 67, 68, 69, 72, 75, 76, 77, ... |
-| backend/src/market/clients/binance.py | 268 | 210 | 22% | 55, 56, 57, 73, 74, 75, 87, 88, 89, 112, 113, 120, 121, 122, 123, ... |
 | backend/src/strategy/engine/implementations/rsi_reversal.py | 60 | 46 | 23% | 53, 56, 57, 58, 59, 60, 63, 64, 76, 77, 80, 83, 86, 90, 93, ... |
 | backend/src/strategy/engine/indicators/technical_indicators.py | 122 | 93 | 24% | 34, 35, 37, 52, 53, 55, 69, 70, 71, 73, 74, 75, 77, 78, 80, ... |
 | backend/src/shared/database/connection.py | 130 | 99 | 24% | 43, 45, 47, 48, 51, 52, 54, 55, 56, 58, 59, 60, 61, 63, 64, ... |
@@ -28,6 +27,7 @@ Snapshot du 2026-07-31 -- regenere a chaque `python3 scripts/track_coverage.py`
 | backend/src/market/service.py | 54 | 37 | 31% | 49, 52, 66, 67, 68, 80, 89, 92, 93, 94, 95, 96, 97, 98, 101, ... |
 | backend/src/shared/models/__init__.py | 46 | 30 | 35% | 52, 53, 54, 61, 63, 94, 105, 106, 107, 110, 111, 112, 115, 116, 117, ... |
 | backend/src/auth/dependencies.py | 37 | 24 | 35% | 28, 30, 33, 35, 37, 38, 39, 40, 56, 57, 59, 71, 72, 77, 90, ... |
+| backend/src/market/clients/binance.py | 162 | 102 | 37% | 47, 48, 49, 50, 51, 52, 97, 100, 101, 102, 125, 132, 133, 134, 135, ... |
 | backend/src/trading/service.py | 253 | 156 | 38% | 86, 157, 158, 159, 160, 161, 162, 186, 187, 190, 191, 192, 193, 194, 195, ... |
 | backend/src/strategy/engine/registry.py | 102 | 61 | 40% | 46, 49, 63, 64, 65, 66, 67, 69, 84, 85, 87, 104, 105, 106, 107, ... |
 | backend/src/inference/service.py | 62 | 37 | 40% | 33, 34, 35, 36, 37, 41, 45, 49, 50, 51, 55, 56, 57, 59, 60, ... |
@@ -87,18 +87,17 @@ Snapshot du 2026-07-31 -- regenere a chaque `python3 scripts/track_coverage.py`
 | utils/tests/test_signals.py | 6 | 0 | 100% |  |
 | utils/trading/signals.py | 2 | 0 | 100% |  |
 
-## Frontend (80.8%)
+## Frontend (81.0%)
 
 | Fichier | Lignes | Manquantes | % | Lignes non couvertes |
 |---|---|---|---|---|
 | src/mocks/factories.py | 83 | 83 | 0% | 3, 5, 6, 8, 9, 15, 18, 19, 33, 36, 37, 44, 47, 48, 53, ... |
-| src/utils/api_errors.py | 11 | 8 | 27% | 9, 10, 11, 12, 13, 14, 15, 16 |
+| src/utils/api_errors.py | 25 | 16 | 36% | 10, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, ... |
 | src/services/base.py | 15 | 7 | 53% | 17, 18, 19, 20, 21, 25, 26 |
 | src/pages/05_Controle_Bot_Spot.py | 108 | 45 | 58% | 29, 31, 51, 52, 53, 56, 57, 92, 100, 101, 102, 103, 111, 114, 115, ... |
 | src/utils/numeric.py | 11 | 4 | 64% | 9, 10, 16, 17 |
 | src/app.py | 65 | 22 | 66% | 22, 23, 27, 28, 32, 33, 44, 45, 50, 51, 52, 53, 54, 55, 56, ... |
 | src/services/auth_api_client.py | 75 | 24 | 68% | 45, 50, 51, 52, 53, 54, 57, 64, 71, 78, 106, 107, 109, 110, 113, ... |
-| src/services/auth_service.py | 131 | 38 | 71% | 38, 41, 62, 66, 69, 72, 75, 120, 121, 122, 124, 125, 126, 128, 133, ... |
 | src/pages/06_Parametrage_Bot_Spot.py | 101 | 29 | 71% | 37, 38, 39, 43, 44, 45, 49, 60, 61, 63, 64, 65, 66, 68, 69, ... |
 | src/components/alerts.py | 11 | 3 | 73% | 11, 13, 15 |
 | src/pages/04_Performances_Spot.py | 83 | 21 | 75% | 9, 10, 48, 49, 50, 52, 53, 68, 76, 77, 78, 97, 98, 100, 111, ... |
@@ -108,6 +107,7 @@ Snapshot du 2026-07-31 -- regenere a chaque `python3 scripts/track_coverage.py`
 | src/utils/dates.py | 18 | 4 | 78% | 16, 20, 21, 28 |
 | src/pages/08_Admin.py | 84 | 18 | 79% | 30, 31, 32, 35, 36, 64, 66, 78, 79, 80, 105, 106, 107, 108, 122, ... |
 | src/pages/07_Gestion_de_compte.py | 131 | 27 | 79% | 32, 35, 36, 37, 52, 53, 76, 96, 104, 105, 106, 139, 140, 141, 142, ... |
+| src/services/auth_service.py | 109 | 22 | 80% | 39, 42, 63, 67, 70, 73, 76, 121, 122, 123, 125, 126, 127, 129, 134, ... |
 | src/pages/01_Marche.py | 85 | 17 | 80% | 57, 58, 59, 62, 65, 66, 154, 155, 156, 159, 160, 182, 183, 184, 187, ... |
 | src/state/session.py | 172 | 34 | 80% | 38, 39, 40, 41, 42, 43, 44, 48, 49, 53, 54, 55, 56, 60, 64, ... |
 | src/services/bot_config_service.py | 102 | 18 | 82% | 18, 34, 41, 42, 43, 47, 52, 119, 120, 121, 122, 123, 124, 125, 126, ... |
