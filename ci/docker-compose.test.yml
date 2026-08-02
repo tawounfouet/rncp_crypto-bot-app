@@ -40,7 +40,7 @@ services:
       - DEBUG=true
       - JWT_SIGNING_KEY=test-jwt-signing-key-not-for-production
       - CORS_ORIGINS=http://localhost:8501
-      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - ALLOWED_HOSTS=localhost,127.0.0.1,crypto-bot-backend
     depends_on:
       postgres:
         condition: service_healthy
