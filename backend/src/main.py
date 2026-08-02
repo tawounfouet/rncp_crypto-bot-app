@@ -88,9 +88,9 @@ app = FastAPI(
 #     Base.metadata.create_all(bind=engine)
 #     print("✅ Tables créées avec succès")
 
-# Add trusted host middleware for security
-if not settings.DEBUG:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+# Add trusted host middleware for security (actif dans tous les environnements,
+# y compris DEBUG=true : ALLOWED_HOSTS n'a plus de valeur par defaut, cf. settings.py)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 # Add CORS middleware
 app.add_middleware(

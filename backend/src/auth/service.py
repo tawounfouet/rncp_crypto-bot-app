@@ -26,10 +26,10 @@ class AuthService:
     """Service for handling authentication operations."""
 
     def __init__(self):
-        self.secret_key = settings.SECRET_KEY.get_secret_value()
-        self.algorithm = settings.ALGORITHM
-        self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        self.refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
+        self.secret_key = settings.JWT_SIGNING_KEY.get_secret_value()
+        self.algorithm = settings.JWT_ALGORITHM
+        self.access_token_expire_minutes = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        self.refresh_token_expire_days = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify a password against its hash."""
