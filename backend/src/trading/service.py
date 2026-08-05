@@ -459,7 +459,7 @@ class TradingService:
 
         # Retrieve stored API credentials
         settings = self.db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
-        if not settings or not (settings.api_keys and "binance" in settings.api_keys):
+        if not settings or not settings.has_credentials_for_exchange("binance"):
             return PortfolioResponse(
                 success=False,
                 message="Clés API Binance non configurées",
@@ -516,6 +516,9 @@ class TradingService:
             locked = Decimal(str(b.get("locked", "0")))
             total = free + locked
             usd_price = usdt_prices.get(asset)
+            # LD tokens (Simple Earn) are 1:1 with the underlying asset
+            if usd_price is None and asset.startswith("LD") and len(asset) > 2:
+                usd_price = usdt_prices.get(asset[2:])
             usd_value = (total * usd_price).quantize(Decimal("0.01")) if usd_price else None
             if usd_value is not None:
                 total_usd += usd_value

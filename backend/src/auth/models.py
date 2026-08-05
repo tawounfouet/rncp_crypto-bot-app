@@ -214,41 +214,193 @@ class UserSettings(BaseModel):
         """Check if push notifications are enabled."""
         return self.notification_preferences.get("push", False)
 
+    # ---------------------------------------------------------------------------
+    # Internal helpers
+    # ---------------------------------------------------------------------------
+
     def _decrypt_value(self, stored_value):
         if stored_value is None:
             return None
-
         if isinstance(stored_value, dict) and "ciphertext" in stored_value and "nonce" in stored_value:
             return decrypt_secret(stored_value["ciphertext"], stored_value["nonce"])
-
         return stored_value
 
-    def get_api_key(self, exchange: str) -> str | None:
-        """Get API key for a specific exchange."""
-        if not self.api_keys:
-            return None
-        api_key = self.api_keys.get(exchange, {}).get("api_key")
-        return self._decrypt_value(api_key)
+    def _is_legacy_entry(self, key: str, entry: dict) -> bool:
+        """True when this entry uses the old {exchange: {api_key, api_secret}} format."""
+        return "exchange" not in entry
 
-    def get_api_secret(self, exchange: str) -> str | None:
-        """Get API secret for a specific exchange."""
-        if not self.api_keys:
-            return None
-        api_secret = self.api_keys.get(exchange, {}).get("api_secret")
-        return self._decrypt_value(api_secret)
+    # ---------------------------------------------------------------------------
+    # Multi-credential API (new format)
+    # ---------------------------------------------------------------------------
 
-    def set_api_credentials(self, exchange: str, api_key: str, api_secret: str) -> None:
-        """Set encrypted API credentials for an exchange."""
+    def get_all_credentials(self) -> list[dict]:
+        """Return all stored credentials (masked). Handles both old and new format."""
+        if not self.api_keys:
+            return []
+        result = []
+        for key_id, entry in self.api_keys.items():
+            if not isinstance(entry, dict):
+                continue
+            if self._is_legacy_entry(key_id, entry):
+                raw = self._decrypt_value(entry.get("api_key")) or ""
+                result.append(
+                    {
+                        "id": f"legacy_{key_id}",
+                        "exchange": key_id,
+                        "label": key_id.capitalize(),
+                        "api_key_masked": (raw[:4] + "****") if len(raw) > 4 else "****",
+                        "created_at": None,
+                        "is_primary": entry.get("is_primary", True),
+                    }
+                )
+            else:
+                raw = self._decrypt_value(entry.get("api_key")) or ""
+                result.append(
+                    {
+                        "id": key_id,
+                        "exchange": entry.get("exchange", "binance"),
+                        "label": entry.get("label", "Clef"),
+                        "api_key_masked": (raw[:4] + "****") if len(raw) > 4 else "****",
+                        "created_at": entry.get("created_at"),
+                        "is_primary": entry.get("is_primary", False),
+                    }
+                )
+        return result
+
+    def add_credential(self, label: str, exchange: str, api_key: str, api_secret: str) -> str:
+        """Add a named API credential. Returns the new key_id (UUID).
+        First credential for an exchange is automatically set as primary."""
+        import uuid
+        from datetime import UTC, datetime
+
         if not self.api_keys:
             self.api_keys = {}
+        is_first = not self.has_credentials_for_exchange(exchange)
+        key_id = str(uuid.uuid4())
+        self.api_keys[key_id] = {
+            "exchange": exchange,
+            "label": label,
+            "api_key": encrypt_secret(api_key),
+            "api_secret": encrypt_secret(api_secret),
+            "created_at": datetime.now(UTC).isoformat(),
+            "is_primary": is_first,
+        }
+        return key_id
 
+    def set_primary_credential(self, key_id: str) -> bool:
+        """Mark key_id as primary for its exchange, unmark all others. Returns True if found."""
+        if not self.api_keys:
+            return False
+        actual_key = key_id[7:] if key_id.startswith("legacy_") else key_id
+        entry = self.api_keys.get(actual_key)
+        if not entry or not isinstance(entry, dict):
+            return False
+        exchange = actual_key if self._is_legacy_entry(actual_key, entry) else entry.get("exchange")
+        for kid, e in self.api_keys.items():
+            if not isinstance(e, dict):
+                continue
+            e_exchange = kid if self._is_legacy_entry(kid, e) else e.get("exchange")
+            if e_exchange == exchange:
+                e["is_primary"] = kid == actual_key
+        return True
+
+    def remove_credential(self, key_id: str) -> bool:
+        """Remove a credential by key_id. If it was primary, promote the next one."""
+        if not self.api_keys:
+            return False
+        if key_id.startswith("legacy_"):
+            exchange = key_id[7:]
+            if exchange in self.api_keys:
+                del self.api_keys[exchange]
+                return True
+        if key_id not in self.api_keys:
+            return False
+        entry = self.api_keys[key_id]
+        was_primary = isinstance(entry, dict) and entry.get("is_primary", False)
+        exchange = entry.get("exchange") if isinstance(entry, dict) else None
+        del self.api_keys[key_id]
+        if was_primary and exchange:
+            for _, e in self.api_keys.items():
+                if isinstance(e, dict) and e.get("exchange") == exchange:
+                    e["is_primary"] = True
+                    break
+        return True
+
+    def get_credential_by_id(self, key_id: str) -> dict | None:
+        """Return decrypted credentials dict for a given key_id, or None."""
+        if not self.api_keys:
+            return None
+        if key_id.startswith("legacy_"):
+            exchange = key_id[7:]
+            entry = self.api_keys.get(exchange)
+            if entry and self._is_legacy_entry(exchange, entry):
+                return {
+                    "exchange": exchange,
+                    "label": exchange.capitalize(),
+                    "api_key": self._decrypt_value(entry.get("api_key")),
+                    "api_secret": self._decrypt_value(entry.get("api_secret")),
+                }
+        entry = self.api_keys.get(key_id)
+        if not entry:
+            return None
+        return {
+            "exchange": entry.get("exchange"),
+            "label": entry.get("label"),
+            "api_key": self._decrypt_value(entry.get("api_key")),
+            "api_secret": self._decrypt_value(entry.get("api_secret")),
+        }
+
+    def has_credentials_for_exchange(self, exchange: str) -> bool:
+        """True when at least one credential exists for the given exchange."""
+        return self.get_api_key(exchange) is not None
+
+    # ---------------------------------------------------------------------------
+    # Backward-compatible single-exchange helpers
+    # ---------------------------------------------------------------------------
+
+    def get_api_key(self, exchange: str) -> str | None:
+        """Get API key for exchange — primary first, then first available."""
+        if not self.api_keys:
+            return None
+        entry = self.api_keys.get(exchange)
+        if entry and isinstance(entry, dict) and self._is_legacy_entry(exchange, entry):
+            return self._decrypt_value(entry.get("api_key"))
+        first = None
+        for v in self.api_keys.values():
+            if isinstance(v, dict) and v.get("exchange") == exchange:
+                if v.get("is_primary"):
+                    return self._decrypt_value(v.get("api_key"))
+                if first is None:
+                    first = v
+        return self._decrypt_value(first.get("api_key")) if first else None
+
+    def get_api_secret(self, exchange: str) -> str | None:
+        """Get API secret for exchange — primary first, then first available."""
+        if not self.api_keys:
+            return None
+        entry = self.api_keys.get(exchange)
+        if entry and isinstance(entry, dict) and self._is_legacy_entry(exchange, entry):
+            return self._decrypt_value(entry.get("api_secret"))
+        first = None
+        for v in self.api_keys.values():
+            if isinstance(v, dict) and v.get("exchange") == exchange:
+                if v.get("is_primary"):
+                    return self._decrypt_value(v.get("api_secret"))
+                if first is None:
+                    first = v
+        return self._decrypt_value(first.get("api_secret")) if first else None
+
+    def set_api_credentials(self, exchange: str, api_key: str, api_secret: str) -> None:
+        """Set credentials in legacy format (backward compat — used by existing settings update)."""
+        if not self.api_keys:
+            self.api_keys = {}
         self.api_keys[exchange] = {
             "api_key": encrypt_secret(api_key),
             "api_secret": encrypt_secret(api_secret),
         }
 
     def remove_api_credentials(self, exchange: str) -> None:
-        """Remove API credentials for an exchange."""
+        """Remove legacy-format credentials for an exchange."""
         if self.api_keys and exchange in self.api_keys:
             del self.api_keys[exchange]
 

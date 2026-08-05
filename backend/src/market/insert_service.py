@@ -255,7 +255,7 @@ class MarketDataInsertService:
 
     def _insert_klines_to_db(self, symbol: str, interval: str, klines: list) -> dict:
         """
-        Insert klines data into PostgreSQL database with upsert logic.
+        Insert klines data into PostgreSQL database with batch upsert.
 
         Args:
             symbol: Trading pair symbol
@@ -265,16 +265,12 @@ class MarketDataInsertService:
         Returns:
             dict: Statistics about the insertion
         """
-        inserted = 0
-        updated = 0
-        failed = 0
-        total = len(klines)
+        if not klines:
+            return {"inserted": 0, "updated": 0, "failed": 0, "total": 0}
 
-        for kline in klines:
-            try:
-                # Parse Binance kline data
-                # Kline format: [open_time, open, high, low, close, volume, close_time, ...]
-                market_data = {
+        try:
+            records = [
+                {
                     "symbol": symbol,
                     "exchange": "binance",
                     "interval_timeframe": interval,
@@ -290,54 +286,36 @@ class MarketDataInsertService:
                     "taker_buy_base_volume": Decimal(str(kline[9])),
                     "taker_buy_quote_volume": Decimal(str(kline[10])),
                 }
+                for kline in klines
+            ]
 
-                # Use PostgreSQL UPSERT to insert or update
-                stmt = insert(MarketData).values(**market_data)
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=[
-                        "symbol",
-                        "exchange",
-                        "interval_timeframe",
-                        "open_time",
-                    ],
-                    set_={
-                        "open_price": stmt.excluded.open_price,
-                        "high_price": stmt.excluded.high_price,
-                        "low_price": stmt.excluded.low_price,
-                        "close_price": stmt.excluded.close_price,
-                        "volume": stmt.excluded.volume,
-                        "close_time": stmt.excluded.close_time,
-                        "quote_asset_volume": stmt.excluded.quote_asset_volume,
-                        "number_of_trades": stmt.excluded.number_of_trades,
-                        "taker_buy_base_volume": stmt.excluded.taker_buy_base_volume,
-                        "taker_buy_quote_volume": stmt.excluded.taker_buy_quote_volume,
-                        "updated_at": datetime.now(UTC),
-                    },
-                )
+            stmt = insert(MarketData).values(records)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["symbol", "exchange", "interval_timeframe", "open_time"],
+                set_={
+                    "open_price": stmt.excluded.open_price,
+                    "high_price": stmt.excluded.high_price,
+                    "low_price": stmt.excluded.low_price,
+                    "close_price": stmt.excluded.close_price,
+                    "volume": stmt.excluded.volume,
+                    "close_time": stmt.excluded.close_time,
+                    "quote_asset_volume": stmt.excluded.quote_asset_volume,
+                    "number_of_trades": stmt.excluded.number_of_trades,
+                    "taker_buy_base_volume": stmt.excluded.taker_buy_base_volume,
+                    "taker_buy_quote_volume": stmt.excluded.taker_buy_quote_volume,
+                    "updated_at": datetime.now(UTC),
+                },
+            )
+            self.db.execute(stmt)
+            self.db.commit()
 
-                result = self.db.execute(stmt)
-                self.db.commit()
+            logger.info(f"Batch upserted {len(records)} records for {symbol} ({interval})")
+            return {"inserted": len(records), "updated": 0, "failed": 0, "total": len(records)}
 
-                # Check if it was an insert or update
-                if result.rowcount > 0:
-                    # Note: Can't easily distinguish insert vs update with ON CONFLICT
-                    # For simplicity, count all as inserts
-                    inserted += 1
-                else:
-                    updated += 1
-
-            except Exception as e:
-                logger.error(f"Error inserting kline: {e!s}")
-                self.db.rollback()
-                failed += 1
-                continue
-
-        return {
-            "inserted": inserted,
-            "updated": updated,
-            "failed": failed,
-            "total": total,
-        }
+        except Exception as e:
+            logger.error(f"Error batch inserting klines for {symbol}: {e!s}")
+            self.db.rollback()
+            return {"inserted": 0, "updated": 0, "failed": len(klines), "total": len(klines)}
 
     def get_data_count(self, symbol: str, interval: str, start_time: datetime, end_time: datetime) -> int:
         """
@@ -384,6 +362,41 @@ class MarketDataInsertService:
         except Exception as e:
             logger.warning(f"Symbol validation failed for {symbol}: {e!s}")
             return False
+
+    def get_coverage(self) -> list[dict]:
+        """Return data coverage summary grouped by symbol and timeframe.
+
+        Returns:
+            List of dicts with symbol, timeframe, count, first_candle, last_candle.
+        """
+        from sqlalchemy import func
+
+        try:
+            rows = (
+                self.db.query(
+                    MarketData.symbol,
+                    MarketData.interval_timeframe,
+                    func.count(MarketData.id).label("count"),
+                    func.min(MarketData.open_time).label("first_candle"),
+                    func.max(MarketData.open_time).label("last_candle"),
+                )
+                .group_by(MarketData.symbol, MarketData.interval_timeframe)
+                .order_by(MarketData.symbol, MarketData.interval_timeframe)
+                .all()
+            )
+            return [
+                {
+                    "symbol": r.symbol,
+                    "timeframe": r.interval_timeframe,
+                    "count": r.count,
+                    "first_candle": r.first_candle.isoformat() if r.first_candle else None,
+                    "last_candle": r.last_candle.isoformat() if r.last_candle else None,
+                }
+                for r in rows
+            ]
+        except Exception as e:
+            logger.error(f"Error fetching coverage: {e!s}")
+            return []
 
     def get_latest_data(self, symbol: str, interval: str, limit: int = 100) -> list[dict]:
         """

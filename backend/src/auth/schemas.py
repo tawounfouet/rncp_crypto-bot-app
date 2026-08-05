@@ -93,6 +93,38 @@ class UserSettingsUpdate(BaseModel):
     )
 
 
+# API Credential schemas (multi-key)
+class ApiCredentialCreate(BaseModel):
+    """Schema for adding a named API credential."""
+
+    label: str = Field(..., min_length=1, max_length=100, description="User-defined label")
+    exchange: str = Field(..., description="Exchange name (e.g., binance)")
+    api_key: str = Field(..., min_length=1, description="API key")
+    api_secret: str = Field(..., min_length=1, description="API secret")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "label": "Clef principale",
+                "exchange": "binance",
+                "api_key": "your_api_key",
+                "api_secret": "your_api_secret",
+            }
+        }
+    )
+
+
+class ApiCredentialResponse(BaseModel):
+    """Masked credential returned to the client."""
+
+    id: str
+    exchange: str
+    label: str
+    api_key_masked: str
+    created_at: str | None = None
+    is_primary: bool = False
+
+
 # User Responses
 class UserBase(BaseModel):
     """Base user fields for responses."""

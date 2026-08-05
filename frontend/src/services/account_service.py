@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from mocks.db import MockStore
-from schemas.account import AccountProfile, BinanceCredentialInput, BinanceCredentialStatus
+from schemas.account import (
+    AccountProfile,
+    ApiCredentialEntry,
+    ApiCredentialInput,
+    BinanceCredentialInput,
+    BinanceCredentialStatus,
+)
 from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token, set_binance_configured, sync_current_user_from_backend
@@ -121,3 +127,72 @@ class AccountService:
 
         set_binance_configured(True, store=self.store)
         return True, "Cles Binance enregistrees et chiffrees en base."
+
+    # -------------------------------------------------------------------------
+    # Multi-credential management
+    # -------------------------------------------------------------------------
+
+    def list_credentials(self) -> list[ApiCredentialEntry]:
+        try:
+            token = self._token()
+        except ServiceError:
+            return []
+        response = self.client.list_api_credentials(token)
+        if not response.success or not isinstance(response.data, list):
+            return []
+        return [
+            ApiCredentialEntry(
+                id=c.get("id", ""),
+                exchange=c.get("exchange", "binance"),
+                label=c.get("label", ""),
+                api_key_masked=c.get("api_key_masked", "****"),
+                created_at=c.get("created_at"),
+                is_primary=c.get("is_primary", False),
+            )
+            for c in response.data
+        ]
+
+    def add_credential(self, payload: ApiCredentialInput) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
+
+        if not payload.label.strip():
+            return False, "Le label est requis."
+        if not payload.api_key.strip() or not payload.api_secret.strip():
+            return False, "La clef API et le secret sont requis."
+
+        response = self.client.add_api_credential(
+            token,
+            label=payload.label.strip(),
+            exchange=payload.exchange.strip().lower(),
+            api_key=payload.api_key.strip(),
+            api_secret=payload.api_secret.strip(),
+        )
+        if not response.success:
+            return False, _extract_error(response)
+
+        set_binance_configured(True, store=self.store)
+        return True, f"Clef '{payload.label}' ajoutee et chiffree en base."
+
+    def set_primary_credential(self, key_id: str) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
+        response = self.client.set_primary_api_credential(token, key_id)
+        if not response.success:
+            return False, _extract_error(response)
+        return True, "Clef définie comme principale."
+
+    def delete_credential(self, key_id: str) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
+
+        response = self.client.delete_api_credential(token, key_id)
+        if not response.success and response.status_code != 204:
+            return False, _extract_error(response)
+        return True, "Clef supprimee."

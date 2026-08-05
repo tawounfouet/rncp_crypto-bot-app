@@ -81,49 +81,47 @@ def main() -> None:
 
     left, right = st.columns([1, 1], gap="large")
     with left:
-        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        st.write(f"Email: `{detail.email}`")
-        st.write(f"Nom: {detail.first_name} {detail.last_name or ''}")
-        render_status_badge("Role", detail.role.value)
-        render_status_badge("Statut", detail.status.value)
-        st.caption(f"Dernier login: {format_datetime(detail.last_login)}")
-        st.caption(f"Cree le: {format_datetime(detail.created_at)}")
-        st.caption(f"Binance configure: {bool_to_label(detail.binance_configured)}")
-        st.caption(f"Echecs login: {detail.failed_login_count}")
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.write(f"Email: `{detail.email}`")
+            st.write(f"Nom: {detail.first_name} {detail.last_name or ''}")
+            render_status_badge("Role", detail.role.value)
+            render_status_badge("Statut", detail.status.value)
+            st.caption(f"Dernier login: {format_datetime(detail.last_login)}")
+            st.caption(f"Cree le: {format_datetime(detail.created_at)}")
+            st.caption(f"Binance configure: {bool_to_label(detail.binance_configured)}")
+            st.caption(f"Echecs login: {detail.failed_login_count}")
 
     with right:
-        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        st.markdown("##### Actions admin")
-        target_enabled = detail.status != UserStatus.ENABLED
-        toggle_label = "Activer le compte" if target_enabled else "Desactiver le compte"
-        confirm_toggle = st.checkbox(
-            f"Je confirme: {toggle_label.lower()}",
-            key=f"confirm_toggle_{detail.email}",
-        )
-        if compat_button(toggle_label, width="stretch", disabled=not confirm_toggle):
-            ok, message = service.set_enabled(detail.email, target_enabled)
-            show_feedback("success" if ok else "error", message)
-            if ok:
-                st.rerun()
+        with st.container(border=True):
+            st.markdown("##### Actions admin")
+            target_enabled = detail.status != UserStatus.ENABLED
+            toggle_label = "Activer le compte" if target_enabled else "Desactiver le compte"
+            confirm_toggle = st.checkbox(
+                f"Je confirme: {toggle_label.lower()}",
+                key=f"confirm_toggle_{detail.email}",
+            )
+            if compat_button(toggle_label, width="stretch", disabled=not confirm_toggle):
+                ok, message = service.set_enabled(detail.email, target_enabled)
+                show_feedback("success" if ok else "error", message)
+                if ok:
+                    st.rerun()
 
-        st.markdown("---")
-        next_role = st.selectbox(
-            "Nouveau role",
-            options=[UserRole.USER, UserRole.ADMIN],
-            format_func=lambda role: role.value,
-            index=0 if detail.role == UserRole.USER else 1,
-        )
-        confirm_role = st.checkbox(
-            "Je confirme le changement de role",
-            key=f"confirm_role_{detail.email}",
-        )
-        if compat_button("Appliquer le role", width="stretch", disabled=not confirm_role):
-            ok, message = service.set_role(detail.email, next_role)
-            show_feedback("success" if ok else "error", message)
-            if ok:
-                st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("---")
+            next_role = st.selectbox(
+                "Nouveau role",
+                options=[UserRole.USER, UserRole.ADMIN],
+                format_func=lambda role: role.value,
+                index=0 if detail.role == UserRole.USER else 1,
+            )
+            confirm_role = st.checkbox(
+                "Je confirme le changement de role",
+                key=f"confirm_role_{detail.email}",
+            )
+            if compat_button("Appliquer le role", width="stretch", disabled=not confirm_role):
+                ok, message = service.set_role(detail.email, next_role)
+                show_feedback("success" if ok else "error", message)
+                if ok:
+                    st.rerun()
 
 
 if __name__ == "__main__":

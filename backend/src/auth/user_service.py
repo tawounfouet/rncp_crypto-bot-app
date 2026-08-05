@@ -192,7 +192,7 @@ class UserService:
             settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if settings is None:
                 return None
-            has_binance = bool(settings.api_keys and "binance" in settings.api_keys)
+            has_binance = settings.has_credentials_for_exchange("binance")
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
@@ -214,7 +214,7 @@ class UserService:
                     "theme": settings.theme,
                     "risk_profile": settings.risk_profile,
                     "notification_preferences": settings.notification_preferences,
-                    "has_binance_credentials": bool(settings.api_keys and "binance" in settings.api_keys),
+                    "has_binance_credentials": settings.has_credentials_for_exchange("binance"),
                 }
 
             accounts_data = [
@@ -306,13 +306,88 @@ class UserService:
                     setattr(settings, field, value)
 
             # Capture return values before session closes
-            has_binance = bool(settings.api_keys and "binance" in settings.api_keys)
+            has_binance = settings.has_credentials_for_exchange("binance")
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
                 "notification_preferences": settings.notification_preferences,
                 "has_binance_credentials": has_binance,
             }
+
+    # ---------------------------------------------------------------------------
+    # Multi-credential management
+    # ---------------------------------------------------------------------------
+
+    def _get_or_create_settings(self, session, user_id: str) -> UserSettings:
+        settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+        if not settings:
+            settings = UserSettings(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                theme="light",
+                notification_preferences={"email": True, "push": False},
+                risk_profile="moderate",
+                api_keys=None,
+            )
+            session.add(settings)
+        return settings
+
+    def list_api_credentials(self, user_id: str) -> list[dict]:
+        """List all API credentials for a user (masked)."""
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                return []
+            return settings.get_all_credentials()
+
+    def add_api_credential(self, user_id: str, label: str, exchange: str, api_key: str, api_secret: str) -> dict:
+        """Add a named API credential. Returns the masked credential dict."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        with get_db_session() as session:
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND)
+            settings = self._get_or_create_settings(session, user_id)
+            key_id = settings.add_credential(label, exchange, api_key, api_secret)
+            flag_modified(settings, "api_keys")
+            session.commit()
+            raw = api_key
+            return {
+                "id": key_id,
+                "exchange": exchange,
+                "label": label,
+                "api_key_masked": (raw[:4] + "****") if len(raw) > 4 else "****",
+                "created_at": None,
+            }
+
+    def remove_api_credential(self, user_id: str, key_id: str) -> bool:
+        """Remove an API credential by key_id. Returns True if removed."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                return False
+            removed = settings.remove_credential(key_id)
+            if removed:
+                flag_modified(settings, "api_keys")
+                session.commit()
+            return removed
+
+    def set_primary_credential(self, user_id: str, key_id: str) -> bool:
+        """Mark key_id as primary for its exchange. Returns True if found."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                return False
+            updated = settings.set_primary_credential(key_id)
+            if updated:
+                flag_modified(settings, "api_keys")
+                session.commit()
+            return updated
 
     # Admin operations
     def activate_user(self, user_id: str) -> bool:

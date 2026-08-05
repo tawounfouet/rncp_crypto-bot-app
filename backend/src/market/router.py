@@ -51,6 +51,21 @@ def get_market_data_service() -> MarketDataService:
 # ============================================================================
 
 
+@router.get("/data/coverage")
+async def get_data_coverage(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return OHLCV data coverage grouped by symbol and timeframe.
+
+    Each entry shows how many candles are stored and their date range,
+    so the frontend can check availability before running a backtest.
+    """
+    insert_service = MarketDataInsertService(db)
+    coverage = insert_service.get_coverage()
+    return {"success": True, "message": f"{len(coverage)} series", "data": coverage}
+
+
 @router.post("/data/insert", response_model=BaseResponse)
 async def insert_historical_data(
     request: MarketDataRequest,

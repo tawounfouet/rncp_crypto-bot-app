@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from auth.dependencies import get_current_admin_user, get_current_user
 from auth.models import User as UserModel
-from auth.schemas import UserResponse, UserSettingsUpdate, UserUpdate
+from auth.schemas import ApiCredentialCreate, ApiCredentialResponse, UserResponse, UserSettingsUpdate, UserUpdate
 from auth.user_service import user_service
 
 # Define a constant for the error message
@@ -116,6 +116,84 @@ async def update_user_settings(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update user settings: {e!s}",
+        ) from None
+
+
+@router.get("/me/api-keys", response_model=list[ApiCredentialResponse])
+async def list_api_credentials(
+    current_user: UserModel = Depends(get_current_user),
+) -> list[ApiCredentialResponse]:
+    """List all stored API credentials for the current user (masked)."""
+    try:
+        creds = user_service.list_api_credentials(current_user.id)
+        return [ApiCredentialResponse(**c) for c in creds]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list API credentials: {e!s}",
+        ) from None
+
+
+@router.post("/me/api-keys", response_model=ApiCredentialResponse, status_code=status.HTTP_201_CREATED)
+async def add_api_credential(
+    credential: ApiCredentialCreate,
+    current_user: UserModel = Depends(get_current_user),
+) -> ApiCredentialResponse:
+    """Add a new named API credential."""
+    try:
+        result = user_service.add_api_credential(
+            current_user.id,
+            label=credential.label,
+            exchange=credential.exchange,
+            api_key=credential.api_key,
+            api_secret=credential.api_secret,
+        )
+        return ApiCredentialResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add API credential: {e!s}",
+        ) from None
+
+
+@router.put("/me/api-keys/{key_id}/primary", status_code=status.HTTP_200_OK)
+async def set_primary_api_credential(
+    key_id: str,
+    current_user: UserModel = Depends(get_current_user),
+) -> dict:
+    """Mark an API credential as primary for its exchange."""
+    try:
+        updated = user_service.set_primary_credential(current_user.id, key_id)
+        if not updated:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+        return {"success": True, "message": "Clef définie comme principale."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to set primary credential: {e!s}",
+        ) from None
+
+
+@router.delete("/me/api-keys/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_api_credential(
+    key_id: str,
+    current_user: UserModel = Depends(get_current_user),
+) -> None:
+    """Delete an API credential by ID."""
+    try:
+        removed = user_service.remove_api_credential(current_user.id, key_id)
+        if not removed:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Credential not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete API credential: {e!s}",
         ) from None
 
 

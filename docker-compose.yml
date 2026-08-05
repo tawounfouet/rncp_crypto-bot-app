@@ -157,6 +157,7 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8009", "--reload"]
     depends_on:
       postgres:
         condition: service_healthy

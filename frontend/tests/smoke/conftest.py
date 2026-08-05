@@ -81,6 +81,26 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
         has_binance = bool(getattr(user, "binance_configured", False)) if user else False
         return ApiResponse(status_code=200, data={"has_binance_credentials": has_binance})
 
+    # ── /users/me/api-keys (multi-credential) ────────────────────────────────
+    if "/users/me/api-keys" in path and method == "GET":
+        _, user = _get_store_user()
+        configured = bool(getattr(user, "binance_configured", False)) if user else False
+        if not configured:
+            return ApiResponse(status_code=200, data=[])
+        return ApiResponse(
+            status_code=200,
+            data=[
+                {
+                    "id": "cred_binance_1",
+                    "exchange": "binance",
+                    "label": "Binance Spot principal",
+                    "api_key_masked": "AK_****",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "is_primary": True,
+                }
+            ],
+        )
+
     # ── /users/me (GET ou PUT) ────────────────────────────────────────────────
     if "/users/me" in path:
         _, user = _get_store_user()

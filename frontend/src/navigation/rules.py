@@ -67,6 +67,13 @@ PAGES: dict[str, NavPage] = {
         requires_auth=True,
         show_when_authenticated=True,
     ),
+    "backtesting": NavPage(
+        key="backtesting",
+        label="Backtesting",
+        path="pages/09_Backtesting.py",
+        requires_auth=True,
+        show_when_authenticated=True,
+    ),
     "admin": NavPage(
         key="admin",
         label="Admin",
@@ -89,7 +96,7 @@ def allowed_page_keys_in_sidebar(user: MockUser | None) -> list[str]:
     if user is None:
         return ["login", "signup"]
 
-    keys = ["portfolio", "performance", "bot_control", "bot_config", "account"]
+    keys = ["portfolio", "performance", "bot_control", "bot_config", "backtesting", "account"]
     if user.role == UserRole.ADMIN:
         keys.append("admin")
     return keys

@@ -83,9 +83,8 @@ WORKDIR /app
 # Copier le code source
 COPY --chown=app:app . .
 
-# Creer les repertoires necessaires
-RUN mkdir -p logs data && \
-    chown -R app:app /app
+# Creer les repertoires necessaires (droits deja poses par COPY --chown)
+RUN mkdir -p logs data
 
 # Changer vers l'utilisateur non-root
 USER app

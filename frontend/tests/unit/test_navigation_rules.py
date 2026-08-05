@@ -13,7 +13,7 @@ def test_sidebar_entries_when_authenticated_standard_user(store) -> None:
     keys = allowed_page_keys_in_sidebar(user)
     assert "signup" not in keys
     assert "admin" not in keys
-    assert keys == ["portfolio", "performance", "bot_control", "bot_config", "account"]
+    assert keys == ["portfolio", "performance", "bot_control", "bot_config", "backtesting", "account"]
 
 
 def test_sidebar_entries_when_authenticated_admin(store) -> None:
