@@ -6,11 +6,11 @@ Handles all configuration including database fallback to SQLite.
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import field_validator
 from pydantic.types import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -30,11 +30,13 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     ENVIRONMENT: str = "development"
 
-    # Security settings
-    SECRET_KEY: SecretStr = "your-secret-key-change-this-in-production"  # noqa: S105
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Security settings (JWT)
+    # Pas de valeur par defaut : une clef par defaut, publique dans le repo, permettrait
+    # de forger des JWT valides pour n'importe quel compte. Doit venir de l'environnement.
+    JWT_SIGNING_KEY: SecretStr
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Server settings
     HOST: str = "0.0.0.0"  # noqa: S104
@@ -42,13 +44,19 @@ class Settings(BaseSettings):
     RELOAD: bool = True
 
     # CORS settings
-    CORS_ORIGINS: list[str] = ["*"]
+    # Pas de valeur par defaut ("*" autoriserait n'importe quel site a appeler l'API
+    # depuis le navigateur d'un utilisateur connecte) : doit venir de l'environnement,
+    # liste d'origines separees par des virgules (ex: http://localhost:8501,https://...).
+    CORS_ORIGINS: Annotated[list[str], NoDecode]
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: list[str] = ["*"]
     CORS_ALLOW_HEADERS: list[str] = ["*"]
 
     # Trusted hosts
-    ALLOWED_HOSTS: list[str] = ["*"]
+    # Pas de valeur par defaut ("*" neutralise le TrustedHostMiddleware, aucune protection
+    # contre l'injection d'en-tete Host) : doit venir de l'environnement, liste de hosts
+    # separes par des virgules (ex: localhost,api.example.com).
+    ALLOWED_HOSTS: Annotated[list[str], NoDecode]
 
     # Rate limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -88,8 +96,6 @@ class Settings(BaseSettings):
     USE_REDIS: bool = False
 
     # Binance API settings
-    BINANCE_API_KEY: SecretStr | None = None
-    BINANCE_API_SECRET: SecretStr | None = None
     BINANCE_TESTNET: bool = True
     BINANCE_TESTNET_API_KEY: SecretStr | None = None
     BINANCE_TESTNET_API_SECRET: SecretStr | None = None
@@ -167,6 +173,14 @@ class Settings(BaseSettings):
         if self.LOG_FILE:
             log_dir = Path(self.LOG_FILE).parent
             log_dir.mkdir(parents=True, exist_ok=True)
+
+    @field_validator("CORS_ORIGINS", "ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def split_comma_separated_list(cls, v):
+        """Accepte une chaine separee par des virgules (format .env/docker-compose)."""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
     @field_validator("DATABASE_URL", mode="after")
     @classmethod

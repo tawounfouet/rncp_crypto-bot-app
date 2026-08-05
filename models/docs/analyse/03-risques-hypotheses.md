@@ -1,5 +1,8 @@
 # Risques et hypothèses
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Hypothèses de départ
 
 | Hypothèse | Impact si fausse | Validation MVP |

@@ -158,6 +158,22 @@ def build_global_css(theme_mode: ThemeMode = DEFAULT_THEME_MODE) -> str:
         color: var(--sidebar-muted-text) !important;
       }}
 
+      section[data-testid="stSidebar"] .block-container {{
+        padding-top: 0.4rem;
+      }}
+
+      .sidebar-logo-wrap {{
+        text-align: center !important;
+        margin-bottom: 0.4rem;
+      }}
+
+      #sidebar-logo-img {{
+        width: 96px !important;
+        height: auto !important;
+        display: inline-block !important;
+        margin: 0 !important;
+      }}
+
       .block-container {{
         padding-top: 1.2rem;
         padding-bottom: 2.4rem;

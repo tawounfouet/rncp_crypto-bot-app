@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import functools
+import os
+from pathlib import Path
+
 import streamlit as st
 
 from mocks.db import MockStore
@@ -11,12 +16,46 @@ from schemas.auth import MockUser
 from state.session import get_theme_mode, set_theme_mode
 from utils.streamlit_compat import button as compat_button
 
+ENV_COLORS = {
+    "development": "blue",
+    "staging": "orange",
+    "production": "green",
+}
+
+LOGO_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "crypto_bot_logo.png"
+
 
 def _safe_page_link(page: str, label: str) -> None:
     try:
         st.page_link(page, label=label)
     except Exception:
         st.caption(label)
+
+
+@functools.lru_cache(maxsize=1)
+def _logo_data_uri() -> str | None:
+    """Encode le logo en base64 une fois : evite de relire/re-encoder le fichier a chaque rerun."""
+    if not LOGO_PATH.exists():
+        return None
+    encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def _render_brand_badge() -> None:
+    data_uri = _logo_data_uri()
+    if data_uri:
+        # <img> HTML brut : st.image() ignorait la largeur demandee. Taille/centrage
+        # geres via id + conteneur text-align:center dans theme/styles.py (aucun
+        # attribut inline ici, cf. test_theme_hardcoded_audit.py).
+        st.markdown(
+            f"<div class='sidebar-logo-wrap'>"
+            f"<img src='{data_uri}' alt='Crypto-bot' id='sidebar-logo-img'></div>",
+            unsafe_allow_html=True,
+        )
+    env = os.getenv("ENVIRONMENT", "development")
+    version = os.getenv("APP_VERSION", "dev")
+    color = ENV_COLORS.get(env, "gray")
+    st.markdown(f"**Crypto-bot** :{color}[{env}] — `{version}`")
 
 
 def _render_theme_switch() -> None:
@@ -34,6 +73,8 @@ def _render_theme_switch() -> None:
 
 def render_public_sidebar() -> None:
     with st.sidebar:
+        _render_brand_badge()
+        st.markdown("---")
         _render_theme_switch()
         st.markdown("---")
         st.markdown("### Navigation")
@@ -46,6 +87,8 @@ def render_public_sidebar() -> None:
 def render_private_sidebar(store: MockStore, user: MockUser) -> bool:
     logout_clicked = False
     with st.sidebar:
+        _render_brand_badge()
+        st.markdown("---")
         _render_theme_switch()
         st.markdown("---")
         st.markdown("### Navigation")

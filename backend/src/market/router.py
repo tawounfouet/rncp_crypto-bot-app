@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from market.insert_service import MarketDataInsertService
 from market.schemas import (
+    ExchangeListResponse,
+    ExchangeOption,
     MarketDataListResponse,
     MarketDataRequest,
     MarketDataResponse,
@@ -23,6 +25,10 @@ from market.schemas import (
     MarketSummaryResponse,
     PriceInfo,
     PriceResponse,
+    PublicKlineInfo,
+    PublicKlineListResponse,
+    PublicPriceInfo,
+    PublicPriceListResponse,
     SymbolInfo,
     SymbolListResponse,
     TechnicalIndicators,
@@ -30,6 +36,11 @@ from market.schemas import (
     TradingPair,
 )
 from market.service import MarketDataService
+from utils.connectors.exchanges.registry import (
+    get_market_data_driver,
+    list_configured_exchanges,
+    supports_sandbox_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +50,117 @@ router = APIRouter(prefix="/market", tags=["Market Data"])
 # Constants
 SYMBOL_DESCRIPTION = "Trading symbol (e.g., BTCUSDC)"
 
+DEFAULT_PUBLIC_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+EXCHANGE_LABELS = {"binance": "Binance", "binance_us": "Binance.US", "kraken": "Kraken"}
+
 
 # Dependency to get market data service
 def get_market_data_service() -> MarketDataService:
     """Get market data service instance."""
     return MarketDataService()
+
+
+# ============================================================================
+# PUBLIC MARKET ENDPOINTS (no auth — accessible connecté ou non)
+# ============================================================================
+
+
+@router.get("/exchanges", response_model=ExchangeListResponse)
+async def list_public_exchanges() -> ExchangeListResponse:
+    """
+    **Liste des plateformes disponibles pour la consultation des prix publics.**
+
+    Source unique de vérité : les drivers de données de marché réellement enregistrés
+    (`utils/connectors/exchanges/registry.py`), pas un catalogue codé en dur côté frontend.
+    """
+    ids = list_configured_exchanges()
+    return ExchangeListResponse(
+        data=[
+            ExchangeOption(
+                id=exchange_id,
+                label=EXCHANGE_LABELS.get(exchange_id, exchange_id.capitalize()),
+                supports_sandbox=supports_sandbox_credentials(exchange_id),
+            )
+            for exchange_id in ids
+        ]
+    )
+
+
+@router.get("/public/prices", response_model=PublicPriceListResponse)
+async def get_public_prices(
+    exchange: str = Query("binance", description="Exchange source (e.g., binance, kraken)"),
+    symbols: str = Query(",".join(DEFAULT_PUBLIC_SYMBOLS), description="Paires séparées par des virgules"),
+) -> PublicPriceListResponse:
+    """
+    **Derniers prix publics pour une ou plusieurs paires, sans authentification.**
+
+    Interroge directement le driver de données de marché (API publique de l'exchange,
+    aucune clé requise) — pas la base de données de collecte historique.
+    """
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    driver = get_market_data_driver(exchange)
+
+    prices: list[PublicPriceInfo] = []
+    warnings: list[str] = []
+    for symbol in symbol_list:
+        try:
+            rows = driver.fetch_klines(symbol, "1m", limit=1)
+            if not rows:
+                warnings.append(f"Aucune donnée pour {symbol} sur {exchange}")
+                continue
+            latest = rows[-1]
+            prices.append(
+                PublicPriceInfo(symbol=symbol, exchange=exchange, price=latest["close"], as_of=latest["close_time"])
+            )
+        except Exception as exc:
+            logger.warning(f"Public price fetch failed exchange={exchange} symbol={symbol}: {exc}")
+            warnings.append(f"{symbol}: indisponible sur {exchange}")
+
+    return PublicPriceListResponse(data=prices, warnings=warnings)
+
+
+@router.get("/public/klines", response_model=PublicKlineListResponse)
+async def get_public_klines(
+    exchange: str = Query("binance", description="Exchange source (e.g., binance, kraken)"),
+    symbols: str = Query(",".join(DEFAULT_PUBLIC_SYMBOLS), description="Paires séparées par des virgules"),
+    interval: str = Query("1h", description="Intervalle des bougies (e.g., 1m, 1h)"),
+    limit: int = Query(24, ge=1, le=1000, description="Nombre de bougies par paire"),
+) -> PublicKlineListResponse:
+    """
+    **Série de bougies (klines) publiques pour une ou plusieurs paires, sans authentification.**
+
+    Interroge directement le driver de données de marché (API publique de l'exchange,
+    aucune clé requise) — pas la base de données de collecte historique.
+    """
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    driver = get_market_data_driver(exchange)
+
+    klines: list[PublicKlineInfo] = []
+    warnings: list[str] = []
+    for symbol in symbol_list:
+        try:
+            rows = driver.fetch_klines(symbol, interval, limit=limit)
+            if not rows:
+                warnings.append(f"Aucune donnée pour {symbol} sur {exchange}")
+                continue
+            for row in rows:
+                klines.append(
+                    PublicKlineInfo(
+                        symbol=symbol,
+                        exchange=exchange,
+                        interval=interval,
+                        open_time=row["open_time"],
+                        open=row["open"],
+                        high=row["high"],
+                        low=row["low"],
+                        close=row["close"],
+                        volume=row["volume"],
+                    )
+                )
+        except Exception as exc:
+            logger.warning(f"Public kline fetch failed exchange={exchange} symbol={symbol}: {exc}")
+            warnings.append(f"{symbol}: indisponible sur {exchange}")
+    return PublicKlineListResponse(data=klines, warnings=warnings)
 
 
 # ============================================================================
@@ -110,7 +227,7 @@ async def insert_historical_data(
         insert_service = MarketDataInsertService(db)
 
         # Validate symbol
-        is_valid = insert_service.validate_symbol(request.symbol)
+        is_valid = insert_service.validate_symbol(request.exchange, request.symbol)
         if not is_valid:
             raise ValidationError(f"Invalid trading symbol: {request.symbol}")
 
@@ -122,12 +239,15 @@ async def insert_historical_data(
             raise ValidationError("start_time must be before end_time")
 
         # Check existing data count
-        existing_count = insert_service.get_data_count(request.symbol, request.interval, request.start_time, end_time)
+        existing_count = insert_service.get_data_count(
+            request.symbol, request.interval, request.start_time, end_time, exchange=request.exchange
+        )
 
         logger.info(f"Found {existing_count} existing records for {request.symbol} ({request.interval}) in database")
 
-        # Insert data from Binance
+        # Insert data from the exchange
         result = insert_service.insert_historical_data(
+            exchange=request.exchange,
             symbol=request.symbol,
             interval=request.interval,
             start_time=request.start_time,
@@ -245,6 +365,7 @@ async def get_latest_market_data(
     symbol: str = Path(..., description=SYMBOL_DESCRIPTION),
     interval: str = Query("1h", description="Timeframe (e.g., 1m, 5m, 1h, 1d)"),
     periods: int = Query(100, ge=1, le=1000, description="Number of periods to fetch"),
+    exchange: str = Query("binance", description="Exchange source (e.g., binance, kraken)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MarketDataListResponse:
@@ -254,6 +375,7 @@ async def get_latest_market_data(
     - **symbol**: Trading symbol
     - **interval**: Timeframe
     - **periods**: Number of periods to fetch
+    - **exchange**: Exchange source
     """
     try:
         logger.info(f"User {current_user.username} fetching latest {periods} periods for {symbol} ({interval})")
@@ -262,12 +384,14 @@ async def get_latest_market_data(
         insert_service = MarketDataInsertService(db)
 
         # Validate symbol
-        is_valid = insert_service.validate_symbol(symbol)
+        is_valid = insert_service.validate_symbol(exchange, symbol)
         if not is_valid:
             raise ValidationError(f"Invalid symbol: {symbol}")
 
         # Fetch latest data from PostgreSQL
-        data_records = insert_service.get_latest_data(symbol=symbol, interval=interval, limit=periods)
+        data_records = insert_service.get_latest_data(
+            symbol=symbol, interval=interval, limit=periods, exchange=exchange
+        )
 
         if not data_records:
             logger.warning(f"No data found in database for {symbol} ({interval})")

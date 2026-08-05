@@ -1,5 +1,8 @@
 # 04 — Troubleshooting : Difficultés rencontrées
 
+Statut: référence
+Derniere revision: 2026-07-28
+
 Historique des problèmes rencontrés lors de l'intégration d'Airflow dans le projet
 `_dst-crypto-bot_v2`, avec causes racines et solutions appliquées.
 
@@ -273,6 +276,43 @@ make dev-up
 
 > Volume `postgres_data` vide ⇒ `init-user-db.sh` rejoue et crée `airflow` + `mlflow`.
 > Avec le healthcheck corrigé, `airflow-init` attend que ce soit fait : plus de course.
+
+---
+
+## Problème 8 — DAG `ml_pipeline` : `train-rf` échouait (ModuleNotFoundError sklearn/torch)
+
+### Statut : résolu
+
+### Symptôme (historique)
+
+Une fois Airflow déployé sur staging/prod (VM AWS, image construite depuis
+`orchestration/Dockerfile`), les tâches `build_features_*` et `train_random_forest`
+du DAG `ml_pipeline` échouaient avec `ModuleNotFoundError: No module named 'sklearn'`
+(ou `torch`).
+
+### Cause (historique)
+
+`ml_pipeline.py` lançait l'entraînement via `BashOperator` (`cd {MODELS_DIR} && python
+-m src.main train-rf`), exécuté **dans le conteneur Airflow lui-même**. Mais
+`orchestration/requirements.txt` n'inclut que `jobs/requirements.txt` (dépendances
+d'ingestion), pas `models/requirements.txt` (`pandas`, `scikit-learn`, `torch`,
+`mlflow`...). `pandas` fonctionnait par hasard (dépendance transitive d'un provider
+Airflow), pas les autres.
+
+### Résolution retenue
+
+La piste 2 envisagée a été retenue : `build_features_*` et `train_random_forest`
+sont désormais déclenchées par un **appel HTTP** au conteneur `crypto-bot-ml-api`
+(routes `POST /internal/pipeline/features`, `POST /internal/pipeline/train-rf`),
+au lieu d'exécuter `python -m src.main` dans l'environnement Python d'Airflow.
+Raison (cf. docstring de `orchestration/dags/ml_pipeline.py`) : `ml-api` a déjà
+torch/mlflow/scikit-learn qui fonctionnent ; les installer en plus dans l'image
+Airflow provoquait des conflits de versions (ex: `email-validator`/`pydantic`
+requis par Flask-AppBuilder vs. celui tiré par une version récente de mlflow).
+Airflow orchestre, il n'héberge plus la stack ML.
+
+Le DAG `ingest_ohlcv` n'est pas concerné (dépendances légères, déjà dans
+`jobs/requirements.txt`) et fonctionne normalement.
 
 ---
 

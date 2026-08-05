@@ -8,13 +8,13 @@ from components.alerts import show_feedback
 from components.badges import render_status_badge
 from components.headers import render_page_header, render_section_title
 from layouts.page_shell import setup_page
-from schemas.account import AccountProfile, ApiCredentialInput
+from schemas.account import AccountProfile, ExchangeCredentialInput, ExchangeCredentialStatus
 from services.account_service import AccountService
 from services.base import ServiceError
-from utils.streamlit_compat import button as compat_button
+from state.session import get_selected_exchange, set_selected_exchange
+from utils.constants import EXCHANGE_CATALOG
+from utils.formatters import format_datetime
 from utils.streamlit_compat import form_submit_button as compat_form_submit_button
-
-SUPPORTED_EXCHANGES = ["binance", "kraken", "bybit", "coinbase", "okx"]
 
 
 def _render_profile_section(service: AccountService, profile: AccountProfile) -> None:
@@ -24,7 +24,9 @@ def _render_profile_section(service: AccountService, profile: AccountProfile) ->
         last_name = st.text_input("Nom", value=profile.last_name or "")
         email = st.text_input("Email", value=profile.email)
         save_profile = compat_form_submit_button(
-            "Enregistrer le profil", type="primary", width="stretch"
+            "Enregistrer le profil",
+            type="primary",
+            width="stretch",
         )
     if save_profile:
         ok, message = service.update_profile(
@@ -35,75 +37,68 @@ def _render_profile_section(service: AccountService, profile: AccountProfile) ->
             st.rerun()
 
 
-def _render_credentials_table(service: AccountService) -> None:
-    render_section_title("Clefs API enregistrees")
-    credentials = service.list_credentials()
+def _render_exchange_selector() -> str:
+    render_section_title("Exchange")
+    exchange_ids = list(EXCHANGE_CATALOG.keys())
+    current = get_selected_exchange()
+    selected = st.selectbox(
+        "Exchange actif",
+        options=exchange_ids,
+        index=exchange_ids.index(current) if current in exchange_ids else 0,
+        format_func=lambda eid: EXCHANGE_CATALOG.get(eid, eid),
+        help="L'exchange utilise pour la collecte de donnees et l'execution de vos ordres.",
+    )
+    if selected != current:
+        set_selected_exchange(selected)
+        st.rerun()
+    return selected
 
-    if not credentials:
-        st.info("Aucune clef API enregistree. Ajoutez-en une ci-dessous.")
-        return
 
-    for cred in credentials:
-        col_label, col_exchange, col_masked, col_primary, col_del = st.columns(
-            [2.5, 1.5, 2, 1.5, 1]
+def _render_exchange_status_card(
+    exchange: str, credential_status: ExchangeCredentialStatus
+) -> None:
+    render_section_title(f"Statut des cles {EXCHANGE_CATALOG.get(exchange, exchange)}")
+    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+    render_status_badge(
+        EXCHANGE_CATALOG.get(exchange, exchange),
+        "ENABLED" if credential_status.configured else "DISABLED",
+    )
+    st.caption(
+        f"Derniere mise a jour: {format_datetime(credential_status.updated_at)}"
+        if credential_status.updated_at
+        else "Aucune cle enregistree"
+    )
+    if credential_status.configured:
+        mode_label = "Simulation" if credential_status.active_mode == "sandbox" else "Reel"
+        st.write(f"Mode actif : **{mode_label}**")
+    st.write(f"Cles reelles : {'configurees' if credential_status.live_configured else 'absentes'}")
+    if credential_status.supports_sandbox:
+        st.write(
+            f"Cles simulation : {'configurees' if credential_status.sandbox_configured else 'absentes'}"
         )
-        with col_label:
-            label_text = f"**{cred.label}**"
-            if cred.is_primary:
-                label_text += " ★"
-            st.write(label_text)
-            if cred.created_at:
-                st.caption(cred.created_at[:10])
-        with col_exchange:
-            render_status_badge("Exchange", cred.exchange.upper())
-        with col_masked:
-            st.code(cred.api_key_masked, language=None)
-        with col_primary:
-            if cred.is_primary:
-                st.caption("Principale")
-            else:
-                if compat_button("Définir principale", key=f"primary_{cred.id}"):
-                    ok, msg = service.set_primary_credential(cred.id)
-                    show_feedback("success" if ok else "error", msg)
-                    if ok:
-                        st.rerun()
-        with col_del:
-            confirm_key = f"confirm_del_{cred.id}"
-            if st.session_state.get(confirm_key):
-                if compat_button("Confirmer", key=f"do_del_{cred.id}"):
-                    ok, msg = service.delete_credential(cred.id)
-                    show_feedback("success" if ok else "error", msg)
-                    st.session_state[confirm_key] = False
-                    if ok:
-                        st.rerun()
-                if compat_button("Annuler", key=f"cancel_del_{cred.id}"):
-                    st.session_state[confirm_key] = False
-                    st.rerun()
-            else:
-                if compat_button("Supprimer", key=f"del_{cred.id}"):
-                    st.session_state[confirm_key] = True
-                    st.rerun()
-        st.divider()
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _render_add_credential_form(service: AccountService) -> None:
-    render_section_title("Ajouter une clef API")
-    with st.form("add_credential_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            label = st.text_input("Label (ex: Binance Spot principal)", max_chars=100)
-            exchange = st.selectbox("Exchange", options=SUPPORTED_EXCHANGES)
-        with col2:
-            api_key = st.text_input("API key")
-            api_secret = st.text_input("API secret", type="password")
-        submitted = compat_form_submit_button(
-            "Enregistrer la clef", type="primary", width="stretch"
+def _render_exchange_credentials_form(
+    service: AccountService, exchange: str, mode: str, title: str
+) -> None:
+    render_section_title(title)
+    with st.form(f"exchange_form_{exchange}_{mode}", clear_on_submit=True):
+        api_key = st.text_input("API key")
+        api_secret = st.text_input("API secret", type="password")
+        save_keys = compat_form_submit_button(
+            f"Enregistrer les cles {EXCHANGE_CATALOG.get(exchange, exchange)}",
+            type="primary",
+            width="stretch",
         )
 
-    if submitted:
-        ok, message = service.add_credential(
-            ApiCredentialInput(
-                label=label, exchange=exchange, api_key=api_key, api_secret=api_secret
+    if save_keys:
+        ok, message = service.save_exchange_credentials(
+            ExchangeCredentialInput(
+                exchange=exchange,
+                api_key=api_key,
+                api_secret=api_secret,
+                mode=mode,
             )
         )
         show_feedback("success" if ok else "error", message)
@@ -111,11 +106,73 @@ def _render_add_credential_form(service: AccountService) -> None:
             st.rerun()
 
 
+def _render_mode_selector(
+    service: AccountService, exchange: str, credential_status: ExchangeCredentialStatus
+) -> None:
+    render_section_title("Mode actif")
+    if not credential_status.live_configured:
+        st.caption(
+            "Enregistrez d'abord vos cles reelles pour pouvoir choisir le mode "
+            "(reel ou simulation)."
+        )
+        return
+
+    if not credential_status.supports_sandbox:
+        st.caption(
+            f"{EXCHANGE_CATALOG.get(exchange, exchange)} n'a pas de testnet : en mode "
+            "simulation, le solde reste reel, seuls les ordres sont simules."
+        )
+
+    options = ["live", "sandbox"]
+    labels = {"live": "Reel", "sandbox": "Simulation"}
+    selected = st.radio(
+        "Mode",
+        options=options,
+        format_func=lambda opt: labels[opt],
+        index=options.index(credential_status.active_mode)
+        if credential_status.active_mode in options
+        else 0,
+        horizontal=True,
+        key=f"mode_selector_{exchange}",
+    )
+    if selected != credential_status.active_mode:
+        ok, message = service.set_active_mode(exchange, selected)
+        show_feedback("success" if ok else "error", message)
+        if ok:
+            st.rerun()
+
+
+def _render_configured_exchanges_section(service: AccountService, selected_exchange: str) -> None:
+    render_section_title("Mes clés API enregistrées")
+    configured = service.list_configured_exchanges()
+
+    if not configured:
+        st.caption("Aucune clé API enregistree pour le moment.")
+        return
+
+    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+    for exchange in configured:
+        label = EXCHANGE_CATALOG.get(exchange, exchange)
+        row_left, row_mid, row_right = st.columns([2, 1, 1.2])
+        with row_left:
+            st.write(f"**{label}**" + (" (actif)" if exchange == selected_exchange else ""))
+        with row_mid:
+            render_status_badge(label, "ENABLED")
+        with row_right:
+            confirm = st.checkbox("Confirmer", key=f"confirm_delete_{exchange}")
+            if st.button("Supprimer", key=f"delete_{exchange}", disabled=not confirm):
+                ok, message = service.delete_exchange_credentials(exchange)
+                show_feedback("success" if ok else "error", message)
+                if ok:
+                    st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def main() -> None:
     store, _ = setup_page(title="Gestion de compte", icon="👤", page_key="account")
     render_page_header(
         "Gestion de compte",
-        "Profil, clefs API multi-exchanges (chiffrees en base). Plusieurs clefs par exchange supportees.",
+        "Mise a jour du profil et gestion securisee des cles d'exchange (chiffrees en base).",
     )
 
     service = AccountService(store)
@@ -125,35 +182,47 @@ def main() -> None:
         show_feedback("error", str(exc))
         return
 
-    # Check if at least one Binance key exists
-    credentials = service.list_credentials()
-    has_binance = any(c.exchange == "binance" for c in credentials)
-    if not has_binance:
-        with st.container(border=True):
-            st.markdown("### Etape prioritaire: configurer une clef Binance")
-            st.caption(
-                "Ajoutez au moins une clef Binance pour activer le portefeuille et les bots Spot."
-            )
+    selected_exchange = _render_exchange_selector()
+    exchange_label = EXCHANGE_CATALOG.get(selected_exchange, selected_exchange)
+    credential_status = service.get_exchange_status(selected_exchange)
+
+    _render_configured_exchanges_section(service, selected_exchange)
+    st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
+
+    if not credential_status.configured:
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.markdown(f"### Étape prioritaire: configurer {exchange_label}")
+        st.caption(
+            f"Votre compte est cree mais le pre-requis {exchange_label} n'est pas encore rempli. "
+            "Configurez vos cles pour activer toutes les fonctionnalites Spot."
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
 
     left, right = st.columns([1.1, 1], gap="large")
     with left:
         _render_profile_section(service, profile)
     with right:
-        with st.container(border=True):
-            st.markdown(f"**Clefs enregistrees:** {len(credentials)}")
-            binance_count = sum(1 for c in credentials if c.exchange == "binance")
-            if binance_count:
-                render_status_badge("Binance", "ENABLED")
-                st.caption(f"{binance_count} clef(s) Binance")
-            else:
-                render_status_badge("Binance", "DISABLED")
-                st.caption("Aucune clef Binance")
+        _render_exchange_status_card(selected_exchange, credential_status)
 
     st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
-    _render_credentials_table(service)
+    if credential_status.supports_sandbox:
+        keys_left, keys_right = st.columns(2, gap="large")
+        with keys_left:
+            _render_exchange_credentials_form(
+                service, selected_exchange, "live", f"Cles reelles {exchange_label}"
+            )
+        with keys_right:
+            _render_exchange_credentials_form(
+                service, selected_exchange, "sandbox", f"Cles simulation {exchange_label}"
+            )
+    else:
+        _render_exchange_credentials_form(
+            service, selected_exchange, "live", f"Cles reelles {exchange_label}"
+        )
+
     st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
-    _render_add_credential_form(service)
+    _render_mode_selector(service, selected_exchange, credential_status)
 
 
 if __name__ == "__main__":

@@ -2,11 +2,11 @@
 # ============================
 
 # Core Framework
-fastapi==0.135.1
-uvicorn[standard]==0.42.0
-pydantic==2.12.5
-pydantic-settings==2.13.1
-pydantic[email]==2.12.5
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+pydantic[email]==2.13.4
 
 # Authentication & Security
 PyJWT[crypto]==2.12.1
@@ -22,13 +22,20 @@ minio==7.2.20
 
 # Data Processing
 pandas==2.3.3
-numpy==2.4.3
-pyarrow==23.0.1
+numpy==2.4.6
+pyarrow==24.0.0
 fastparquet==2026.3.0
 
 # Binance API
 python-binance==1.0.35
 
+# Multi-exchange (ccxt)
+ccxt==4.5.63
+
+# Machine Learning (inference)
+scikit-learn==1.9.0
+joblib==1.5.3
+
 # Utilities
 python-dotenv==1.2.2
-requests==2.33.1
+requests==2.34.2

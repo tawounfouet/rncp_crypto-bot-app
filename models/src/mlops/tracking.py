@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -85,16 +86,22 @@ def start_run(settings: AppSettings, model_name: str, run_id: str | None = None)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     config_snapshot_path = run_dir / "config_snapshot.json"
-    config_snapshot_path.write_text(
-        json.dumps(dump_config_snapshot(settings), indent=2, default=str), encoding="utf-8"
-    )
+    config_snapshot_path.write_text(json.dumps(dump_config_snapshot(settings), indent=2, default=str), encoding="utf-8")
 
-    mlflow.set_tracking_uri(settings.mlops.tracking_uri)
+    # MLFLOW_TRACKING_URI (defini par docker-compose pour crypto-bot-ml-api, pointe
+    # vers le Postgres partage avec mlflow-ui) prime sur le sqlite local de
+    # config.yaml quand present -- sinon les runs restent invisibles depuis l'UI
+    # web, qui lit exclusivement ce Postgres.
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI") or settings.mlops.tracking_uri
+    mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(settings.mlops.experiment_name)
 
     logger.info(
         "mlops run start model=%s run_id=%s run_dir=%s config_snapshot=%s",
-        model_name, actual_run_id, run_dir, config_snapshot_path,
+        model_name,
+        actual_run_id,
+        run_dir,
+        config_snapshot_path,
     )
 
     with mlflow.start_run(run_name=f"{model_name}/{actual_run_id}") as active_run:
@@ -106,5 +113,7 @@ def start_run(settings: AppSettings, model_name: str, run_id: str | None = None)
         finally:
             logger.info(
                 "mlops run complete model=%s run_id=%s run_dir=%s",
-                model_name, actual_run_id, run_dir,
+                model_name,
+                actual_run_id,
+                run_dir,
             )

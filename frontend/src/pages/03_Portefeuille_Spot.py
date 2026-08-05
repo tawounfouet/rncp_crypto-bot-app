@@ -14,13 +14,14 @@ from components.alerts import show_feedback
 from components.badges import render_status_badge
 from components.cards import KpiItem, render_kpi_cards
 from components.headers import render_page_header, render_section_title
-from components.prerequisites import render_binance_prerequisite_state
+from components.prerequisites import render_exchange_prerequisite_state
 from components.tables import render_dataframe
 from layouts.page_shell import setup_page
-from prerequisites.binance import evaluate_binance_prerequisite
+from prerequisites.exchange import evaluate_exchange_prerequisite
+from services.account_service import AccountService
 from services.base import ServiceError
 from services.portfolio_service import PortfolioService
-from state.session import get_theme_mode
+from state.session import get_selected_exchange, get_theme_mode, set_selected_exchange
 from theme.plotly import pie_color_sequence, themed_layout
 from utils.formatters import format_currency, format_datetime
 from utils.selectors import models_to_dataframe, top_assets_with_others
@@ -29,21 +30,58 @@ from utils.streamlit_compat import plotly_chart as compat_plotly_chart
 
 
 def _render_status_banner(snapshot) -> None:
-    with st.container(border=True):
-        col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
-        with col1:
-            render_status_badge("Backend", "OK" if snapshot.system_status.backend_ok else "ERROR")
-        with col2:
-            render_status_badge("Binance", "OK" if snapshot.system_status.binance_ok else "WARNING")
-        with col3:
-            st.caption(f"Derniere synchro: {format_datetime(snapshot.system_status.last_sync)}")
-        with col4:
-            if compat_button("Refresh", width="stretch"):
-                st.rerun()
+    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
+    with col1:
+        render_status_badge("Backend", "OK" if snapshot.system_status.backend_ok else "ERROR")
+    with col2:
+        render_status_badge(
+            snapshot.system_status.exchange.capitalize(),
+            "OK" if snapshot.system_status.exchange_ok else "WARNING",
+        )
+    with col3:
+        st.caption(f"Derniere synchro: {format_datetime(snapshot.system_status.last_sync)}")
+    with col4:
+        if compat_button("Refresh", width="stretch"):
+            st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _to_df(items: list) -> pd.DataFrame:
     return models_to_dataframe(items)
+
+
+def _render_portfolio_list(store, service: PortfolioService) -> None:
+    account_service = AccountService(store)
+    configured = account_service.list_configured_exchanges()
+    if len(configured) <= 1:
+        return  # rien a comparer avec un seul exchange configure
+
+    render_section_title("Mes portefeuilles")
+    snapshots = service.list_snapshots(configured)
+    current = get_selected_exchange()
+
+    active_modes = account_service.get_active_modes(configured)
+    columns = st.columns(len(configured))
+    for column, exchange_id in zip(columns, configured, strict=True):
+        snapshot = snapshots[exchange_id]
+        mode_label = "Simulation" if active_modes.get(exchange_id) == "sandbox" else "Reel"
+        with column:
+            st.metric(
+                label=f"{exchange_id.capitalize()} ({mode_label})",
+                value=format_currency(snapshot.total_value_usdt),
+            )
+            if not snapshot.system_status.exchange_ok:
+                st.caption(":orange[Cles invalides ou non configurees]")
+            if exchange_id == current:
+                st.caption("**Actif**")
+            elif compat_button(
+                f"Voir {exchange_id.capitalize()}", key=f"select_portfolio_{exchange_id}"
+            ):
+                set_selected_exchange(exchange_id)
+                st.rerun()
+
+    st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
 
 
 def main() -> None:
@@ -53,12 +91,14 @@ def main() -> None:
         "Vue temps reel de vos actifs Spot, ordres ouverts et derniers trades.",
     )
 
-    gate = evaluate_binance_prerequisite("portfolio", user)
+    gate = evaluate_exchange_prerequisite("portfolio", user)
     if gate.should_block_content:
-        render_binance_prerequisite_state("portfolio", cta_key="cta_binance_portfolio")
+        render_exchange_prerequisite_state("portfolio", cta_key="cta_exchange_portfolio")
         return
 
     service = PortfolioService(store)
+    _render_portfolio_list(store, service)
+
     theme_mode = get_theme_mode()
     try:
         with st.spinner("Chargement du portefeuille..."):
@@ -68,10 +108,11 @@ def main() -> None:
         return
 
     _render_status_banner(snapshot)
-    if not snapshot.system_status.binance_ok:
+    if not snapshot.system_status.exchange_ok:
         show_feedback(
             "warning",
-            f"Binance : {snapshot.system_status.binance_message}",
+            f"{snapshot.system_status.exchange.capitalize()} n'est pas configure. "
+            "Ajoutez vos cles dans Gestion de compte.",
         )
         return
 

@@ -10,30 +10,8 @@ from schemas.common import UserRole, UserStatus
 from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token
-
-
-def _parse_dt(value: object) -> datetime | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return None
-
-
-def _extract_error(response) -> str:
-    if response.error:
-        return response.error
-    data = response.data
-    if isinstance(data, dict):
-        detail = data.get("detail")
-        if isinstance(detail, str) and detail:
-            return detail
-    return f"Erreur backend ({response.status_code})."
+from utils.api_errors import extract_error as _extract_error
+from utils.dates import parse_dt
 
 
 class AdminService:
@@ -60,10 +38,10 @@ class AdminService:
             email=u.get("email", ""),
             role=UserRole.ADMIN if u.get("is_admin") else UserRole.USER,
             status=UserStatus.ENABLED if u.get("is_active", True) else UserStatus.DISABLED,
-            last_login=_parse_dt(u.get("last_active_at")),
+            last_login=parse_dt(u.get("last_active_at")),
             first_name=u.get("first_name") or "",
             last_name=u.get("last_name") or None,
-            binance_configured=False,
+            exchange_configured=False,
         )
 
     def list_users(self) -> list[AdminUserRow]:
@@ -93,11 +71,11 @@ class AdminService:
             email=user.get("email", ""),
             role=UserRole.ADMIN if user.get("is_admin") else UserRole.USER,
             status=UserStatus.ENABLED if user.get("is_active", True) else UserStatus.DISABLED,
-            last_login=_parse_dt(user.get("last_active_at")),
+            last_login=parse_dt(user.get("last_active_at")),
             first_name=user.get("first_name") or "",
             last_name=user.get("last_name") or None,
-            created_at=_parse_dt(user.get("created_at")) or datetime.now(UTC),
-            binance_configured=False,
+            created_at=parse_dt(user.get("created_at")) or datetime.now(UTC),
+            exchange_configured=False,
             failed_login_count=0,
         )
 

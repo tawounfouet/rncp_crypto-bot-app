@@ -5,8 +5,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import pandas as pd
-
 from src.config.config_loader import load_config
 from src.data.storage import read_dataset
 from src.mlops.model_card import write_model_card

@@ -1,5 +1,8 @@
 # CryptoBot v2 — Models Training
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 Ce dépôt porte le MVP **Data Engineering + Machine Learning** du CryptoBot v2. Il transforme des cours de marché BTC en datasets fiables, en features exploitables, en runs d'entraînement traçables, puis expose un signal opérationnel `BUY`, `SELL` ou `HOLD`.
 
 Le périmètre est volontairement réduit pour valider l'hypothèse de valeur sans multiplier les risques techniques :

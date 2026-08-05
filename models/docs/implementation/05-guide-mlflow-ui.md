@@ -2,6 +2,8 @@
 title: Explorer les runs dans l'UI MLflow
 description: Guide pratique pour naviguer, comparer et interpréter les runs dans l'interface MLflow locale.
 nav_title: MLflow UI
+status: référence
+updated: 2026-06-10
 ---
 
 Ce guide couvre l'exploration des runs produits par ce pipeline dans l'UI MLflow locale. Tous les runs — modèles entraînés et baselines — sont visibles dans une interface unifiée.

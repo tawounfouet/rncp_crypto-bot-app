@@ -41,15 +41,15 @@ def main() -> None:
             "email",
             "role",
             "status",
-            "binance_configured",
+            "exchange_configured",
             "last_login",
             "first_name",
             "last_name",
         ]
     ]
     users_df["last_login"] = users_df["last_login"].apply(format_datetime)
-    users_df["binance_configured"] = users_df["binance_configured"].apply(bool_to_label)
-    users_df = users_df.rename(columns={"binance_configured": "Binance configuré"})
+    users_df["exchange_configured"] = users_df["exchange_configured"].apply(bool_to_label)
+    users_df = users_df.rename(columns={"exchange_configured": "Exchange configuré"})
 
     filter_col1, filter_col2 = st.columns(2)
     with filter_col1:
@@ -81,15 +81,16 @@ def main() -> None:
 
     left, right = st.columns([1, 1], gap="large")
     with left:
-        with st.container(border=True):
-            st.write(f"Email: `{detail.email}`")
-            st.write(f"Nom: {detail.first_name} {detail.last_name or ''}")
-            render_status_badge("Role", detail.role.value)
-            render_status_badge("Statut", detail.status.value)
-            st.caption(f"Dernier login: {format_datetime(detail.last_login)}")
-            st.caption(f"Cree le: {format_datetime(detail.created_at)}")
-            st.caption(f"Binance configure: {bool_to_label(detail.binance_configured)}")
-            st.caption(f"Echecs login: {detail.failed_login_count}")
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        st.write(f"Email: `{detail.email}`")
+        st.write(f"Nom: {detail.first_name} {detail.last_name or ''}")
+        render_status_badge("Role", detail.role.value)
+        render_status_badge("Statut", detail.status.value)
+        st.caption(f"Dernier login: {format_datetime(detail.last_login)}")
+        st.caption(f"Cree le: {format_datetime(detail.created_at)}")
+        st.caption(f"Exchange configure: {bool_to_label(detail.exchange_configured)}")
+        st.caption(f"Echecs login: {detail.failed_login_count}")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
         with st.container(border=True):

@@ -7,24 +7,19 @@ from schemas.account import (
     AccountProfile,
     ApiCredentialEntry,
     ApiCredentialInput,
-    BinanceCredentialInput,
-    BinanceCredentialStatus,
+    ExchangeCredentialInput,
+    ExchangeCredentialStatus,
 )
 from services.api_client import BackendApiClient
 from services.base import ServiceError
-from state.session import get_access_token, set_binance_configured, sync_current_user_from_backend
+from state.session import (
+    get_access_token,
+    get_selected_exchange,
+    set_exchange_configured,
+    sync_current_user_from_backend,
+)
+from utils.api_errors import extract_error as _extract_error
 from utils.validators import validate_email, validate_required
-
-
-def _extract_error(response) -> str:
-    if response.error:
-        return response.error
-    data = response.data
-    if isinstance(data, dict):
-        detail = data.get("detail")
-        if isinstance(detail, str) and detail:
-            return detail
-    return f"Erreur backend ({response.status_code})."
 
 
 class AccountService:
@@ -77,33 +72,84 @@ class AccountService:
 
         return True, "Profil mis a jour."
 
-    def get_binance_status(self) -> BinanceCredentialStatus:
+    def get_exchange_capabilities(self) -> dict[str, bool]:
+        """Retourne {exchange: supports_sandbox} depuis le catalogue public des exchanges."""
+        response = self.client.get_public_exchanges()
+        if not response.success:
+            return {}
+        data = response.data or {}
+        items = data.get("data") if isinstance(data, dict) else data
+        if not isinstance(items, list):
+            return {}
+        return {
+            item["id"]: bool(item.get("supports_sandbox"))
+            for item in items
+            if isinstance(item, dict)
+        }
+
+    def get_exchange_status(self, exchange: str) -> ExchangeCredentialStatus:
+        supports_sandbox = self.get_exchange_capabilities().get(exchange, False)
+
         try:
             token = self._token()
         except ServiceError:
-            return BinanceCredentialStatus(configured=False)
+            return ExchangeCredentialStatus(
+                exchange=exchange, configured=False, supports_sandbox=supports_sandbox
+            )
 
         response = self.client.get_user_settings(token)
         if not response.success:
-            return BinanceCredentialStatus(configured=False)
+            return ExchangeCredentialStatus(
+                exchange=exchange, configured=False, supports_sandbox=supports_sandbox
+            )
 
         data = response.data or {}
-        # L'endpoint retourne has_binance_credentials=True/False ou api_keys.binance present
-        if "has_binance_credentials" in data:
-            configured = bool(data["has_binance_credentials"])
+        detail_map = data.get("exchange_credentials")
+        if detail_map is not None:
+            detail = detail_map.get(exchange, {})
+            live_configured = bool(detail.get("live"))
+            sandbox_configured = bool(detail.get("sandbox"))
+            configured = live_configured or sandbox_configured
+            active_mode = detail.get("active_mode", "live")
         else:
-            api_keys = data.get("api_keys") or {}
-            configured = bool(api_keys.get("binance"))
+            # Ancien contrat de reponse (sans detail par mode) : deduit du seul flag "configure".
+            configured = exchange in (data.get("configured_exchanges") or [])
+            live_configured = configured
+            sandbox_configured = False
+            active_mode = "live"
 
-        set_binance_configured(configured, store=self.store)
+        set_exchange_configured(configured, store=self.store)
 
-        return BinanceCredentialStatus(
+        return ExchangeCredentialStatus(
+            exchange=exchange,
             configured=configured,
+            live_configured=live_configured,
+            sandbox_configured=sandbox_configured,
+            active_mode=active_mode,
+            supports_sandbox=supports_sandbox,
             api_key_masked="sk_****" if configured else "",
             api_secret_masked="sk_****" if configured else "",
         )
 
-    def save_binance_credentials(self, payload: BinanceCredentialInput) -> tuple[bool, str]:
+    def get_active_modes(self, exchanges: list[str]) -> dict[str, str]:
+        """Mode actif ("live"/"sandbox") par exchange, sans effet de bord sur l'etat de session."""
+        try:
+            token = self._token()
+        except ServiceError:
+            return {}
+
+        response = self.client.get_user_settings(token)
+        if not response.success:
+            return {}
+
+        data = response.data or {}
+        detail_map = data.get("exchange_credentials") or {}
+        return {
+            exchange: detail_map.get(exchange, {}).get("active_mode", "live")
+            for exchange in exchanges
+        }
+
+    def save_exchange_credentials(self, payload: ExchangeCredentialInput) -> tuple[bool, str]:
         try:
             token = self._token()
         except ServiceError as exc:
@@ -119,14 +165,60 @@ class AccountService:
 
         response = self.client.update_user_settings(
             token,
-            binance_api_key=payload.api_key.strip(),
-            binance_api_secret=payload.api_secret.strip(),
+            exchange=payload.exchange,
+            api_key=payload.api_key.strip(),
+            api_secret=payload.api_secret.strip(),
+            mode=payload.mode,
         )
         if not response.success:
             return False, _extract_error(response)
 
-        set_binance_configured(True, store=self.store)
-        return True, "Cles Binance enregistrees et chiffrees en base."
+        set_exchange_configured(True, store=self.store)
+        return True, "Cles enregistrees et chiffrees en base."
+
+    def set_active_mode(self, exchange: str, mode: str) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
+
+        response = self.client.update_user_settings(token, exchange=exchange, mode=mode)
+        if not response.success:
+            return False, _extract_error(response)
+
+        return True, "Mode actif mis a jour."
+
+    def list_configured_exchanges(self) -> list[str]:
+        try:
+            token = self._token()
+        except ServiceError:
+            return []
+
+        response = self.client.get_user_settings(token)
+        if not response.success:
+            return []
+
+        data = response.data or {}
+        if "configured_exchanges" in data:
+            return sorted(data["configured_exchanges"] or [])
+        api_keys = data.get("api_keys") or {}
+        return sorted(api_keys.keys())
+
+    def delete_exchange_credentials(self, exchange: str) -> tuple[bool, str]:
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc)
+
+        response = self.client.update_user_settings(
+            token, exchange=exchange, api_key="", api_secret=""
+        )
+        if not response.success:
+            return False, _extract_error(response)
+
+        if exchange == get_selected_exchange():
+            set_exchange_configured(False, store=self.store)
+        return True, "Cles supprimees."
 
     # -------------------------------------------------------------------------
     # Multi-credential management
@@ -173,7 +265,7 @@ class AccountService:
         if not response.success:
             return False, _extract_error(response)
 
-        set_binance_configured(True, store=self.store)
+        set_exchange_configured(True, store=self.store)
         return True, f"Clef '{payload.label}' ajoutee et chiffree en base."
 
     def set_primary_credential(self, key_id: str) -> tuple[bool, str]:

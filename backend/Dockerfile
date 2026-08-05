@@ -1,9 +1,12 @@
 # Dockerfile multi-stage pour le backend FastAPI
 # ===============================================
+# Contexte de build = racine du repo (pas ./backend) : necessaire pour COPY utils/,
+# le package multi-exchange partage avec jobs/orchestration (cf. issue #10, uv workspaces).
+# Invocation : docker build -f backend/Dockerfile --target <stage> .
 
 # Stage 1: Builder
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as builder
+FROM python:${PYTHON_VERSION}-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -21,20 +24,20 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Copier et installer les requirements
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 
 # Stage 2: Test (utilise par la CI pour les tests d'integration)
-# Build: docker build --target test -t backend:test ./backend
+# Build: docker build -f backend/Dockerfile --target test -t backend:test .
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as test
+FROM python:${PYTHON_VERSION}-slim AS test
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app/src:/app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libpq5 curl && \
@@ -43,24 +46,25 @@ RUN apt-get update && \
 COPY --from=builder /opt/venv /opt/venv
 
 # Installer les deps de test par-dessus les deps de prod
-COPY requirements.txt requirements-dev.txt ./
+COPY backend/requirements.txt backend/requirements-dev.txt ./
 RUN pip install -r requirements-dev.txt
 
 WORKDIR /app
-COPY . .
-COPY ci/parse_test_report.py /usr/local/bin/parse_test_report.py
+COPY backend/ .
+COPY utils/ ./utils
+COPY backend/ci/parse_test_report.py /usr/local/bin/parse_test_report.py
 
-CMD ["pytest", "src/tests", "-v"]
+CMD ["pytest", "tests", "-v"]
 
 
 # Stage 3: Runtime (image de production, legere, user non-root)
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as runtime
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app/src:/app
 
 # Installer les dependances runtime et appliquer les patchs securite
 RUN apt-get update && \
@@ -81,7 +85,8 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 
 # Copier le code source
-COPY --chown=app:app . .
+COPY --chown=app:app backend/ .
+COPY --chown=app:app utils/ ./utils
 
 # Creer les repertoires necessaires (logs/ et data/ sont exclues du
 # build context par .dockerignore -> crees ici avec les bons droits)

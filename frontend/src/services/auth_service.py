@@ -15,6 +15,7 @@ from state.session import (
     set_auth_tokens,
     sync_current_user_from_backend,
 )
+from utils.api_errors import extract_error
 from utils.validators import (
     validate_confirm_password,
     validate_email,
@@ -152,7 +153,7 @@ class AuthService:
         last_login: datetime,
     ) -> AuthResult:
         if not response.success:
-            return AuthResult(success=False, message=self._extract_error_message(response))
+            return AuthResult(success=False, message=extract_error(response))
 
         if not isinstance(response.data, dict):
             return AuthResult(success=False, message="Reponse backend auth invalide.")
@@ -191,31 +192,6 @@ class AuthService:
         return sync_current_user_from_backend(
             user_data, store=self.store, access_token=access_token
         )
-
-    def _extract_error_message(self, response: ApiResponse) -> str:
-        if response.error:
-            return response.error
-
-        payload = response.data
-        if isinstance(payload, dict):
-            detail = payload.get("detail")
-            if isinstance(detail, str) and detail:
-                return detail
-            message = payload.get("message")
-            if isinstance(message, str) and message:
-                return message
-            details = payload.get("details")
-            if isinstance(details, list) and details:
-                first_error = details[0]
-                if isinstance(first_error, dict):
-                    detail_message = first_error.get("msg")
-                    if isinstance(detail_message, str) and detail_message:
-                        return detail_message
-        if isinstance(payload, str) and payload.strip():
-            return payload.strip()
-        if response.status_code == 0:
-            return "API auth indisponible."
-        return f"Erreur backend ({response.status_code})."
 
     def _local_user(self) -> MockUser | None:
         if not self.store.current_user_email:

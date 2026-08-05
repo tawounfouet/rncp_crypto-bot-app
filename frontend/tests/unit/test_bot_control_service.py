@@ -10,7 +10,6 @@ from services.auth_api_client import ApiResponse
 from services.bot_control_service import BotControlService
 from utils.constants import ACTION_PAUSE, ACTION_START, ACTION_STOP
 
-
 MOCK_STRATEGIES = [
     {
         "id": "strat_btc",
@@ -90,3 +89,47 @@ def test_bot_pause_not_supported(store) -> None:
     service = BotControlService(store, client=MagicMock())
     result = service.apply_action("strat_btc", ACTION_PAUSE)
     assert result.success is False
+
+
+def test_start_bot_success(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.deploy_strategy.return_value = _ok({"id": "deploy_2", "status": "active"})
+    service = BotControlService(store, client=client)
+
+    result = service.start_bot(
+        "strat_btc",
+        exchange="binance",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        amount=100.0,
+        is_paper=True,
+    )
+
+    assert result.success is True
+    client.deploy_strategy.assert_called_once_with(
+        "fake-token",
+        "strat_btc",
+        exchange="binance",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        amount=100.0,
+        is_paper=True,
+    )
+
+
+def test_start_bot_failure_returns_backend_message(store) -> None:
+    client = MagicMock(spec=BackendApiClient)
+    client.deploy_strategy.return_value = ApiResponse(status_code=400, error="Strategie invalide")
+    service = BotControlService(store, client=client)
+
+    result = service.start_bot(
+        "strat_btc",
+        exchange="binance",
+        symbol="BTCUSDT",
+        timeframe="1h",
+        amount=100.0,
+        is_paper=True,
+    )
+
+    assert result.success is False
+    assert result.message == "Strategie invalide"

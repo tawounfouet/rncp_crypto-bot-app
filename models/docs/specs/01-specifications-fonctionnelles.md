@@ -1,5 +1,8 @@
 # Spécifications fonctionnelles MVP
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Objectif fonctionnel
 
 Le système models-training doit produire un signal `BUY`, `SELL` ou `HOLD` pour `BTCUSDT` et `BTCETH`, à partir de données OHLCV collectées automatiquement.

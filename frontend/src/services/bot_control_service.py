@@ -11,6 +11,7 @@ from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token
 from utils.constants import ACTION_START, ACTION_STOP
+from utils.dates import parse_dt_or_now
 
 _DEPLOY_STATUS_MAP: dict[str, BotRuntimeStatus] = {
     "active": BotRuntimeStatus.RUNNING,
@@ -18,17 +19,6 @@ _DEPLOY_STATUS_MAP: dict[str, BotRuntimeStatus] = {
     "stopped": BotRuntimeStatus.STOPPED,
     "error": BotRuntimeStatus.ERROR,
 }
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
 
 
 class BotControlService:
@@ -91,11 +81,11 @@ class BotControlService:
                 status = _DEPLOY_STATUS_MAP.get(
                     deployment.get("status", "stopped"), BotRuntimeStatus.STOPPED
                 )
-                heartbeat = _parse_dt(deployment.get("updated_at"))
+                heartbeat = parse_dt_or_now(deployment.get("updated_at"))
             else:
                 # Cherche le dernier deployment (pas forcement actif)
                 status = BotRuntimeStatus.STOPPED
-                heartbeat = _parse_dt(s.get("updated_at"))
+                heartbeat = parse_dt_or_now(s.get("updated_at"))
 
             bots.append(
                 BotInfo(
@@ -205,7 +195,6 @@ class BotControlService:
                 or f"Erreur backend ({response.status_code})."
             )
             return BotActionResult(success=False, message=msg)
-
         mode = "Paper" if is_paper else "Live"
         return BotActionResult(
             success=True,

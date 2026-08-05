@@ -14,6 +14,7 @@ from shared.schemas.common import BaseResponse
 from strategy.schemas import (
     BacktestCreate,
     BacktestResponse,
+    ModelInfo,
     StrategyCreate,
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
@@ -60,6 +61,35 @@ async def get_available_strategies(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get available strategies: {e!s}",
+        ) from None
+
+
+@router.get("/available-models", response_model=DataResponse[list[ModelInfo]])
+def get_available_models(
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """
+    Get all available-models for the current user.
+
+    Args:
+        current_user: Current authenticated user
+
+    Returns:
+        List of available models
+    """
+    try:
+        models = strategy_service.get_available_models()
+
+        return DataResponse(
+            success=True,
+            message=f"Retrieved {len(models)} deployments",
+            data=models,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to get available models: {e!s}",
         ) from None
 
 
@@ -399,6 +429,24 @@ async def get_backtest(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get backtest: {e!s}",
+        ) from None
+
+
+@router.post("/deployments/execute-active", response_model=DataResponse[list[dict[str, Any]]])
+async def execute_active_deployments(strategy_service: StrategyService = Depends(get_strategy_service)):
+    """
+    Declenche l'execution de tous les deployments actifs (tous utilisateurs).
+
+    Appele par Airflow (bot_execution.py), pas par un utilisateur final -- pas
+    d'authentification, meme principe que POST /inference/predict-live.
+    """
+    try:
+        results = await strategy_service.execute_active_deployments()
+        return DataResponse(success=True, message=f"Executed {len(results)} deployments", data=results)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute active deployments: {e!s}",
         ) from None
 
 

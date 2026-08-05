@@ -73,8 +73,10 @@ class UserSettingsUpdate(BaseModel):
     theme: ThemeEnum | None = None
     risk_profile: RiskProfileEnum | None = None
     notification_preferences: dict | None = None
-    binance_api_key: str | None = None
-    binance_api_secret: str | None = None
+    exchange: str | None = None
+    api_key: str | None = None
+    api_secret: str | None = None
+    mode: str | None = Field(None, pattern="^(live|sandbox)$", description="Slot cible: live ou sandbox")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -86,8 +88,10 @@ class UserSettingsUpdate(BaseModel):
                     "push": False,
                     "trading_alerts": True,
                 },
-                "binance_api_key": "your_binance_api_key",
-                "binance_api_secret": "your_binance_api_secret",
+                "exchange": "kraken",
+                "api_key": "your_api_key",
+                "api_secret": "your_api_secret",
+                "mode": "live",
             }
         }
     )

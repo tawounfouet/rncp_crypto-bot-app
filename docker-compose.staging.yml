@@ -2,7 +2,9 @@
 # ==========================================
 # IMPORTANT : ne pas lancer directement avec "docker compose".
 # Utiliser : make staging-up / make staging-down / make staging-config
-# Ports: Backend 8009, Postgres 5434
+# Ports (staging = memes valeurs que dev ; prod = staging+1, cf. docker-compose.prod.yml) :
+# Backend 8009, Postgres 5434, MinIO API 9000 / Console 9010, Adminer 8085,
+# Frontend 8501, ml-api 8020, mlflow-ui 5001, Airflow 8080
 
 services:
   postgres:
@@ -19,7 +21,7 @@ services:
       - staging_postgres_data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,7 +50,7 @@ services:
     restart: always
     ports:
       - "9000:9000"
-      - "9001:9001"
+      - "9010:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_USER_ADMIN:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_PWD_ADMIN:-minioadmin}
@@ -87,8 +89,8 @@ services:
   crypto-bot-backend:
     image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/backend:${IMAGE_TAG:-latest}
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
       args:
         PYTHON_VERSION: ${PYTHON_VERSION}
     container_name: staging-backend
@@ -108,7 +110,10 @@ services:
       - MINIO_BUCKET=crypto-bot-data
       - ENVIRONMENT=staging
       - DEBUG=true
-      - BINANCE_ENC_KEY=${BINANCE_ENC_KEY}
+      - EXCHANGE_ENC_KEY=${EXCHANGE_ENC_KEY}
+      - JWT_SIGNING_KEY=${JWT_SIGNING_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
     depends_on:
       postgres:
         condition: service_healthy
@@ -144,9 +149,200 @@ services:
     networks:
       - staging-network
 
+  # Service de prediction ML (FastAPI)
+  crypto-bot-ml-api:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: models/Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: staging-ml-api
+    restart: always
+    ports:
+      - "8020:8010"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+      - ./models/logs:/app/logs
+    environment:
+      - ENVIRONMENT=staging
+      - DEBUG=false
+      - MLFLOW_TRACKING_URI=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow
+      # MinIO — requis par build_symbol_features (lecture des OHLCV bruts ingérés par Airflow)
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - staging-network
+
+  # Interface utilisateur MLflow (meme image que crypto-bot-ml-api, commande differente)
+  mlflow-ui:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/ml-api:${IMAGE_TAG:-latest}
+    container_name: staging-mlflow-ui
+    restart: always
+    mem_limit: 1g
+    environment:
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./models/artifacts:/app/artifacts
+    command: python -m mlflow ui --backend-store-uri postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/mlflow --host 0.0.0.0 --port 5001 --allowed-hosts "${MLFLOW_SERVER_ALLOWED_HOSTS:-localhost:*,127.0.0.1:*}" --workers 1
+    # Le HEALTHCHECK de l'image cible le port 8010 (crypto-bot-ml-api) : ce service
+    # tourne sur 5001 (mlflow ui), d'ou ce healthcheck dedie.
+    # --allowed-hosts : protection anti DNS-rebinding de MLflow >= 3.x, n'autorise par
+    # defaut que localhost/IP privees -- MLFLOW_SERVER_ALLOWED_HOSTS (.env.staging) doit
+    # inclure l'IP publique de la VM (SANS oublier ":*" pour le port, sinon comparaison
+    # exacte qui echoue -- cf. is_allowed_host_header dans mlflow/server/security_utils.py),
+    # ex. MLFLOW_SERVER_ALLOWED_HOSTS=localhost:*,127.0.0.1:*,<IP_PUBLIQUE_VM>:*
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - staging-network
+
+  # Airflow (orchestration DAGs : ingestion, pipeline ML)
+  airflow-webserver:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+      args:
+        AIRFLOW_IMAGE: ${AIRFLOW_IMAGE}
+    container_name: staging-airflow-webserver
+    restart: always
+    command: webserver
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_BASE_URL=https://api.binance.com
+    volumes:
+      - staging_airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - staging-network
+
+  airflow-scheduler:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+      args:
+        AIRFLOW_IMAGE: ${AIRFLOW_IMAGE}
+    container_name: staging-airflow-scheduler
+    restart: always
+    command: scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_SECURE=0
+      - MINIO_BUCKET=crypto-bot-data
+      - BINANCE_BASE_URL=https://api.binance.com
+    volumes:
+      - staging_airflow_logs:/opt/airflow/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    networks:
+      - staging-network
+
+  airflow-init:
+    image: ${CI_REGISTRY_IMAGE:-registry.gitlab.com/dst_crypto/crypto-bot-app}/airflow:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: orchestration/Dockerfile
+      args:
+        AIRFLOW_IMAGE: ${AIRFLOW_IMAGE}
+    container_name: staging-airflow-init
+    command: version
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - PYTHONPATH=/opt/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PWD:-postgres}@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        airflow db init
+        airflow connections delete postgres_default || true
+        airflow connections add 'postgres_default' \
+          --conn-type 'postgres' \
+          --conn-host 'postgres' \
+          --conn-port '5432' \
+          --conn-login '${POSTGRES_USER:-postgres}' \
+          --conn-password '${POSTGRES_PWD:-postgres}' \
+          --conn-schema 'crypto_bot_db'
+        airflow users create \
+          --username '${AIRFLOW_ADMIN_USER:-admin}' \
+          --firstname Crypto \
+          --lastname Admin \
+          --role Admin \
+          --email admin@cryptobot.local \
+          --password '${AIRFLOW_ADMIN_PASSWORD:-admin}' || true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - staging-network
+
 volumes:
   staging_postgres_data:
   staging_minio_data:
+  staging_airflow_logs:
 
 networks:
   staging-network:

@@ -18,6 +18,10 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.attributes import flag_modified
+
+DEFAULT_CREDENTIAL_MODE = "live"
+SANDBOX_CREDENTIAL_MODE = "sandbox"
 
 
 @register_model
@@ -225,44 +229,223 @@ class UserSettings(BaseModel):
             return decrypt_secret(stored_value["ciphertext"], stored_value["nonce"])
         return stored_value
 
-    def _is_legacy_entry(self, key: str, entry: dict) -> bool:
-        """True when this entry uses the old {exchange: {api_key, api_secret}} format."""
-        return "exchange" not in entry
+    @staticmethod
+    def _is_legacy_entry(entry: dict) -> bool:
+        """Ancien format (cles a plat, sans sous-cles live/sandbox)."""
+        return "api_key" in entry
+
+    def _find_exchange_entries(self, exchange: str) -> list[tuple[str, dict]]:
+        """Toutes les entrees (key, entry) associees a un exchange, quel que soit le format stocke.
+
+        Deux formes coexistent pour la retro-compatibilite :
+        - format "exchange-keyed" : {exchange: {api_key, api_secret}} (plat) ou
+          {exchange: {active_mode, live, sandbox}} (mode simule/reel) ;
+        - format "multi-credential" : {key_id: {exchange, label, api_key, api_secret, is_primary}}.
+        """
+        if not self.api_keys:
+            return []
+        entries = []
+        for key, value in self.api_keys.items():
+            if not isinstance(value, dict):
+                continue
+            if value.get("exchange") == exchange:
+                entries.append((key, value))
+            elif "exchange" not in value and key == exchange:
+                entries.append((key, value))
+        return entries
+
+    def _credential_entry(self, exchange: str, mode: str | None = None) -> dict | None:
+        """Resout le dict {api_key, api_secret} chiffre pour un exchange+mode.
+
+        L'entree primaire est preferee en format multi-credential. Retro-compatible
+        avec l'ancien format a plat (traite comme mode "live").
+        """
+        entries = self._find_exchange_entries(exchange)
+        if not entries:
+            return None
+        primary = next((entry for _, entry in entries if entry.get("is_primary")), None)
+        entry = primary if primary is not None else entries[0][1]
+        if self._is_legacy_entry(entry):
+            return entry if (mode or DEFAULT_CREDENTIAL_MODE) == DEFAULT_CREDENTIAL_MODE else None
+        resolved_mode = mode or entry.get("active_mode", DEFAULT_CREDENTIAL_MODE)
+        return entry.get(resolved_mode)
+
+    def get_api_key(self, exchange: str, mode: str | None = None) -> str | None:
+        """Get API key for a specific exchange (mode actif si non precise)."""
+        entry = self._credential_entry(exchange, mode)
+        return self._decrypt_value(entry.get("api_key")) if entry else None
+
+    def get_api_secret(self, exchange: str, mode: str | None = None) -> str | None:
+        """Get API secret for a specific exchange (mode actif si non precise)."""
+        entry = self._credential_entry(exchange, mode)
+        return self._decrypt_value(entry.get("api_secret")) if entry else None
+
+    def get_active_mode(self, exchange: str) -> str:
+        """Mode actif ("live"/"sandbox") pour un exchange, "live" par defaut ou si non configure."""
+        entries = self._find_exchange_entries(exchange)
+        if not entries:
+            return DEFAULT_CREDENTIAL_MODE
+        primary = next((entry for _, entry in entries if entry.get("is_primary")), None)
+        entry = primary if primary is not None else entries[0][1]
+        if self._is_legacy_entry(entry):
+            return DEFAULT_CREDENTIAL_MODE
+        return entry.get("active_mode", DEFAULT_CREDENTIAL_MODE)
+
+    def has_credentials(self, exchange: str, mode: str) -> bool:
+        """Indique si un jeu de cles existe pour ce mode precis (pas juste l'exchange)."""
+        return self._credential_entry(exchange, mode) is not None
+
+    def has_credentials_for_exchange(self, exchange: str) -> bool:
+        """True quand au moins une credential existe pour l'exchange."""
+        return bool(self._find_exchange_entries(exchange))
+
+    def exchange_credentials_detail(self) -> dict[str, dict]:
+        """Detail par exchange configure : quels modes ont des cles + lequel est actif.
+
+        Utilise par GET /users/me/settings pour piloter l'UI (liste de portefeuilles,
+        selecteur de mode) sans exposer les cles elles-memes.
+        """
+        if not self.api_keys:
+            return {}
+        detail: dict[str, dict] = {}
+        for key, entry in self.api_keys.items():
+            if not isinstance(entry, dict):
+                continue
+            exchange = entry.get("exchange", key)
+            current = detail.setdefault(
+                exchange,
+                {"live": False, "sandbox": False, "active_mode": DEFAULT_CREDENTIAL_MODE},
+            )
+            if self._is_legacy_entry(entry):
+                current["live"] = True
+                continue
+            current["live"] = current["live"] or (DEFAULT_CREDENTIAL_MODE in entry)
+            current["sandbox"] = current["sandbox"] or (SANDBOX_CREDENTIAL_MODE in entry)
+            current["active_mode"] = entry.get("active_mode", DEFAULT_CREDENTIAL_MODE)
+        return detail
+
+    def set_api_credentials(
+        self, exchange: str, api_key: str, api_secret: str, mode: str = DEFAULT_CREDENTIAL_MODE
+    ) -> None:
+        """Enregistre des cles chiffrees pour un exchange, sur le slot live ou sandbox.
+
+        Le mode enregistre devient automatiquement le mode actif de l'exchange.
+        """
+        if not self.api_keys:
+            self.api_keys = {}
+        entries = self._find_exchange_entries(exchange)
+        if entries:
+            primary = next((entry for _, entry in entries if entry.get("is_primary")), None)
+            entry = primary if primary is not None else entries[0][1]
+            if self._is_legacy_entry(entry):
+                live_slot = {"api_key": entry["api_key"], "api_secret": entry["api_secret"]}
+                meta = {k: entry[k] for k in ("exchange", "label", "is_primary", "created_at") if k in entry}
+                entry.clear()
+                entry.update(meta)
+                entry["live"] = live_slot
+        else:
+            entry = {}
+            self.api_keys[exchange] = entry
+
+        entry[mode] = {"api_key": encrypt_secret(api_key), "api_secret": encrypt_secret(api_secret)}
+        entry["active_mode"] = mode
+        if "exchange" not in entry:
+            entry["exchange"] = exchange
+            entry["label"] = exchange.capitalize()
+        flag_modified(self, "api_keys")
+
+    def set_active_mode(self, exchange: str, mode: str) -> None:
+        """Bascule le mode actif sans toucher aux cles.
+
+        Kraken (pas de cles sandbox distinctes) : autorise de basculer sur "sandbox" tant que
+        "live" existe -- le comportement (validate=true) est gere a l'execution, pas ici.
+        """
+        entries = self._find_exchange_entries(exchange)
+        if not entries:
+            raise ValueError(f"Exchange {exchange} non configure")
+
+        primary = next((entry for _, entry in entries if entry.get("is_primary")), None)
+        entry = primary if primary is not None else entries[0][1]
+        if self._is_legacy_entry(entry):
+            entry = {DEFAULT_CREDENTIAL_MODE: entry}
+            self.api_keys[entries[0][0]] = entry
+
+        if DEFAULT_CREDENTIAL_MODE not in entry:
+            raise ValueError(f"Aucune cle live configuree pour {exchange}")
+        if mode == SANDBOX_CREDENTIAL_MODE and SANDBOX_CREDENTIAL_MODE not in entry:
+            # Pas de cles sandbox dediees (ex: Kraken) : le mode existe quand meme, il pilotera
+            # `validate=true` a l'execution plutot qu'un jeu de cles different.
+            pass
+        elif mode not in (DEFAULT_CREDENTIAL_MODE, SANDBOX_CREDENTIAL_MODE):
+            raise ValueError(f"Mode inconnu: {mode}")
+
+        entry["active_mode"] = mode
+        flag_modified(self, "api_keys")
+
+    def remove_api_credentials(self, exchange: str, mode: str | None = None) -> None:
+        """Supprime les cles d'un exchange (mode precis, ou tout l'exchange si mode omis)."""
+        if not self.api_keys:
+            return
+        entries = self._find_exchange_entries(exchange)
+        if not entries:
+            return
+
+        if mode is None:
+            for key, _ in entries:
+                del self.api_keys[key]
+            flag_modified(self, "api_keys")
+            return
+
+        for key, entry in entries:
+            if self._is_legacy_entry(entry):
+                if mode == DEFAULT_CREDENTIAL_MODE:
+                    del self.api_keys[key]
+                continue
+            entry.pop(mode, None)
+            if DEFAULT_CREDENTIAL_MODE not in entry and SANDBOX_CREDENTIAL_MODE not in entry:
+                del self.api_keys[key]
+            elif entry.get("active_mode") == mode:
+                entry["active_mode"] = (
+                    DEFAULT_CREDENTIAL_MODE if DEFAULT_CREDENTIAL_MODE in entry else SANDBOX_CREDENTIAL_MODE
+                )
+        flag_modified(self, "api_keys")
 
     # ---------------------------------------------------------------------------
-    # Multi-credential API (new format)
+    # Multi-credential API (credentials nominees)
     # ---------------------------------------------------------------------------
 
     def get_all_credentials(self) -> list[dict]:
-        """Return all stored credentials (masked). Handles both old and new format."""
+        """Return all stored credentials (masked). Handles all legacy/new formats."""
         if not self.api_keys:
             return []
         result = []
         for key_id, entry in self.api_keys.items():
             if not isinstance(entry, dict):
                 continue
-            if self._is_legacy_entry(key_id, entry):
+            if self._is_legacy_entry(entry):
+                exchange = entry.get("exchange", key_id)
+                ident = key_id if entry.get("exchange") else f"legacy_{key_id}"
                 raw = self._decrypt_value(entry.get("api_key")) or ""
                 result.append(
                     {
-                        "id": f"legacy_{key_id}",
-                        "exchange": key_id,
-                        "label": key_id.capitalize(),
+                        "id": ident,
+                        "exchange": exchange,
+                        "label": entry.get("label", exchange.capitalize()),
                         "api_key_masked": (raw[:4] + "****") if len(raw) > 4 else "****",
-                        "created_at": None,
+                        "created_at": entry.get("created_at"),
                         "is_primary": entry.get("is_primary", True),
                     }
                 )
             else:
-                raw = self._decrypt_value(entry.get("api_key")) or ""
+                raw = self._decrypt_value(entry.get("live", {}).get("api_key")) or ""
                 result.append(
                     {
                         "id": key_id,
-                        "exchange": entry.get("exchange", "binance"),
-                        "label": entry.get("label", "Clef"),
+                        "exchange": key_id,
+                        "label": key_id.capitalize(),
                         "api_key_masked": (raw[:4] + "****") if len(raw) > 4 else "****",
-                        "created_at": entry.get("created_at"),
-                        "is_primary": entry.get("is_primary", False),
+                        "created_at": None,
+                        "is_primary": True,
                     }
                 )
         return result
@@ -275,7 +458,7 @@ class UserSettings(BaseModel):
 
         if not self.api_keys:
             self.api_keys = {}
-        is_first = not self.has_credentials_for_exchange(exchange)
+        is_first = not self._find_exchange_entries(exchange)
         key_id = str(uuid.uuid4())
         self.api_keys[key_id] = {
             "exchange": exchange,
@@ -295,11 +478,11 @@ class UserSettings(BaseModel):
         entry = self.api_keys.get(actual_key)
         if not entry or not isinstance(entry, dict):
             return False
-        exchange = actual_key if self._is_legacy_entry(actual_key, entry) else entry.get("exchange")
+        exchange = entry.get("exchange", actual_key)
         for kid, e in self.api_keys.items():
             if not isinstance(e, dict):
                 continue
-            e_exchange = kid if self._is_legacy_entry(kid, e) else e.get("exchange")
+            e_exchange = e.get("exchange", kid)
             if e_exchange == exchange:
                 e["is_primary"] = kid == actual_key
         return True
@@ -333,7 +516,7 @@ class UserSettings(BaseModel):
         if key_id.startswith("legacy_"):
             exchange = key_id[7:]
             entry = self.api_keys.get(exchange)
-            if entry and self._is_legacy_entry(exchange, entry):
+            if entry and self._is_legacy_entry(entry):
                 return {
                     "exchange": exchange,
                     "label": exchange.capitalize(),
@@ -349,60 +532,6 @@ class UserSettings(BaseModel):
             "api_key": self._decrypt_value(entry.get("api_key")),
             "api_secret": self._decrypt_value(entry.get("api_secret")),
         }
-
-    def has_credentials_for_exchange(self, exchange: str) -> bool:
-        """True when at least one credential exists for the given exchange."""
-        return self.get_api_key(exchange) is not None
-
-    # ---------------------------------------------------------------------------
-    # Backward-compatible single-exchange helpers
-    # ---------------------------------------------------------------------------
-
-    def get_api_key(self, exchange: str) -> str | None:
-        """Get API key for exchange — primary first, then first available."""
-        if not self.api_keys:
-            return None
-        entry = self.api_keys.get(exchange)
-        if entry and isinstance(entry, dict) and self._is_legacy_entry(exchange, entry):
-            return self._decrypt_value(entry.get("api_key"))
-        first = None
-        for v in self.api_keys.values():
-            if isinstance(v, dict) and v.get("exchange") == exchange:
-                if v.get("is_primary"):
-                    return self._decrypt_value(v.get("api_key"))
-                if first is None:
-                    first = v
-        return self._decrypt_value(first.get("api_key")) if first else None
-
-    def get_api_secret(self, exchange: str) -> str | None:
-        """Get API secret for exchange — primary first, then first available."""
-        if not self.api_keys:
-            return None
-        entry = self.api_keys.get(exchange)
-        if entry and isinstance(entry, dict) and self._is_legacy_entry(exchange, entry):
-            return self._decrypt_value(entry.get("api_secret"))
-        first = None
-        for v in self.api_keys.values():
-            if isinstance(v, dict) and v.get("exchange") == exchange:
-                if v.get("is_primary"):
-                    return self._decrypt_value(v.get("api_secret"))
-                if first is None:
-                    first = v
-        return self._decrypt_value(first.get("api_secret")) if first else None
-
-    def set_api_credentials(self, exchange: str, api_key: str, api_secret: str) -> None:
-        """Set credentials in legacy format (backward compat — used by existing settings update)."""
-        if not self.api_keys:
-            self.api_keys = {}
-        self.api_keys[exchange] = {
-            "api_key": encrypt_secret(api_key),
-            "api_secret": encrypt_secret(api_secret),
-        }
-
-    def remove_api_credentials(self, exchange: str) -> None:
-        """Remove legacy-format credentials for an exchange."""
-        if self.api_keys and exchange in self.api_keys:
-            del self.api_keys[exchange]
 
     def __repr__(self) -> str:
         return f"<UserSettings(id={self.id}, user_id={self.user_id}, theme={self.theme})>"

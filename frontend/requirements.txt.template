@@ -1,0 +1,4 @@
+streamlit==$STREAMLIT_VERSION
+plotly==$PLOTLY_VERSION
+pandas==$PANDAS_VERSION
+pydantic==$PYDANTIC_VERSION

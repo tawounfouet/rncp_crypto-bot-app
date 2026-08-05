@@ -1,5 +1,8 @@
 # Contrats données et API
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Symboles supportés
 
 | Nom canonique MVP | Variante Binance possible | Commentaire |

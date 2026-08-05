@@ -192,12 +192,13 @@ class UserService:
             settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if settings is None:
                 return None
-            has_binance = settings.has_credentials_for_exchange("binance")
+            configured_exchanges = sorted(settings.exchange_credentials_detail())
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
                 "notification_preferences": settings.notification_preferences,
-                "has_binance_credentials": has_binance,
+                "configured_exchanges": configured_exchanges,
+                "exchange_credentials": settings.exchange_credentials_detail(),
             }
 
     def export_user_data(self, user_id: str) -> dict:
@@ -215,6 +216,8 @@ class UserService:
                     "risk_profile": settings.risk_profile,
                     "notification_preferences": settings.notification_preferences,
                     "has_binance_credentials": settings.has_credentials_for_exchange("binance"),
+                    "configured_exchanges": sorted(settings.exchange_credentials_detail()),
+                    "exchange_credentials": settings.exchange_credentials_detail(),
                 }
 
             accounts_data = [
@@ -284,21 +287,29 @@ class UserService:
                 )
                 session.add(settings)
 
-            # Update API credentials if provided
+            # Update API credentials if provided (exchange defaults to "binance" for compat)
             update_data = settings_data.model_dump(exclude_unset=True)
-            binance_api_key = update_data.pop("binance_api_key", None)
-            binance_api_secret = update_data.pop("binance_api_secret", None)
+            exchange = update_data.pop("exchange", None) or "binance"
+            api_key = update_data.pop("api_key", None)
+            api_secret = update_data.pop("api_secret", None)
+            mode = update_data.pop("mode", None)
 
-            if binance_api_key is not None or binance_api_secret is not None:
-                if binance_api_key is None or binance_api_secret is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Both binance_api_key and binance_api_secret are required together.",
-                    )
-                if binance_api_key == "" and binance_api_secret == "":
-                    settings.remove_api_credentials("binance")
-                else:
-                    settings.set_api_credentials("binance", binance_api_key, binance_api_secret)
+            try:
+                if api_key is not None or api_secret is not None:
+                    if api_key is None or api_secret is None:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Both api_key and api_secret are required together.",
+                        )
+                    if api_key == "" and api_secret == "":
+                        settings.remove_api_credentials(exchange, mode=mode)
+                    else:
+                        settings.set_api_credentials(exchange, api_key, api_secret, mode=mode or "live")
+                elif mode is not None:
+                    # Pas de nouvelles cles : juste basculer le mode actif (deja configure).
+                    settings.set_active_mode(exchange, mode)
+            except ValueError as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
             # Update other settings fields if provided
             for field, value in update_data.items():
@@ -306,12 +317,13 @@ class UserService:
                     setattr(settings, field, value)
 
             # Capture return values before session closes
-            has_binance = settings.has_credentials_for_exchange("binance")
+            configured_exchanges = sorted(settings.exchange_credentials_detail())
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
                 "notification_preferences": settings.notification_preferences,
-                "has_binance_credentials": has_binance,
+                "configured_exchanges": configured_exchanges,
+                "exchange_credentials": settings.exchange_credentials_detail(),
             }
 
     # ---------------------------------------------------------------------------

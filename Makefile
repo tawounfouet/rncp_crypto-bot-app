@@ -12,6 +12,11 @@ export
 
 .DEFAULT_GOAL := help
 
+# Python du venv local : .venv/bin/python (Linux/macOS/WSL2) ou .venv/Scripts/python.exe
+# (Windows). Utilise -m pytest/-m ruff plutot que les executables directs pour rester
+# portable (cf. docs/SETUP.md).
+VENV_PYTHON := $(if $(wildcard .venv/bin/python),.venv/bin/python,$(if $(wildcard .venv/Scripts/python.exe),.venv/Scripts/python.exe,.venv/bin/python))
+
 help: ## Afficher cette aide
 	@echo ""
 	@echo "  Crypto-bot-app — commandes disponibles"
@@ -28,7 +33,14 @@ generate-requirements: ## Generer les fichiers requirements.txt a partir de vers
 # Dev
 # ===========================================================================
 
-dev-up: generate-requirements ## Demarrer l'environnement dev (retry auto + backoff si le pull echoue)
+prepare-dirs: ## Corriger les permissions des dossiers bind-montes ecrits par des conteneurs non-root (uid different de l'hote)
+	@mkdir -p data models/logs models/artifacts
+	@for d in data models/logs models/artifacts; do \
+		chmod -R o+w "$$d" 2>/dev/null && echo ">>> prepare-dirs : $$d ouvert en ecriture (o+w)." || \
+		echo ">>> prepare-dirs : ATTENTION, impossible de chmod $$d (pas proprietaire) -- relancer avec 'sudo chmod -R o+w $$d' si un conteneur plante en PermissionError dessus." ; \
+	done
+
+dev-up: generate-requirements prepare-dirs ## Demarrer l'environnement dev (retry auto + backoff si le pull echoue)
 	@n=5; d=5; for i in $$(seq 1 $$n); do \
 		echo ">>> dev-up : tentative $$i/$$n" ; \
 		docker compose up -d && exit 0 ; \
@@ -109,24 +121,53 @@ prod-logs: ## Suivre les logs prod
 # Tests & Lint (venv local)
 # ===========================================================================
 
-test: test-backend test-frontend ## Lancer tous les tests (backend + frontend)
+test: test-backend test-frontend test-utils test-jobs test-models ## Lancer les tests (backend + frontend + utils + jobs + models)
 
-verify: ## Verifier que tous les services installes sont presents et healthy (backend/frontend/airflow/minio/postgres/ml)
-	./scripts/verify.sh $(ARGS)
+verify: ## Verifier que tous les services installes sont presents et healthy (playbook Ansible, cf. crypto-bot-infra/ansible/)
+	cd ../crypto-bot-infra/ansible && ansible-playbook verify.yml -i inventories/dev
 
 test-backend: ## Lancer les tests unitaires backend
-	PYTHONPATH=backend/src .venv/bin/pytest backend/src/tests -v
+	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest backend/tests -v
 
 test-frontend: ## Lancer les tests frontend mock-first
-	cd frontend && ../.venv/bin/pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
+	cd frontend && ../$(VENV_PYTHON) -m pytest tests -q
+
+test-utils: ## Lancer les tests de la couche connecteurs partagee (utils/)
+	PYTHONPATH=. $(VENV_PYTHON) -m pytest utils/tests -q -o cache_dir=/tmp/utils-pytest-cache
+
+test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils, un rapport par couche)
+# NB: backend/utils et frontend ne peuvent PAS partager un seul process pytest : les deux ont
+# chacun leur propre package "utils" (utils/ a la racine vs frontend/src/utils/), qui se
+# marchent dessus des que les deux repertoires sont sur le meme PYTHONPATH. D'ou 2 invocations
+# separees, comme test-backend/test-frontend/test-utils.
+	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest --cov=backend/src --cov=utils --cov-report=term-missing --cov-report=json:coverage.json backend/tests utils/tests
+	cd frontend && PYTHONPATH=src ../$(VENV_PYTHON) -m pytest --cov=src --cov-report=term-missing --cov-report=json:coverage.json tests
+
+test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
+	PYTHONPATH=. $(VENV_PYTHON) -m pytest jobs/tests -q -o cache_dir=/tmp/utils-pytest-cache
+
+test-models: ## Lancer les tests unitaires des models (models/src)
+# cd models : le code de models/src/ resout ses chemins relatifs (config.yaml, mlruns/...)
+# depuis son propre repertoire, pas depuis la racine du repo.
+	cd models && PYTHONPATH=..:. ../$(VENV_PYTHON) -m pytest tests -q -o cache_dir=/tmp/models-pytest-cache
+
+ci-test: ## Rejouer localement le job CI test:integration (build image test + tests contre un vrai Postgres)
+	docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --target test -f backend/Dockerfile -t crypto-bot-backend:ci-test-local .
+	IMAGE_TAG=crypto-bot-backend:ci-test-local docker compose --env-file versions.env -f ci/docker-compose.test.yml up \
+		--abort-on-container-exit --exit-code-from test-runner; \
+	STATUS=$$?; \
+	mkdir -p ci/test-results; \
+	docker cp "$$(docker compose -f ci/docker-compose.test.yml ps -q test-runner)":/tmp/test-results/. ci/test-results/ 2>/dev/null || true; \
+	docker compose -f ci/docker-compose.test.yml down -v 2>/dev/null || true; \
+	exit $$STATUS
 
 lint: ## Lancer ruff check + format
-	.venv/bin/ruff check backend/src/ frontend/src/ --output-format=concise
-	.venv/bin/ruff format --check backend/src/ frontend/src/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ models/src/ --output-format=concise
+	$(VENV_PYTHON) -m ruff format --check backend/src/ frontend/src/ utils/ jobs/ models/src/
 
 lint-fix: ## Corriger automatiquement les erreurs ruff
-	.venv/bin/ruff check backend/src/ frontend/src/ --fix
-	.venv/bin/ruff format backend/src/ frontend/src/
+	$(VENV_PYTHON) -m ruff check backend/src/ frontend/src/ utils/ jobs/ models/src/ --fix
+	$(VENV_PYTHON) -m ruff format backend/src/ frontend/src/ utils/ jobs/ models/src/
 
 # ===========================================================================
 # Outils

@@ -6,8 +6,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    load_dotenv(dotenv_path=env_path)
+except ImportError:
+    pass
+
 from src.config.config_loader import load_config
-from src.data.collect import collect_symbol
 from src.features.build import build_symbol_features
 from src.training.train_baselines import train_from_processed_dataset as train_baselines_from_processed_dataset
 from src.training.train_lstm import train_from_processed_dataset as train_lstm_from_processed_dataset
@@ -22,15 +29,6 @@ def config_command(args: argparse.Namespace) -> None:
     print(f"symbols={','.join(settings.data.symbols)}")
     print(f"interval={settings.data.primary_interval}")
     print(f"mlops={settings.mlops.tracking_backend}:{settings.mlops.tracking_uri}")
-
-
-def collect_command(args: argparse.Namespace) -> None:
-    settings = load_config(args.config)
-    symbols = args.symbols or settings.data.symbols
-    interval = args.interval or settings.data.primary_interval
-    for symbol in symbols:
-        frame = collect_symbol(symbol, interval, args.config)
-        print(f"collected {symbol.upper()} {interval}: {len(frame)} rows")
 
 
 def features_command(args: argparse.Namespace) -> None:
@@ -86,11 +84,6 @@ def build_parser() -> argparse.ArgumentParser:
     config_parser = subparsers.add_parser("config", help="Validate and print config summary")
     config_parser.set_defaults(func=config_command)
 
-    collect_parser = subparsers.add_parser("collect", help="Collect raw OHLCV datasets")
-    collect_parser.add_argument("--symbols", nargs="*", help="Symbols to collect")
-    collect_parser.add_argument("--interval", help="Interval to collect")
-    collect_parser.set_defaults(func=collect_command)
-
     features_parser = subparsers.add_parser("features", help="Build processed features")
     features_parser.add_argument("--symbols", nargs="*", help="Symbols to process")
     features_parser.add_argument("--interval", help="Interval to process")
@@ -112,7 +105,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     train_lstm_parser.set_defaults(func=train_lstm_command)
 
-    train_baselines_parser = subparsers.add_parser("train-baselines", help="Evaluate AlwaysHold and UniformRandom baselines")
+    train_baselines_parser = subparsers.add_parser(
+        "train-baselines", help="Evaluate AlwaysHold and UniformRandom baselines"
+    )
     train_baselines_parser.add_argument(
         "--dataset",
         default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),

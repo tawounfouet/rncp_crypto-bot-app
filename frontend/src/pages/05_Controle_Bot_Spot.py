@@ -9,9 +9,9 @@ import streamlit as st
 from components.alerts import show_feedback
 from components.badges import render_status_badge
 from components.headers import render_page_header, render_section_title
-from components.prerequisites import render_binance_prerequisite_state
+from components.prerequisites import render_exchange_prerequisite_state
 from layouts.page_shell import setup_page
-from prerequisites.binance import evaluate_binance_prerequisite
+from prerequisites.exchange import evaluate_exchange_prerequisite
 from services.base import ServiceError
 from services.bot_control_service import BotControlService
 from utils.constants import ACTION_PAUSE, ACTION_STOP
@@ -271,9 +271,9 @@ def main() -> None:
         "Supervision et pilotage des bots : lancement (paper / live), pause, arret.",
     )
 
-    gate = evaluate_binance_prerequisite("bot_control", user)
+    gate = evaluate_exchange_prerequisite("bot_control", user)
     if gate.missing:
-        render_binance_prerequisite_state("bot_control", cta_key="cta_binance_bot_control")
+        render_exchange_prerequisite_state("bot_control", cta_key="cta_exchange_bot_control")
 
     service = BotControlService(store)
 
@@ -310,7 +310,7 @@ def main() -> None:
     if gate.missing:
         render_section_title(
             "Bots Spot disponibles",
-            "Configuration Binance requise avant toute supervision d'execution.",
+            "Configuration de l'exchange requise avant toute supervision d'execution.",
         )
         with st.container(border=True):
             for bot in bots:

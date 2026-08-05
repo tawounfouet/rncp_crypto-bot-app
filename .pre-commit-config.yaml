@@ -26,14 +26,14 @@ repos:
       - id: ruff
         name: "Run ruff linter"
         args: ["--fix"]
-        files: ^(backend|frontend)/src/
+        files: ^((backend|frontend)/src|utils|jobs)/
       - id: ruff-format
         name: "Run ruff formatter"
-        files: ^(backend|frontend)/src/
+        files: ^((backend|frontend)/src|utils|jobs)/
 
   # Semgrep securite
   - repo: https://github.com/semgrep/semgrep
-    rev: v1.156.0
+    rev: v1.165.0
     hooks:
       - id: semgrep
         name: "Semgrep security scan"
@@ -54,7 +54,7 @@ repos:
         name: "Run lint + tests for changed code"
         entry: scripts/run-tests-if-needed.sh
         language: script
-        files: '^(backend|frontend)/src/.*\.py$'
+        files: '^((backend|frontend)/(src|tests)|utils|jobs)/.*\.py$'
         pass_filenames: false
 
 ci:

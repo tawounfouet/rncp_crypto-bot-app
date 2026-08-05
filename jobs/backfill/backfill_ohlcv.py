@@ -64,23 +64,24 @@ logger = logging.getLogger("backfill.backfill_ohlcv")
 
 #: Millisecondes par intervalle — sert à calculer les bornes de chunk
 INTERVAL_MS: dict[str, int] = {
-    "1m":  60_000,
-    "5m":  300_000,
+    "1m": 60_000,
+    "5m": 300_000,
     "15m": 900_000,
     "30m": 1_800_000,
-    "1h":  3_600_000,
-    "4h":  14_400_000,
-    "1d":  86_400_000,
-    "1w":  604_800_000,
+    "1h": 3_600_000,
+    "4h": 14_400_000,
+    "1d": 86_400_000,
+    "1w": 604_800_000,
 }
 
 BINANCE_KLINES_LIMIT = 1000  # maximum par appel API Binance
-API_SLEEP_S = 0.25           # pause entre deux appels pour respecter les rate limits Binance
+API_SLEEP_S = 0.25  # pause entre deux appels pour respecter les rate limits Binance
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _dt_to_ms(dt: datetime) -> int:
     """Convertit un datetime UTC en timestamp milliseconde."""
@@ -94,6 +95,7 @@ def _ms_to_dt(ms: int) -> datetime:
 # ---------------------------------------------------------------------------
 # Logique principale
 # ---------------------------------------------------------------------------
+
 
 def run_backfill(
     symbol: str,
@@ -124,10 +126,7 @@ def run_backfill(
             total_rows, chunks_processed, chunks_failed, duration_s
     """
     if interval not in INTERVAL_MS:
-        raise ValueError(
-            f"Intervalle inconnu: {interval!r}. "
-            f"Valeurs supportées: {sorted(INTERVAL_MS)}"
-        )
+        raise ValueError(f"Intervalle inconnu: {interval!r}. Valeurs supportées: {sorted(INTERVAL_MS)}")
 
     interval_ms = INTERVAL_MS[interval]
     chunk_ms = BINANCE_KLINES_LIMIT * interval_ms
@@ -140,11 +139,14 @@ def run_backfill(
     total_chunks_est = (total_candles_expected + BINANCE_KLINES_LIMIT - 1) // BINANCE_KLINES_LIMIT
 
     logger.info(
-        "backfill start  symbol=%s interval=%s  range=[%s → %s]  "
-        "expected_candles~%s  chunks~%s  dry_run=%s",
-        symbol.upper(), interval,
-        start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d"),
-        total_candles_expected, total_chunks_est, dry_run,
+        "backfill start  symbol=%s interval=%s  range=[%s → %s]  expected_candles~%s  chunks~%s  dry_run=%s",
+        symbol.upper(),
+        interval,
+        start_dt.strftime("%Y-%m-%d"),
+        end_dt.strftime("%Y-%m-%d"),
+        total_candles_expected,
+        total_chunks_est,
+        dry_run,
     )
 
     minio_client = None
@@ -175,7 +177,8 @@ def run_backfill(
 
         logger.info(
             "chunk %s/%s  symbol=%s  from=%s",
-            chunk_idx, total_chunks_est,
+            chunk_idx,
+            total_chunks_est,
             symbol.upper(),
             chunk_start_dt.strftime("%Y-%m-%d %H:%M"),
         )
@@ -189,7 +192,7 @@ def run_backfill(
                 start_time_ms=chunk_start_ms,
                 end_time_ms=chunk_end_ms - 1,  # endTime est inclusif côté Binance
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("fetch failed  chunk=%s: %s", chunk_idx, exc)
             stats["chunks_failed"] += 1
             chunk_start_ms = chunk_end_ms
@@ -197,9 +200,7 @@ def run_backfill(
             continue
 
         if not rows:
-            logger.warning(
-                "empty chunk=%s (pas de données pour cette fenêtre), skip", chunk_idx
-            )
+            logger.warning("empty chunk=%s (pas de données pour cette fenêtre), skip", chunk_idx)
             chunk_start_ms = chunk_end_ms
             continue
 
@@ -209,18 +210,14 @@ def run_backfill(
         if not dry_run:
             df = pd.DataFrame(rows)
             ts_label = chunk_start_dt.strftime("%Y-%m-%dT%H%M%S")
-            object_key = (
-                f"raw/ohlcv/{symbol.upper()}/{interval}/backfill/{ts_label}.parquet"
-            )
+            object_key = f"raw/ohlcv/{symbol.upper()}/{interval}/backfill/{ts_label}.parquet"
             try:
                 upload_dataframe_parquet(minio_client, df, object_key, bucket)
                 run_loading(object_key=object_key, bucket=bucket)
                 stats["object_keys"].append(object_key)
                 stats["chunks_processed"] += 1
-            except Exception as exc:  # noqa: BLE001
-                logger.error(
-                    "store/load failed  chunk=%s  key=%s: %s", chunk_idx, object_key, exc
-                )
+            except Exception as exc:
+                logger.error("store/load failed  chunk=%s  key=%s: %s", chunk_idx, object_key, exc)
                 stats["chunks_failed"] += 1
         else:
             stats["chunks_processed"] += 1
@@ -246,6 +243,7 @@ def run_backfill(
 # ---------------------------------------------------------------------------
 # Point d'entrée CLI
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -307,11 +305,10 @@ def main() -> None:
         )
         if stats["chunks_failed"]:
             print(
-                f"⚠  {stats['chunks_failed']} chunk(s) en échec. "
-                "Relancez le job pour récupérer les données manquantes."
+                f"⚠  {stats['chunks_failed']} chunk(s) en échec. Relancez le job pour récupérer les données manquantes."
             )
             sys.exit(2)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("backfill failed: %s", exc)
         sys.exit(1)
 

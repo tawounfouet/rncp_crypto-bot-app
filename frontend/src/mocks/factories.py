@@ -93,8 +93,9 @@ def _trades(now: datetime) -> list[SpotTrade]:
 
 def build_portfolio_snapshot(
     scenario: MockScenario,
-    binance_configured: bool,
+    exchange_configured: bool,
     now: datetime | None = None,
+    exchange: str = "binance",
 ) -> PortfolioSnapshot:
     current = now or datetime.now(UTC)
     if scenario == MockScenario.PORTFOLIO_EMPTY:
@@ -115,16 +116,19 @@ def build_portfolio_snapshot(
 
     total = sum(row.value_usdt for row in balances)
     free_cash = next((row.free for row in balances if row.asset in ("USDT", "USDC")), 0.0)
-    active_binance = binance_configured and scenario != MockScenario.BINANCE_NOT_CONFIGURED
+    active_exchange = exchange_configured and scenario != MockScenario.EXCHANGE_NOT_CONFIGURED
 
     return PortfolioSnapshot(
         system_status=SystemStatus(
             backend_ok=True,
-            binance_ok=active_binance,
+            exchange=exchange,
+            exchange_ok=active_exchange,
             last_sync=current,
             backend_message="Backend mock disponible",
-            binance_message=(
-                "Cles API absentes" if not active_binance else "Connexion Binance mock active"
+            exchange_message=(
+                "Cles API absentes"
+                if not active_exchange
+                else f"Connexion {exchange.capitalize()} mock active"
             ),
         ),
         total_value_usdt=total,

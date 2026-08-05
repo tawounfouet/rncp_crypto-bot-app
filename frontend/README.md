@@ -1,6 +1,9 @@
-# Frontend Streamlit - Crypto Bot Spot MVP (Mock-First)
+# Frontend Streamlit - Crypto Bot Spot MVP
 
-Frontend multipage premium en Streamlit, totalement fonctionnel sur donnees mockees, sans dependance backend/FastAPI/Binance.
+Statut: référence
+Derniere revision: 2026-07-28
+
+Frontend multipage premium en Streamlit, connecte au backend FastAPI reel (auth, marche, portefeuille, trading, strategies). Un mode mock (`mocks/`) reste disponible pour le developpement et les tests hors backend.
 
 ## 1. Prerequis
 - Python 3.10+
@@ -14,9 +17,7 @@ cd frontend
 python -m pip install -r requirements.txt
 ```
 
-Note environnement courant:
-- `pydantic` n'est pas resolvable sur l'index pip disponible localement.
-- Un shim minimal compatible (`src/pydantic/__init__.py`) est inclus pour conserver une execution locale testable en mode offline.
+`pydantic>=2.8,<3.0` est une dependance normale (`requirements.txt`), installee sans contournement particulier. Un shim local (`src/pydantic/__init__.py`) existe encore dans le code pour l'execution hors-ligne ; comme `PYTHONPATH=/app/src` le place avant le vrai paquet installe, c'est lui qui est effectivement utilise en conteneur. À nettoyer si le vrai paquet couvre desormais tous les usages.
 
 ## 3. Lancer l'application
 ```bash
@@ -50,6 +51,7 @@ frontend/
   src/
     app.py
     pages/
+      01_Marche.py
       02_Inscription.py
       03_Portefeuille_Spot.py
       04_Performances_Spot.py
@@ -62,6 +64,8 @@ frontend/
     theme/
     services/
     mocks/
+    navigation/
+    prerequisites/
     schemas/
     state/
     utils/
@@ -69,35 +73,33 @@ frontend/
     unit/
     integration/
     smoke/
-  IMPLEMENTATION_PLAN.md
-  PROGRESS.md
   MOCK_SCENARIOS.md
   requirements.txt
   pyproject.toml
 ```
 
-## 7. Strategie Mock-First
-- Separation nette:
-  - `pages/`: rendu et interactions Streamlit
-  - `services/`: logique metier mockee
-  - `mocks/`: generation et scenario de donnees
-  - `schemas/`: models types (pydantic-compatible)
-  - `state/`: session globale
-- Scenarios mockes pilotables depuis la sidebar.
-- Delais simules et erreurs forcees possibles par service.
-- Substitution backend future:
-  - conserver les signatures de `services/*`
-  - remplacer la logique interne par appels API sans casser les pages.
+## 7. Architecture services / mocks
+
+- `pages/`: rendu et interactions Streamlit
+- `services/`: logique metier, connectee au backend reel via `BackendApiClient`/`AuthApiClient` par defaut (voir en-tete de chaque fichier `services/*.py`, ex. `"connecte au backend reel"`)
+- `mocks/`: `MockStore` + scenarios de donnees, utilises par les tests (`tests/unit`, `tests/integration`, `tests/smoke`) et disponibles en developpement local sans backend
+- `schemas/`: models types (pydantic-compatible)
+- `state/`: session globale
+- `navigation/`: regles d'acces aux pages selon l'etat de connexion/role
+- `prerequisites/`: verification des prerequis (ex. configuration d'un exchange) avant certaines pages
+
+Scenarios mockes pilotables depuis la sidebar (voir `MOCK_SCENARIOS.md`) ; delais simules et erreurs forcees possibles via `services/base.py` (`simulate_latency`, `raise_if_forced_error`) — ces utilitaires ne s'appliquent qu'au chemin `MockStore`, pas aux appels reels au backend.
 
 ## 8. Pages implementees
-1. Connexion (`src/app.py`)
-2. Inscription
-3. Portefeuille Spot
-4. Performances Spot
-5. Controle Bot Spot
-6. Parametrage Bot Spot
-7. Gestion de compte
-8. Admin
+1. Marche (`pages/01_Marche.py`, accessible connecte ou non)
+2. Connexion (`src/app.py`)
+3. Inscription
+4. Portefeuille Spot
+5. Performances Spot
+6. Controle Bot Spot
+7. Parametrage Bot Spot
+8. Gestion de compte
+9. Admin
 
 ## 9. UX/Design
 - Theme dark premium par defaut.
