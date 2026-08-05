@@ -83,8 +83,9 @@ WORKDIR /app
 # Copier le code source
 COPY --chown=app:app . .
 
-# Creer les repertoires necessaires (droits deja poses par COPY --chown)
-RUN mkdir -p logs data
+# Creer les repertoires necessaires (logs/ et data/ sont exclues du
+# build context par .dockerignore -> crees ici avec les bons droits)
+RUN mkdir -p logs data && chown -R app:app logs data
 
 # Changer vers l'utilisateur non-root
 USER app

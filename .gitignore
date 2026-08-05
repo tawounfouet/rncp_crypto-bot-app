@@ -36,6 +36,9 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# OpenCode
+AGENTS.md
+
 # Frontend temporary caches
 pytest-cache-files-*/
 .cacheprobe/
