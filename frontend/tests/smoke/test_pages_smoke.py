@@ -67,11 +67,50 @@ def _sidebar_captions(at: AppTest) -> list[str]:
         "app.py",
         "pages/01_Marche.py",
         "pages/02_Inscription.py",
+        "pages/10_Politique_de_confidentialite.py",
     ],
 )
 def test_public_pages_render(relative_path: str) -> None:
     at = _run_app(relative_path)
     _assert_no_exception(at)
+
+
+def test_privacy_page_renders_placeholder_content() -> None:
+    at = _run_app("pages/10_Politique_de_confidentialite.py")
+    _assert_no_exception(at)
+    markdown_values = " ".join(entry.value for entry in at.markdown)
+    assert "Politique de confidentialité" in markdown_values
+    assert "placeholder" in markdown_values.lower()
+
+
+def test_signup_page_requires_consent_checkbox() -> None:
+    at = _run_app("pages/02_Inscription.py")
+    _assert_no_exception(at)
+    consent_boxes = [cb for cb in at.checkbox if cb.label.startswith("J'accepte la politique")]
+    assert len(consent_boxes) == 1
+    assert consent_boxes[0].value is False
+
+
+def test_signup_blocked_without_consent() -> None:
+    at = _run_app("pages/02_Inscription.py")
+    _assert_no_exception(at)
+
+    inputs = {
+        "Prenom *": "Nina",
+        "Email *": "nina@cryptobot.dev",
+        "Nom d'utilisateur *": "nina",
+        "Mot de passe *": "Strong123",
+        "Confirmation mot de passe *": "Strong123",
+    }
+    for text_input in at.text_input:
+        if text_input.label in inputs:
+            text_input.set_value(inputs[text_input.label])
+
+    submit = next(button for button in at.button if button.label == "Creer mon compte")
+    at = submit.click().run(timeout=20)
+    _assert_no_exception(at)
+    errors = [error.value for error in at.error]
+    assert any("politique de confidentialite" in error.lower() for error in errors)
 
 
 def test_market_page_renders_for_anonymous_user() -> None:
@@ -206,6 +245,7 @@ def test_sidebar_rules_for_anonymous_user_on_protected_page() -> None:
     captions = _sidebar_captions(at)
     assert "Connexion" in captions
     assert "Inscription" in captions
+    assert "Politique de confidentialité" in captions
     assert "Admin" not in captions
     assert "Portefeuille Spot" not in captions
 
@@ -298,6 +338,7 @@ def test_select_pages_render_select_widgets_in_both_themes(
     [
         ("app.py", None),
         ("pages/02_Inscription.py", None),
+        ("pages/10_Politique_de_confidentialite.py", None),
         ("pages/03_Portefeuille_Spot.py", "alice@cryptobot.dev"),
         ("pages/04_Performances_Spot.py", "alice@cryptobot.dev"),
         ("pages/05_Controle_Bot_Spot.py", "alice@cryptobot.dev"),
@@ -322,6 +363,7 @@ def test_pages_render_in_light_theme(relative_path: str, auth_email: str | None)
     [
         ("app.py", None),
         ("pages/02_Inscription.py", None),
+        ("pages/10_Politique_de_confidentialite.py", None),
         ("pages/03_Portefeuille_Spot.py", "alice@cryptobot.dev"),
         ("pages/04_Performances_Spot.py", "alice@cryptobot.dev"),
         ("pages/05_Controle_Bot_Spot.py", "alice@cryptobot.dev"),

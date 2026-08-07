@@ -89,6 +89,13 @@ PAGES: dict[str, NavPage] = {
         requires_admin=True,
         show_when_authenticated=True,
     ),
+    "privacy": NavPage(
+        key="privacy",
+        label="Politique de confidentialité",
+        path="pages/10_Politique_de_confidentialite.py",
+        show_when_anonymous=True,
+        show_when_authenticated=True,
+    ),
 }
 
 
@@ -101,7 +108,7 @@ def get_page(page_key: str) -> NavPage:
 
 def allowed_page_keys_in_sidebar(user: MockUser | None) -> list[str]:
     if user is None:
-        return ["market", "login", "signup"]
+        return ["market", "login", "signup", "privacy"]
 
     keys = [
         "market",
@@ -114,6 +121,7 @@ def allowed_page_keys_in_sidebar(user: MockUser | None) -> list[str]:
     ]
     if user.role == UserRole.ADMIN:
         keys.append("admin")
+    keys.append("privacy")
     return keys
 
 
