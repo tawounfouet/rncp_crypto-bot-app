@@ -11,6 +11,7 @@ requests==$REQUESTS_VERSION
 python-dotenv==$PYTHON_DOTENV_VERSION
 scikit-learn==$SCIKIT_LEARN_VERSION
 joblib==$JOBLIB_VERSION
+xgboost==$XGBOOST_VERSION
 torch==$TORCH_VERSION
 mlflow==$MLFLOW_VERSION
 psycopg2-binary==$PSYCOPG2_VERSION

@@ -1,4 +1,4 @@
-.PHONY: help install install-dev config collect features train-rf train-lstm api check test compile clean
+.PHONY: help install install-dev config collect features train-rf train-lstm train-mlp train-xgboost api check test compile clean
 
 PYTHON ?= ../../.venv/bin/python
 PIP ?= $(PYTHON) -m pip
@@ -38,6 +38,12 @@ train-rf: ## Entraîne la baseline Random Forest sur DATASET
 
 train-lstm: ## Lance l'entraînement LSTM
 	$(PYTHON) -m src.main --config $(CONFIG) train-lstm --dataset $(DATASET)
+
+train-mlp: ## Entraîne le classifier MLP sur DATASET
+	$(PYTHON) -m src.main --config $(CONFIG) train-mlp --dataset $(DATASET)
+
+train-xgboost: ## Entraîne le classifier XGBoost sur DATASET
+	$(PYTHON) -m src.main --config $(CONFIG) train-xgboost --dataset $(DATASET)
 
 mlflow-ui: ## Démarre l'UI MLflow sur http://localhost:5001
 	$(PYTHON) -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001

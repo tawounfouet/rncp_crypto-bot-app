@@ -28,7 +28,6 @@ from strategy.schemas import (
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
     StrategyResponse,
-    StrategyTypeEnum,
     StrategyUpdate,
 )
 from utils.trading.signals import VALUE_TO_SIGNAL
@@ -269,7 +268,7 @@ class StrategyService:
         Args:
             deployment_id: Deployment identifier
             data: Market data DataFrame, requis uniquement pour le moteur de règles fixes
-                (la branche ML_RANDOM_FOREST va chercher ses propres données live)
+                (la branche ML va chercher ses propres données live)
 
         Returns:
             Execution results with signals and metadata
@@ -291,10 +290,11 @@ class StrategyService:
             strategy_model = deployment.strategy
 
             try:
-                if strategy_model.strategy_type == StrategyTypeEnum.ML_RANDOM_FOREST:
+                if strategy_model.strategy_type.startswith("ml_"):
                     df = build_live_feature_frame(deployment.symbol, deployment.timeframe)
                     latest_row = df.iloc[-1]
-                    svc = InferenceService()
+                    model_name = strategy_model.strategy_type.removeprefix("ml_")
+                    svc = InferenceService(model_name=model_name)
                     features = {col: latest_row[col] for col in svc.feature_columns}
                     result = svc.predict(features)
                     latest_signal = result["signal_value"]

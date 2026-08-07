@@ -62,3 +62,21 @@ class TrainRandomForestRequest(BaseModel):
 
 class TrainRandomForestResponse(BaseModel):
     artifact_dir: str
+
+
+class TrainMLPRequest(BaseModel):
+    dataset: str
+    config: str = "config.yaml"
+
+
+class TrainMLPResponse(BaseModel):
+    artifact_dir: str
+
+
+class TrainXGBoostRequest(BaseModel):
+    dataset: str
+    config: str = "config.yaml"
+
+
+class TrainXGBoostResponse(BaseModel):
+    artifact_dir: str
