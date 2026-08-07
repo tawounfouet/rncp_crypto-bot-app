@@ -4,6 +4,7 @@ Provides endpoints for user management, profiles, and settings.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from shared.schemas.common import BaseResponse
 
 from auth.dependencies import get_current_admin_user, get_current_user
 from auth.models import User as UserModel
@@ -354,4 +355,30 @@ async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_c
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to deactivate user: {e!s}",
+        ) from None
+
+
+@router.post("/purge-inactive", response_model=BaseResponse)
+def purge_inactive_users(
+    days: int = Query(730, ge=1, description="Seuil d'inactivite en jours"),
+) -> BaseResponse:
+    """Purge les comptes inactifs depuis plus de ``days`` jours.
+
+    Appele par Airflow (DAG ``cryptobot_purge_inactive_users``), pas par un
+    utilisateur final -- pas d'authentification, meme principe que
+    ``POST /strategies/deployments/execute-active``.
+    """
+    try:
+        deleted = user_service.delete_inactive_users_older_than(days=days)
+        return BaseResponse(
+            success=True,
+            message=f"Deleted {deleted} inactive users",
+            data={"deleted": deleted},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to purge inactive users: {e!s}",
         ) from None

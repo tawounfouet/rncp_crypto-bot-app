@@ -5,9 +5,11 @@ Handles user CRUD operations and business logic.
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from auth.models import User, UserSettings
@@ -16,6 +18,20 @@ from auth.service import auth_service
 
 # Constants
 USER_NOT_FOUND = "User not found"
+
+
+def _export_value(value: object) -> object:
+    """Serialize scalar column values for a portable export (JSON-safe)."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _model_to_dict(obj: object) -> dict:
+    """Serialize a SQLAlchemy model to a plain dict (columns only, no relations)."""
+    return {column.key: _export_value(getattr(obj, column.key)) for column in sa_inspect(obj).mapper.column_attrs}
 
 
 class UserService:
@@ -230,6 +246,14 @@ class UserService:
                 for account in user.accounts
             ]
 
+            # Trading data (relations du modele User) pour l'export RGPD complet
+            strategies_data = [_model_to_dict(s) for s in user.strategies]
+            deployments_data = [_model_to_dict(d) for d in user.strategy_deployments]
+            orders_data = [_model_to_dict(o) for o in user.orders]
+            transactions_data = [_model_to_dict(t) for t in user.transactions]
+            sessions_data = [_model_to_dict(s) for s in user.trading_sessions]
+            backtests_data = [_model_to_dict(b) for b in user.backtest_results]
+
             return {
                 "user": {
                     "id": user.id,
@@ -239,12 +263,18 @@ class UserService:
                     "last_name": user.last_name,
                     "is_active": user.is_active,
                     "is_admin": user.is_admin,
-                    "last_active_at": user.last_active_at,
-                    "created_at": user.created_at,
-                    "updated_at": user.updated_at,
+                    "last_active_at": _export_value(user.last_active_at),
+                    "created_at": _export_value(user.created_at),
+                    "updated_at": _export_value(user.updated_at),
                 },
                 "settings": settings_data,
                 "accounts": accounts_data,
+                "strategies": strategies_data,
+                "strategy_deployments": deployments_data,
+                "orders": orders_data,
+                "transactions": transactions_data,
+                "trading_sessions": sessions_data,
+                "backtest_results": backtests_data,
             }
 
     def delete_inactive_users_older_than(self, days: int = 730) -> int:
