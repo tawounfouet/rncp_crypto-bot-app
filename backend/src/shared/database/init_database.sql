@@ -156,6 +156,7 @@ CREATE TABLE strategy_deployments (
     timeframe VARCHAR(10) NOT NULL,
     amount DECIMAL(20,8) NOT NULL,
     parameters JSON,
+    is_paper BOOLEAN NOT NULL DEFAULT TRUE,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP,

@@ -22,6 +22,7 @@ class StrategyTypeEnum(str, Enum):
     MEAN_REVERSION = "mean_reversion"
     MOMENTUM = "momentum"
     ML_RANDOM_FOREST = "ml_random_forest"
+    ML_LSTM = "ml_lstm"
     ML_MLP = "ml_mlp"
     ML_XGBOOST = "ml_xgboost"
     CUSTOM = "custom"
