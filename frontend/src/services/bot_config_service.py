@@ -158,7 +158,23 @@ class BotConfigService:
 
     def create_bot(self, name, strategy_type):
         token = self._token()
-        response = self.client.create_strategy(token, name=name, strategy_type=strategy_type)
+        parameters = {
+            "symbol": "BTCUSDC",
+            "quote_asset": "USDC",
+            "budget_usdt": 1000.0,
+            "max_open_positions": 3,
+            "risk_per_trade_pct": 1.0,
+            "take_profit_pct": 3.0,
+            "stop_loss_pct": 2.0,
+            "cooldown_seconds": 300,
+            "version": 1,
+        }
+        response = self.client.create_strategy(
+            token,
+            name=name,
+            strategy_type=strategy_type,
+            parameters=parameters,
+        )
         if not response.success:
             raise ServiceError("Impossible de créer une stratégie.")
 

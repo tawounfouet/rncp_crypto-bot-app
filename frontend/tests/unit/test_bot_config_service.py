@@ -174,13 +174,28 @@ def test_create_bot_calls_client_with_prefixed_strategy_type(store) -> None:
     service.create_bot(name="Mon bot RF", strategy_type="ml_random_forest")
 
     client.create_strategy.assert_called_once_with(
-        "fake-token", name="Mon bot RF", strategy_type="ml_random_forest"
+        "fake-token",
+        name="Mon bot RF",
+        strategy_type="ml_random_forest",
+        parameters={
+            "symbol": "BTCUSDC",
+            "quote_asset": "USDC",
+            "budget_usdt": 1000.0,
+            "max_open_positions": 3,
+            "risk_per_trade_pct": 1.0,
+            "take_profit_pct": 3.0,
+            "stop_loss_pct": 2.0,
+            "cooldown_seconds": 300,
+            "version": 1,
+        },
     )
 
 
 def test_create_bot_raises_on_backend_error(store) -> None:
     client = MagicMock(spec=BackendApiClient)
-    client.create_strategy.return_value = ApiResponse(status_code=400, error="Unknown strategy type")
+    client.create_strategy.return_value = ApiResponse(
+        status_code=400, error="Unknown strategy type"
+    )
     service = BotConfigService(store, client=client)
 
     with pytest.raises(ServiceError):
