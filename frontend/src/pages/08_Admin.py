@@ -81,16 +81,15 @@ def main() -> None:
 
     left, right = st.columns([1, 1], gap="large")
     with left:
-        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        st.write(f"Email: `{detail.email}`")
-        st.write(f"Nom: {detail.first_name} {detail.last_name or ''}")
-        render_status_badge("Role", detail.role.value)
-        render_status_badge("Statut", detail.status.value)
-        st.caption(f"Dernier login: {format_datetime(detail.last_login)}")
-        st.caption(f"Cree le: {format_datetime(detail.created_at)}")
-        st.caption(f"Exchange configure: {bool_to_label(detail.exchange_configured)}")
-        st.caption(f"Echecs login: {detail.failed_login_count}")
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.write(f"Email: `{detail.email}`")
+            st.write(f"Nom: {detail.first_name} {detail.last_name or ''}")
+            render_status_badge("Role", detail.role.value)
+            render_status_badge("Statut", detail.status.value)
+            st.caption(f"Dernier login: {format_datetime(detail.last_login)}")
+            st.caption(f"Cree le: {format_datetime(detail.created_at)}")
+            st.caption(f"Exchange configure: {bool_to_label(detail.exchange_configured)}")
+            st.caption(f"Echecs login: {detail.failed_login_count}")
 
     with right:
         with st.container(border=True):

@@ -30,21 +30,20 @@ from utils.streamlit_compat import plotly_chart as compat_plotly_chart
 
 
 def _render_status_banner(snapshot) -> None:
-    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
-    with col1:
-        render_status_badge("Backend", "OK" if snapshot.system_status.backend_ok else "ERROR")
-    with col2:
-        render_status_badge(
-            snapshot.system_status.exchange.capitalize(),
-            "OK" if snapshot.system_status.exchange_ok else "WARNING",
-        )
-    with col3:
-        st.caption(f"Derniere synchro: {format_datetime(snapshot.system_status.last_sync)}")
-    with col4:
-        if compat_button("Refresh", width="stretch"):
-            st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
+        with col1:
+            render_status_badge("Backend", "OK" if snapshot.system_status.backend_ok else "ERROR")
+        with col2:
+            render_status_badge(
+                snapshot.system_status.exchange.capitalize(),
+                "OK" if snapshot.system_status.exchange_ok else "WARNING",
+            )
+        with col3:
+            st.caption(f"Derniere synchro: {format_datetime(snapshot.system_status.last_sync)}")
+        with col4:
+            if compat_button("Refresh", width="stretch"):
+                st.rerun()
 
 
 def _to_df(items: list) -> pd.DataFrame:

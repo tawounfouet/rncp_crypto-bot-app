@@ -58,25 +58,26 @@ def _render_exchange_status_card(
     exchange: str, credential_status: ExchangeCredentialStatus
 ) -> None:
     render_section_title(f"Statut des cles {EXCHANGE_CATALOG.get(exchange, exchange)}")
-    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-    render_status_badge(
-        EXCHANGE_CATALOG.get(exchange, exchange),
-        "ENABLED" if credential_status.configured else "DISABLED",
-    )
-    st.caption(
-        f"Derniere mise a jour: {format_datetime(credential_status.updated_at)}"
-        if credential_status.updated_at
-        else "Aucune cle enregistree"
-    )
-    if credential_status.configured:
-        mode_label = "Simulation" if credential_status.active_mode == "sandbox" else "Reel"
-        st.write(f"Mode actif : **{mode_label}**")
-    st.write(f"Cles reelles : {'configurees' if credential_status.live_configured else 'absentes'}")
-    if credential_status.supports_sandbox:
-        st.write(
-            f"Cles simulation : {'configurees' if credential_status.sandbox_configured else 'absentes'}"
+    with st.container(border=True):
+        render_status_badge(
+            EXCHANGE_CATALOG.get(exchange, exchange),
+            "ENABLED" if credential_status.configured else "DISABLED",
         )
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.caption(
+            f"Derniere mise a jour: {format_datetime(credential_status.updated_at)}"
+            if credential_status.updated_at
+            else "Aucune cle enregistree"
+        )
+        if credential_status.configured:
+            mode_label = "Simulation" if credential_status.active_mode == "sandbox" else "Reel"
+            st.write(f"Mode actif : **{mode_label}**")
+        st.write(
+            f"Cles reelles : {'configurees' if credential_status.live_configured else 'absentes'}"
+        )
+        if credential_status.supports_sandbox:
+            st.write(
+                f"Cles simulation : {'configurees' if credential_status.sandbox_configured else 'absentes'}"
+            )
 
 
 def _render_exchange_credentials_form(
@@ -150,22 +151,21 @@ def _render_configured_exchanges_section(service: AccountService, selected_excha
         st.caption("Aucune clé API enregistree pour le moment.")
         return
 
-    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-    for exchange in configured:
-        label = EXCHANGE_CATALOG.get(exchange, exchange)
-        row_left, row_mid, row_right = st.columns([2, 1, 1.2])
-        with row_left:
-            st.write(f"**{label}**" + (" (actif)" if exchange == selected_exchange else ""))
-        with row_mid:
-            render_status_badge(label, "ENABLED")
-        with row_right:
-            confirm = st.checkbox("Confirmer", key=f"confirm_delete_{exchange}")
-            if st.button("Supprimer", key=f"delete_{exchange}", disabled=not confirm):
-                ok, message = service.delete_exchange_credentials(exchange)
-                show_feedback("success" if ok else "error", message)
-                if ok:
-                    st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        for exchange in configured:
+            label = EXCHANGE_CATALOG.get(exchange, exchange)
+            row_left, row_mid, row_right = st.columns([2, 1, 1.2])
+            with row_left:
+                st.write(f"**{label}**" + (" (actif)" if exchange == selected_exchange else ""))
+            with row_mid:
+                render_status_badge(label, "ENABLED")
+            with row_right:
+                confirm = st.checkbox("Confirmer", key=f"confirm_delete_{exchange}")
+                if st.button("Supprimer", key=f"delete_{exchange}", disabled=not confirm):
+                    ok, message = service.delete_exchange_credentials(exchange)
+                    show_feedback("success" if ok else "error", message)
+                    if ok:
+                        st.rerun()
 
 
 def main() -> None:
@@ -190,13 +190,12 @@ def main() -> None:
     st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
 
     if not credential_status.configured:
-        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        st.markdown(f"### Étape prioritaire: configurer {exchange_label}")
-        st.caption(
-            f"Votre compte est cree mais le pre-requis {exchange_label} n'est pas encore rempli. "
-            "Configurez vos cles pour activer toutes les fonctionnalites Spot."
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(f"### Étape prioritaire: configurer {exchange_label}")
+            st.caption(
+                f"Votre compte est cree mais le pre-requis {exchange_label} n'est pas encore rempli. "
+                "Configurez vos cles pour activer toutes les fonctionnalites Spot."
+            )
         st.markdown("<hr class='divider-soft'/>", unsafe_allow_html=True)
 
     left, right = st.columns([1.1, 1], gap="large")
