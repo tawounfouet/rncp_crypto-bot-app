@@ -14,6 +14,7 @@ def test_sidebar_entries_when_authenticated_standard_user(store) -> None:
     assert "signup" not in keys
     assert "admin" not in keys
     assert keys == [
+        "dashboard",
         "market",
         "portfolio",
         "performance",

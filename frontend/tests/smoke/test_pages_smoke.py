@@ -20,6 +20,9 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 
 _SMOKE_TOKEN = "smoke-test-token"
 
+# Nb de strategies exposees par le stub backend (conftest) -> nb de bots au dashboard
+_STUB_DASHBOARD_BOTS = 2
+
 
 def _run_app(
     relative_path: str,
@@ -222,6 +225,7 @@ def test_market_page_listed_in_authenticated_sidebar() -> None:
 @pytest.mark.parametrize(
     "relative_path",
     [
+        "pages/00_Tableau_de_bord.py",
         "pages/03_Portefeuille_Spot.py",
         "pages/04_Performances_Spot.py",
         "pages/05_Controle_Bot_Spot.py",
@@ -256,6 +260,7 @@ def test_sidebar_rules_for_standard_user() -> None:
     captions = _sidebar_captions(at)
     assert "Inscription" not in captions
     assert "Admin" not in captions
+    assert "Tableau de bord" in captions
     assert "Portefeuille Spot" in captions
 
 
@@ -339,6 +344,7 @@ def test_select_pages_render_select_widgets_in_both_themes(
         ("app.py", None),
         ("pages/02_Inscription.py", None),
         ("pages/10_Politique_de_confidentialite.py", None),
+        ("pages/00_Tableau_de_bord.py", "alice@cryptobot.dev"),
         ("pages/03_Portefeuille_Spot.py", "alice@cryptobot.dev"),
         ("pages/04_Performances_Spot.py", "alice@cryptobot.dev"),
         ("pages/05_Controle_Bot_Spot.py", "alice@cryptobot.dev"),
@@ -364,6 +370,7 @@ def test_pages_render_in_light_theme(relative_path: str, auth_email: str | None)
         ("app.py", None),
         ("pages/02_Inscription.py", None),
         ("pages/10_Politique_de_confidentialite.py", None),
+        ("pages/00_Tableau_de_bord.py", "alice@cryptobot.dev"),
         ("pages/03_Portefeuille_Spot.py", "alice@cryptobot.dev"),
         ("pages/04_Performances_Spot.py", "alice@cryptobot.dev"),
         ("pages/05_Controle_Bot_Spot.py", "alice@cryptobot.dev"),
@@ -495,6 +502,48 @@ def test_performance_shows_exchange_prerequisite_without_performance_content_whe
     assert not any("PnL realise" in value for value in markdown_values)
     assert not any("Equity curve" in value for value in markdown_values)
     assert EXCHANGE_SETUP_CTA_LABEL in [button.label for button in at.button]
+
+
+def test_dashboard_shows_aggregated_kpis_for_authenticated_user() -> None:
+    at = _run_app("pages/00_Tableau_de_bord.py", auth_email="alice@cryptobot.dev")
+    _assert_no_exception(at)
+    markdown_values = [entry.value for entry in at.markdown]
+    assert any("Bots actifs" in value for value in markdown_values)
+    assert any("PnL global" in value for value in markdown_values)
+    assert any("ROI moyen" in value for value in markdown_values)
+    assert any("Frais globaux" in value for value in markdown_values)
+    subheaders = [subheader.value for subheader in at.subheader]
+    assert "Derniers signaux par bot" in subheaders
+
+
+def test_dashboard_table_lists_one_row_per_bot() -> None:
+    at = _run_app("pages/00_Tableau_de_bord.py", auth_email="alice@cryptobot.dev")
+    _assert_no_exception(at)
+    assert at.dataframe
+    frame = at.dataframe[0].value
+    assert "Bot" in frame.columns
+    assert len(frame) == _STUB_DASHBOARD_BOTS
+
+
+def test_dashboard_shows_exchange_prerequisite_without_kpis_when_not_configured() -> None:
+    at = _run_app(
+        "pages/00_Tableau_de_bord.py",
+        auth_email="alice@cryptobot.dev",
+        exchange_configured=False,
+    )
+    _assert_no_exception(at)
+    markdown_values = [entry.value for entry in at.markdown]
+    assert any("Pré-requis exchange manquant" in value for value in markdown_values)
+    assert not any("Bots actifs" in value for value in markdown_values)
+    assert not any("PnL global" in value for value in markdown_values)
+    assert not any("Derniers signaux par bot" in value for value in markdown_values)
+    assert EXCHANGE_SETUP_CTA_LABEL in [button.label for button in at.button]
+
+
+def test_app_logged_in_state_offers_dashboard_shortcut() -> None:
+    at = _run_app("app.py", auth_email="alice@cryptobot.dev")
+    _assert_no_exception(at)
+    assert any(button.label == "Ouvrir le tableau de bord" for button in at.button)
 
 
 def test_bot_control_shows_only_bot_list_when_exchange_not_configured() -> None:

@@ -20,6 +20,13 @@ class NavPage:
 
 
 PAGES: dict[str, NavPage] = {
+    "dashboard": NavPage(
+        key="dashboard",
+        label="Tableau de bord",
+        path="pages/00_Tableau_de_bord.py",
+        requires_auth=True,
+        show_when_authenticated=True,
+    ),
     "market": NavPage(
         key="market",
         label="Marché",
@@ -111,6 +118,7 @@ def allowed_page_keys_in_sidebar(user: MockUser | None) -> list[str]:
         return ["market", "login", "signup", "privacy"]
 
     keys = [
+        "dashboard",
         "market",
         "portfolio",
         "performance",
