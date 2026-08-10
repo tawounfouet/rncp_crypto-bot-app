@@ -4,8 +4,8 @@ Enchaîne les étapes du pipeline ML après que les données brutes ont été
 ingérées par le DAG ``ingest_ohlcv_binance_to_minio`` :
 
     start
-      ├── build_features_BTCUSDT_1h
-      ├── build_features_ETHUSDT_1h
+      ├── build_features_BTCUSDC_1h
+      ├── build_features_ETHUSDC_1h
       │
       ├── train_random_forest    (attendent toutes les features)
       ├── train_mlp
@@ -68,7 +68,7 @@ except ImportError:
 # Configuration
 # ---------------------------------------------------------------------------
 
-SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+SYMBOLS = ["BTCUSDC", "ETHUSDC"]
 INTERVAL = "1h"
 
 # Dataset processed (output de build_features, input de train-rf). Chemin relatif au

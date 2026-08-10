@@ -99,7 +99,7 @@ def test_start_bot_success(store) -> None:
     result = service.start_bot(
         "strat_btc",
         exchange="binance",
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         timeframe="1h",
         amount=100.0,
         is_paper=True,
@@ -110,7 +110,7 @@ def test_start_bot_success(store) -> None:
         "fake-token",
         "strat_btc",
         exchange="binance",
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         timeframe="1h",
         amount=100.0,
         is_paper=True,
@@ -125,7 +125,7 @@ def test_start_bot_failure_returns_backend_message(store) -> None:
     result = service.start_bot(
         "strat_btc",
         exchange="binance",
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         timeframe="1h",
         amount=100.0,
         is_paper=True,

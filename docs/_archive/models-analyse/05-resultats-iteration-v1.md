@@ -2,7 +2,7 @@
 
 **Date :** 2026-06-01
 **Runs de référence :** RF `20260601-200806` · LSTM `20260601-200926`
-**Dataset :** `data/processed/BTCUSDT/1h_features.parquet` — 25 950 lignes
+**Dataset :** `data/processed/BTCUSDC/1h_features.parquet` — 25 950 lignes
 
 Contexte : première itération après le diagnostic du run dégénéré.
 Voir [04-diagnostic-premiers-resultats.md](04-diagnostic-premiers-resultats.md) pour la base de comparaison.
@@ -25,7 +25,7 @@ Voir [04-diagnostic-premiers-resultats.md](04-diagnostic-premiers-resultats.md) 
 
 ## 2. Distribution des labels
 
-### BTCUSDT (25 950 lignes après features + dropna)
+### BTCUSDC (25 950 lignes après features + dropna)
 
 | Label | Count | % |
 |---|---|---|
@@ -43,7 +43,7 @@ Voir [04-diagnostic-premiers-resultats.md](04-diagnostic-premiers-resultats.md) 
 | BUY | 5 608 | 21.6% |
 | SELL | 5 191 | 20.0% |
 
-**Lecture :** BTCETH reste plus déséquilibré. La paire BTC/ETH a des mouvements moins marqués que BTC/USDT — l'horizon de labellisation `h=1` et le seuil fixe `0.002` capturent moins de signaux directionnels. À surveiller lors de l'itération v2.
+**Lecture :** BTCETH reste plus déséquilibré. La paire BTC/ETH a des mouvements moins marqués que BTC/USDC — l'horizon de labellisation `h=1` et le seuil fixe `0.002` capturent moins de signaux directionnels. À surveiller lors de l'itération v2.
 
 ---
 

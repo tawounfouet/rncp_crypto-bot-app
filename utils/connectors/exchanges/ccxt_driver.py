@@ -16,8 +16,8 @@ CCXT_IDS = {
     #    "coinbase": "coinbase",
 }
 
-# quotes connues, les plus LONGUES d'abord (USDT avant USD !)
-_KNOWN_QUOTES = ["USDT", "USDC", "USD", "EUR", "BTC", "ETH"]
+# quotes connues, les plus LONGUES d'abord (USDC avant USD !)
+_KNOWN_QUOTES = ["USDC", "USD", "EUR", "BTC", "ETH"]
 
 
 class CcxtDriver:
@@ -28,10 +28,10 @@ class CcxtDriver:
         """Convert a symbol to the native exchange format.
 
         Args:
-            symbol: Trading pair (e.g. ``BTCUSDT``)
+            symbol: Trading pair (e.g. ``BTCUSDC``)
 
         Returns:
-            Native exchange symbol (e.g. ``BTC/USDT``)
+            Native exchange symbol (e.g. ``BTC/USDC``)
         """
         s = symbol.upper()
         for quote in _KNOWN_QUOTES:
@@ -53,13 +53,13 @@ class CcxtDriver:
 
     def fetch_klines(self, symbol, interval, limit=1000, start_time_ms=None, end_time_ms=None):
         client = self._get_client()
-        native = self.to_native_symbol(symbol)  # 'BTC/USDT' pour ccxt
+        native = self.to_native_symbol(symbol)  # 'BTC/USDC' pour ccxt
         rows = client.fetch_ohlcv(native, timeframe=interval, since=start_time_ms, limit=limit)
         return [
             normalize_ohlcv(
                 symbol=symbol,
                 interval=interval,
-                source=self.source,  # on garde 'BTCUSDT' canonique
+                source=self.source,  # on garde 'BTCUSDC' canonique
                 open_time_ms=r[0],
                 open=r[1],
                 high=r[2],

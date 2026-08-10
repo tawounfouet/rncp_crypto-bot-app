@@ -43,20 +43,20 @@ def models_to_dataframe(items: list[Any]) -> pd.DataFrame:
 
 def balances_to_dataframe(rows: list[dict]) -> pd.DataFrame:
     if not rows:
-        return pd.DataFrame(columns=["asset", "free", "locked", "value_usdt"])
+        return pd.DataFrame(columns=["asset", "free", "locked", "value_usdc"])
     return strip_technical_columns(pd.DataFrame(sanitize_records(rows)))
 
 
 def top_assets_with_others(df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame(columns=["asset", "value_usdt"])
-    frame = df.sort_values("value_usdt", ascending=False).reset_index(drop=True)
+        return pd.DataFrame(columns=["asset", "value_usdc"])
+    frame = df.sort_values("value_usdc", ascending=False).reset_index(drop=True)
     top = frame.head(top_n).copy()
     if len(frame) <= top_n:
-        return top[["asset", "value_usdt"]]
-    others_value = frame.iloc[top_n:]["value_usdt"].sum()
-    others = pd.DataFrame([{"asset": "OTHERS", "value_usdt": others_value}])
-    return pd.concat([top[["asset", "value_usdt"]], others], ignore_index=True)
+        return top[["asset", "value_usdc"]]
+    others_value = frame.iloc[top_n:]["value_usdc"].sum()
+    others = pd.DataFrame([{"asset": "OTHERS", "value_usdc": others_value}])
+    return pd.concat([top[["asset", "value_usdc"]], others], ignore_index=True)
 
 
 def to_records_df(records: list[dict], columns: list[str]) -> pd.DataFrame:

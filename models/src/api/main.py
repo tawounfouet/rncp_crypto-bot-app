@@ -64,7 +64,7 @@ def models() -> ModelsResponse:
 
 @app.get("/signals/latest", response_model=SignalResponse)
 def latest_signal(
-    symbol: str = Query(default="BTCUSDT"),
+    symbol: str = Query(default="BTCUSDC"),
     interval: str = Query(default="1h"),
     model: str = Query(default="random_forest"),
 ) -> SignalResponse:

@@ -8,7 +8,7 @@ Derniere revision: 2026-06-10
 | Hypothèse | Impact si fausse | Validation MVP |
 |---|---|---|
 | Les données Binance suffisent pour un premier signal | Le modèle manque de contexte marché | Comparer modèle vs baseline naïf |
-| `BTCUSDT` et `BTCETH` couvrent un cas utile | MVP trop étroit pour la soutenance | Montrer la généricité du collecteur |
+| `BTCUSDC` et `BTCETH` couvrent un cas utile | MVP trop étroit pour la soutenance | Montrer la généricité du collecteur |
 | Un intervalle `1h` est un bon compromis | Signal trop lent ou trop bruité | Prévoir `15m` et `4h` en extension |
 | Random Forest fournit une baseline lisible | Baseline trop faible ou instable | Mesurer f1_macro et matrice de confusion |
 | LSTM capte une dynamique temporelle utile | Complexité non justifiée | Comparaison métrique stricte avec Random Forest |

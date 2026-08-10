@@ -51,12 +51,12 @@ class ClientBinance:
             logger.error(f"Erreur inattendue lors de {action}: {e}")
             return None
 
-    def get_price(self, symbol: str = "BTCUSDT") -> dict | None:
+    def get_price(self, symbol: str = "BTCUSDC") -> dict | None:
         """
         Récupère le prix actuel d'un symbole
 
         Args:
-            symbol (str): Paire de trading (ex: BTCUSDT)
+            symbol (str): Paire de trading (ex: BTCUSDC)
 
         Returns:
             dict: Prix du symbole ou None en cas d'erreur
@@ -563,18 +563,18 @@ if __name__ == "__main__":
                 print(f"{asset}: {amount}")
 
     # Prix actuel du BTC
-    btc_price = client.get_price("BTCUSDT")
+    btc_price = client.get_price("BTCUSDC")
     if btc_price:
-        print(f"\nPrix actuel du BTC: {btc_price['price']} USDT")
+        print(f"\nPrix actuel du BTC: {btc_price['price']} USDC")
 
     # Exemple de données de marché
-    order_book = client.get_order_book("BTCUSDT", limit=5)
+    order_book = client.get_order_book("BTCUSDC", limit=5)
     if order_book:
         print("\nCarnet d'ordres (5 premiers):")
         print("Achats:", order_book["bids"][:3])
         print("Ventes:", order_book["asks"][:3])
 
     # Statistiques sur 24h
-    stats_24h = client.get_ticker_24h("BTCUSDT")
+    stats_24h = client.get_ticker_24h("BTCUSDC")
     if stats_24h:
         print(f"\nStatistiques 24h - Volume BTC: {stats_24h['volume']} - Variation: {stats_24h['priceChangePercent']}%")

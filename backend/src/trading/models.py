@@ -199,7 +199,7 @@ class Transaction(BaseModel):
     transaction_type = Column(String(20), nullable=False, index=True)  # TRADE, DEPOSIT, WITHDRAWAL, FEE
 
     # Asset information
-    asset = Column(String(20), nullable=False, index=True)  # BTC, USDT, ETH, etc.
+    asset = Column(String(20), nullable=False, index=True)  # BTC, USDC, ETH, etc.
     amount = Column(DECIMAL(20, 8), nullable=False)  # Always positive
     direction = Column(String(10), nullable=False, index=True)  # IN, OUT
 

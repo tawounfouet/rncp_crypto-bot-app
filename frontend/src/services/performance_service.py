@@ -38,21 +38,21 @@ class PerformanceService:
         # --- Stats de trading ---
         stats_resp = self.client.get_trading_stats(token, period=period)
         metrics = PerformanceMetrics(
-            pnl_realized_usdt=0.0,
+            pnl_realized_usdc=0.0,
             roi_pct=0.0,
             max_drawdown_pct=0.0,
             win_rate_pct=0.0,
-            fees_usdt=0.0,
+            fees_usdc=0.0,
         )
         if stats_resp.success and isinstance(stats_resp.data, dict):
             raw = stats_resp.data.get("stats") or stats_resp.data
             win_rate = _float(raw.get("win_rate")) * 100
             metrics = PerformanceMetrics(
-                pnl_realized_usdt=_float(raw.get("total_profit_loss")),
+                pnl_realized_usdc=_float(raw.get("total_profit_loss")),
                 roi_pct=0.0,
                 max_drawdown_pct=_float(raw.get("max_drawdown")) * 100,
                 win_rate_pct=win_rate,
-                fees_usdt=0.0,
+                fees_usdc=0.0,
             )
 
         # --- Journal de trades (transactions) ---
@@ -76,8 +76,8 @@ class PerformanceService:
                             side="BUY" if t.get("direction") == "IN" else "SELL",
                             entry_price=_float(t.get("price")),
                             exit_price=_float(t.get("price")),
-                            pnl_usdt=0.0,
-                            fee_usdt=_float(t.get("fee_amount")),
+                            pnl_usdc=0.0,
+                            fee_usdc=_float(t.get("fee_amount")),
                             duration_min=0,
                             closed_at=parse_dt_or_now(t.get("timestamp")),
                         )

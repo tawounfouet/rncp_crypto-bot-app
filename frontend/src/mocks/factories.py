@@ -30,7 +30,7 @@ def _portfolio_balances_rich() -> list[BalanceRow]:
         ("DOT", 140.0, 0.0, 840.0),
         ("ATOM", 100.0, 0.0, 780.0),
     ]
-    return [BalanceRow(asset=a, free=f, locked=lk, value_usdt=v) for a, f, lk, v in rows]
+    return [BalanceRow(asset=a, free=f, locked=lk, value_usdc=v) for a, f, lk, v in rows]
 
 
 def _portfolio_balances_normal() -> list[BalanceRow]:
@@ -41,7 +41,7 @@ def _portfolio_balances_normal() -> list[BalanceRow]:
         ("USDC", 2450.0, 0.0, 2450.0),
         ("LINK", 55.0, 0.0, 290.0),
     ]
-    return [BalanceRow(asset=a, free=f, locked=lk, value_usdt=v) for a, f, lk, v in rows]
+    return [BalanceRow(asset=a, free=f, locked=lk, value_usdc=v) for a, f, lk, v in rows]
 
 
 def _orders(now: datetime) -> list[OpenOrder]:
@@ -84,7 +84,7 @@ def _trades(now: datetime) -> list[SpotTrade]:
                 price=price,
                 quantity=qty,
                 pnl_realized=pnl,
-                fee_usdt=fee,
+                fee_usdc=fee,
                 executed_at=now - timedelta(hours=idx + 2),
             )
         )
@@ -114,8 +114,8 @@ def build_portfolio_snapshot(
         trades = _trades(current)
         note = None
 
-    total = sum(row.value_usdt for row in balances)
-    free_cash = next((row.free for row in balances if row.asset in ("USDT", "USDC")), 0.0)
+    total = sum(row.value_usdc for row in balances)
+    free_cash = next((row.free for row in balances if row.asset in ("USDC",)), 0.0)
     active_exchange = exchange_configured and scenario != MockScenario.EXCHANGE_NOT_CONFIGURED
 
     return PortfolioSnapshot(
@@ -131,8 +131,8 @@ def build_portfolio_snapshot(
                 else f"Connexion {exchange.capitalize()} mock active"
             ),
         ),
-        total_value_usdt=total,
-        free_cash_usdt=free_cash,
+        total_value_usdc=total,
+        free_cash_usdc=free_cash,
         asset_count=len(balances),
         open_order_count=len(orders),
         balances=balances,
@@ -172,15 +172,15 @@ def build_performance_snapshot(
         else:
             drift = rng.uniform(-35.0, 55.0)
         value = max(1000.0, value + drift)
-        equity_curve.append(EquityPoint(timestamp=day, equity_usdt=round(value, 2)))
+        equity_curve.append(EquityPoint(timestamp=day, equity_usdc=round(value, 2)))
 
-    pnl = equity_curve[-1].equity_usdt - equity_curve[0].equity_usdt
-    roi_pct = (pnl / equity_curve[0].equity_usdt) * 100
-    max_value = equity_curve[0].equity_usdt
+    pnl = equity_curve[-1].equity_usdc - equity_curve[0].equity_usdc
+    roi_pct = (pnl / equity_curve[0].equity_usdc) * 100
+    max_value = equity_curve[0].equity_usdc
     drawdowns: list[float] = []
     for point in equity_curve:
-        max_value = max(max_value, point.equity_usdt)
-        dd = ((point.equity_usdt - max_value) / max_value) * 100
+        max_value = max(max_value, point.equity_usdc)
+        dd = ((point.equity_usdc - max_value) / max_value) * 100
         drawdowns.append(dd)
     max_drawdown = min(drawdowns)
 
@@ -208,8 +208,8 @@ def build_performance_snapshot(
                 side="LONG" if idx % 2 == 0 else "SHORT",
                 entry_price=round(entry, 2),
                 exit_price=round(exit_price, 2),
-                pnl_usdt=round(pnl_trade, 2),
-                fee_usdt=round(rng.uniform(0.4, 3.5), 2),
+                pnl_usdc=round(pnl_trade, 2),
+                fee_usdc=round(rng.uniform(0.4, 3.5), 2),
                 duration_min=int(rng.uniform(35, 420)),
                 closed_at=closed_at,
             )
@@ -219,11 +219,11 @@ def build_performance_snapshot(
         bot_id=bot_id,
         period_days=period_days,
         metrics=PerformanceMetrics(
-            pnl_realized_usdt=round(pnl, 2),
+            pnl_realized_usdc=round(pnl, 2),
             roi_pct=round(roi_pct, 2),
             max_drawdown_pct=round(abs(max_drawdown), 2),
             win_rate_pct=win_rate,
-            fees_usdt=fees,
+            fees_usdc=fees,
         ),
         equity_curve=equity_curve,
         trade_journal=journal,

@@ -13,9 +13,9 @@ class DashboardBotRow(BaseModel):
     strategy: str
     mode_live: bool
     status: str
-    pnl_usdt: float
+    pnl_usdc: float
     roi_pct: float
-    fees_usdt: float
+    fees_usdc: float
     last_signal_at: datetime
     last_action_result: str
 
@@ -24,7 +24,7 @@ class DashboardOverview(BaseModel):
     period_days: int
     total_bots: int
     active_bots: int
-    pnl_usdt: float
+    pnl_usdc: float
     avg_roi_pct: float
-    fees_usdt: float
+    fees_usdc: float
     bots: list[DashboardBotRow] = Field(default_factory=list)

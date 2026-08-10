@@ -19,7 +19,7 @@ def sample_ohlcv(rows: int = 80) -> pd.DataFrame:
         low = min(open_price, close_price) - 1.0
         records.append(
             {
-                "symbol": "BTCUSDT",
+                "symbol": "BTCUSDC",
                 "interval": "1h",
                 "open_time": start + timedelta(hours=index),
                 "open": open_price,
@@ -46,7 +46,7 @@ def sample_features(rows: int = 150) -> pd.DataFrame:
     close_prices = [100.0 + i * 0.1 for i in range(rows)]
     return pd.DataFrame(
         {
-            "symbol": "BTCUSDT",
+            "symbol": "BTCUSDC",
             "interval": "1h",
             "open_time": [start + timedelta(hours=i) for i in range(rows)],
             "close": close_prices,

@@ -46,15 +46,15 @@ def test_get_public_prices_uses_market_data_driver(client: TestClient) -> None:
     fake_driver.fetch_klines.return_value = [{"close": 65000.0, "close_time": datetime.now(UTC)}]
 
     with patch("market.router.get_market_data_driver", return_value=fake_driver) as get_driver:
-        response = client.get("/market/public/prices", params={"exchange": "binance", "symbols": "BTCUSDT"})
+        response = client.get("/market/public/prices", params={"exchange": "binance", "symbols": "BTCUSDC"})
 
     get_driver.assert_called_once_with("binance")
-    fake_driver.fetch_klines.assert_called_once_with("BTCUSDT", "1m", limit=1)
+    fake_driver.fetch_klines.assert_called_once_with("BTCUSDC", "1m", limit=1)
     assert response.status_code == 200
     body = response.json()
     assert len(body["data"]) == 1
     entry = body["data"][0]
-    assert entry["symbol"] == "BTCUSDT"
+    assert entry["symbol"] == "BTCUSDC"
     assert entry["exchange"] == "binance"
     assert float(entry["price"]) == 65000.0
     assert body["warnings"] == []
@@ -65,7 +65,7 @@ def test_get_public_prices_collects_warning_on_driver_failure(client: TestClient
     fake_driver.fetch_klines.side_effect = RuntimeError("boom")
 
     with patch("market.router.get_market_data_driver", return_value=fake_driver):
-        response = client.get("/market/public/prices", params={"exchange": "kraken", "symbols": "BTCUSDT"})
+        response = client.get("/market/public/prices", params={"exchange": "kraken", "symbols": "BTCUSDC"})
 
     assert response.status_code == 200
     body = response.json()
@@ -82,7 +82,7 @@ def test_get_public_prices_defaults_to_binance_and_default_symbols(client: TestC
 
     get_driver.assert_called_once_with("binance")
     assert response.status_code == 200
-    assert len(response.json()["data"]) == 2  # DEFAULT_PUBLIC_SYMBOLS = BTCUSDT, ETHUSDT
+    assert len(response.json()["data"]) == 2  # DEFAULT_PUBLIC_SYMBOLS = BTCUSDC, ETHUSDC
 
 
 def test_get_public_klines_uses_market_data_driver(client: TestClient) -> None:
@@ -99,15 +99,15 @@ def test_get_public_klines_uses_market_data_driver(client: TestClient) -> None:
     ]
 
     with patch("market.router.get_market_data_driver", return_value=fake_driver) as get_driver:
-        response = client.get("/market/public/klines", params={"exchange": "binance", "symbols": "BTCUSDT"})
+        response = client.get("/market/public/klines", params={"exchange": "binance", "symbols": "BTCUSDC"})
 
     get_driver.assert_called_once_with("binance")
-    fake_driver.fetch_klines.assert_called_once_with("BTCUSDT", "1h", limit=24)  # defauts de l'endpoint
+    fake_driver.fetch_klines.assert_called_once_with("BTCUSDC", "1h", limit=24)  # defauts de l'endpoint
     assert response.status_code == 200
     body = response.json()
     assert len(body["data"]) == 1
     entry = body["data"][0]
-    assert entry["symbol"] == "BTCUSDT"
+    assert entry["symbol"] == "BTCUSDC"
     assert entry["exchange"] == "binance"
     assert entry["interval"] == "1h"
     assert float(entry["open"]) == 64900.0
@@ -129,7 +129,7 @@ def test_get_public_klines_returns_full_series_not_just_latest(client: TestClien
 
     with patch("market.router.get_market_data_driver", return_value=fake_driver):
         response = client.get(
-            "/market/public/klines", params={"exchange": "binance", "symbols": "BTCUSDT", "limit": 3}
+            "/market/public/klines", params={"exchange": "binance", "symbols": "BTCUSDC", "limit": 3}
         )
 
     assert response.status_code == 200
@@ -141,7 +141,7 @@ def test_get_public_klines_collects_warning_on_driver_failure(client: TestClient
     fake_driver.fetch_klines.side_effect = RuntimeError("boom")
 
     with patch("market.router.get_market_data_driver", return_value=fake_driver):
-        response = client.get("/market/public/klines", params={"exchange": "kraken", "symbols": "BTCUSDT"})
+        response = client.get("/market/public/klines", params={"exchange": "kraken", "symbols": "BTCUSDC"})
 
     assert response.status_code == 200
     body = response.json()

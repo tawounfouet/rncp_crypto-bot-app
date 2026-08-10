@@ -180,8 +180,8 @@ load_<exchange>_<symbol>_<interval>
 Schedule : quotidien à 06:00 UTC (après les runs d'ingestion nocturnes).
 
 ```
-build_features_BTCUSDT_1h ─┐
-build_features_ETHUSDT_1h ─┴─► train_random_forest ─► deploy_model ─► verify_inference
+build_features_BTCUSDC_1h ─┐
+build_features_ETHUSDC_1h ─┴─► train_random_forest ─► deploy_model ─► verify_inference
 ```
 
 `build_features_*` et `train_random_forest` appellent `crypto-bot-ml-api` en HTTP

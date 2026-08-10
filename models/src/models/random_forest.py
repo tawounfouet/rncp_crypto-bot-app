@@ -22,7 +22,7 @@ EXCLUDED_FEATURE_COLUMNS = {
     "source",
     "target",
     "future_return",
-    "price_inverted",  # always False for BTCUSDT, 0% importance
+    "price_inverted",  # always False for BTCUSDC, 0% importance
 }
 
 

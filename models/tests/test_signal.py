@@ -16,7 +16,7 @@ class SignalInferenceTests(unittest.TestCase):
 
     def test_unsupported_model_rejected(self) -> None:
         with self.assertRaises(ValueError):
-            predict_model_signal("lstm", Path("."), sample_features(), "BTCUSDT", "1h")
+            predict_model_signal("lstm", Path("."), sample_features(), "BTCUSDC", "1h")
 
     def test_predict_model_signal_generic(self) -> None:
         settings = load_config("config.yaml")
@@ -24,7 +24,7 @@ class SignalInferenceTests(unittest.TestCase):
         result = train_mlp(data, settings)
         with tempfile.TemporaryDirectory() as tmp:
             save_mlp_artifacts(result, Path(tmp))
-            prediction = predict_model_signal("mlp", Path(tmp), data, symbol="BTCUSDT", interval="1h")
+            prediction = predict_model_signal("mlp", Path(tmp), data, symbol="BTCUSDC", interval="1h")
             self.assertEqual(prediction.model_name, "mlp")
             self.assertEqual(prediction.signal_value, {"SELL": -1, "HOLD": 0, "BUY": 1}[prediction.signal])
 
@@ -34,7 +34,7 @@ class SignalInferenceTests(unittest.TestCase):
         result = train_mlp(data, settings)
         with tempfile.TemporaryDirectory() as tmp:
             save_mlp_artifacts(result, Path(tmp))
-            prediction = predict_random_forest_signal(Path(tmp), data, symbol="BTCUSDT", interval="1h")
+            prediction = predict_random_forest_signal(Path(tmp), data, symbol="BTCUSDC", interval="1h")
             self.assertEqual(prediction.model_name, "random_forest")
 
 

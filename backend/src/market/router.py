@@ -50,7 +50,7 @@ router = APIRouter(prefix="/market", tags=["Market Data"])
 # Constants
 SYMBOL_DESCRIPTION = "Trading symbol (e.g., BTCUSDC)"
 
-DEFAULT_PUBLIC_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+DEFAULT_PUBLIC_SYMBOLS = ["BTCUSDC", "ETHUSDC"]
 EXCHANGE_LABELS = {"binance": "Binance", "binance_us": "Binance.US", "kraken": "Kraken"}
 
 

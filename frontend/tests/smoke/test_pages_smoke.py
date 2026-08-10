@@ -121,8 +121,8 @@ def test_market_page_renders_for_anonymous_user() -> None:
     _assert_no_exception(at)
     assert any(selectbox.label == "Plateforme" for selectbox in at.selectbox)
     metric_labels = [metric.label for metric in at.metric]
-    assert "BTCUSDT" in metric_labels
-    assert "ETHUSDT" in metric_labels
+    assert "BTCUSDC" in metric_labels
+    assert "ETHUSDC" in metric_labels
 
 
 def test_market_page_has_no_error_or_warning_banner_for_anonymous_user() -> None:
@@ -147,8 +147,8 @@ def test_market_page_renders_one_candlestick_chart_per_pair() -> None:
     at = _run_app("pages/01_Marche.py")
     _assert_no_exception(at)
     subheaders = [subheader.value for subheader in at.subheader]
-    assert "BTCUSDT" in subheaders
-    assert "ETHUSDT" in subheaders
+    assert "BTCUSDC" in subheaders
+    assert "ETHUSDC" in subheaders
     assert any(radio.label == "Période" for radio in at.radio)
     charts = at.get("plotly_chart")
     assert len(charts) == 2
@@ -193,12 +193,12 @@ def test_market_page_compare_mode_has_no_error_or_warning_banner() -> None:
 def test_market_page_timeframe_choice_is_independent_per_pair() -> None:
     at = _run_app("pages/01_Marche.py")
     _assert_no_exception(at)
-    btc_radio = next(r for r in at.radio if r.key == "timeframe_BTCUSDT")
-    eth_radio_before = next(r for r in at.radio if r.key == "timeframe_ETHUSDT").value
+    btc_radio = next(r for r in at.radio if r.key == "timeframe_BTCUSDC")
+    eth_radio_before = next(r for r in at.radio if r.key == "timeframe_ETHUSDC").value
 
     at = btc_radio.set_value("Dernier jour").run(timeout=20)
     _assert_no_exception(at)
-    eth_radio_after = next(r for r in at.radio if r.key == "timeframe_ETHUSDT").value
+    eth_radio_after = next(r for r in at.radio if r.key == "timeframe_ETHUSDC").value
     assert eth_radio_after == eth_radio_before
 
 
@@ -412,7 +412,7 @@ def test_light_theme_tables_use_custom_light_table_renderer(
     assert "theme-table-wrapper" in markdown_payload
 
 
-def _fake_snapshot(exchange: str, total_value_usdt: float, *, exchange_ok: bool = True) -> PortfolioSnapshot:
+def _fake_snapshot(exchange: str, total_value_usdc: float, *, exchange_ok: bool = True) -> PortfolioSnapshot:
     return PortfolioSnapshot(
         system_status=SystemStatus(
             backend_ok=True,
@@ -420,8 +420,8 @@ def _fake_snapshot(exchange: str, total_value_usdt: float, *, exchange_ok: bool 
             exchange_ok=exchange_ok,
             last_sync=datetime.now(UTC),
         ),
-        total_value_usdt=total_value_usdt,
-        free_cash_usdt=0.0,
+        total_value_usdc=total_value_usdc,
+        free_cash_usdc=0.0,
         asset_count=0,
         open_order_count=0,
     )

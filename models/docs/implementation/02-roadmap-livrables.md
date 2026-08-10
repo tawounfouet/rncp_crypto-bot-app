@@ -23,7 +23,7 @@ Derniere revision: 2026-06-10
 
 Critères :
 
-- `BTCUSDT` et `BTCETH` collectés
+- `BTCUSDC` et `BTCETH` collectés
 - données triées, dédupliquées
 - rapport qualité disponible
 

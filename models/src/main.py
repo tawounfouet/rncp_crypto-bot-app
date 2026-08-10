@@ -104,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_rf_parser = subparsers.add_parser("train-rf", help="Train Random Forest baseline")
     train_rf_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_rf_parser.set_defaults(func=train_rf_command)
@@ -112,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_lstm_parser = subparsers.add_parser("train-lstm", help="Train LSTM classifier")
     train_lstm_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_lstm_parser.set_defaults(func=train_lstm_command)
@@ -120,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_mlp_parser = subparsers.add_parser("train-mlp", help="Train MLP classifier")
     train_mlp_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_mlp_parser.set_defaults(func=train_mlp_command)
@@ -128,7 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_xgboost_parser = subparsers.add_parser("train-xgboost", help="Train XGBoost classifier")
     train_xgboost_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_xgboost_parser.set_defaults(func=train_xgboost_command)
@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     train_baselines_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_baselines_parser.set_defaults(func=train_baselines_command)

@@ -40,7 +40,7 @@ class MLPTests(unittest.TestCase):
         result = train_mlp(data, self.settings)
         with tempfile.TemporaryDirectory() as tmp:
             save_mlp_artifacts(result, Path(tmp))
-            prediction = predict_mlp_signal(Path(tmp), data, symbol="BTCUSDT", interval="1h")
+            prediction = predict_mlp_signal(Path(tmp), data, symbol="BTCUSDC", interval="1h")
             self.assertEqual(prediction.model_name, "mlp")
             self.assertIn(prediction.signal, {"SELL", "HOLD", "BUY"})
             self.assertGreaterEqual(prediction.confidence, 0.0)

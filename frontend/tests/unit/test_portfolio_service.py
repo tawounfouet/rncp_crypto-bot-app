@@ -75,7 +75,7 @@ def test_get_snapshot_rich(store) -> None:
     service = PortfolioService(store, client=client)
     snapshot = service.get_snapshot()
     assert snapshot.asset_count == 3
-    assert snapshot.total_value_usdt == pytest.approx(15000.0)
+    assert snapshot.total_value_usdc == pytest.approx(15000.0)
     assert snapshot.open_order_count == 1
 
 
@@ -87,7 +87,7 @@ def test_get_snapshot_empty_portfolio(store) -> None:
     service = PortfolioService(store, client=client)
     snapshot = service.get_snapshot()
     assert snapshot.asset_count == 0
-    assert snapshot.total_value_usdt == 0.0
+    assert snapshot.total_value_usdc == 0.0
 
 
 def test_cancel_order(store) -> None:

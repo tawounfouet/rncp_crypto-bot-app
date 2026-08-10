@@ -43,7 +43,7 @@ def fetch_klines(
     """Fetch klines from the public Binance REST API (no API key required).
 
     Args:
-        symbol: Trading pair (e.g. ``BTCUSDT``)
+        symbol: Trading pair (e.g. ``BTCUSDC``)
         interval: Kline interval (e.g. ``1h``, ``4h``, ``1d``)
         limit: Number of klines (max 1000 per call)
         start_time_ms: Start timestamp in milliseconds

@@ -7,7 +7,7 @@ Derniere revision: 2026-06-10
 
 | Nom canonique MVP | Variante Binance possible | Commentaire |
 |---|---|---|
-| `BTCUSDT` | `BTCUSDT` | paire BTC / USDT |
+| `BTCUSDC` | `BTCUSDC` | paire BTC / USDC |
 | `BTCETH` | `ETHBTC` avec inversion OHLC contrôlée | paire BTC / ETH demandée dans le cadrage |
 
 Le symbole canonique reste `BTCETH` dans tout le projet. Binance Spot expose la paire inverse `ETHBTC`; le mapping est donc déclaré dans `config.yaml` via `data.symbol_mappings.BTCETH`.
@@ -33,8 +33,8 @@ Schéma minimal :
 
 ```json
 {
-  "symbol": "BTCUSDT",
-  "source_symbol": "BTCUSDT",
+  "symbol": "BTCUSDC",
+  "source_symbol": "BTCUSDC",
   "price_inverted": false,
   "interval": "1h",
   "open_time": "2026-05-01T00:00:00Z",
@@ -62,9 +62,9 @@ Chaque fichier écrit dans `data/raw` et `data/processed` doit être accompagné
 
 Exemples :
 
-- `data/raw/BTCUSDT/1h.csv.meta.json`
+- `data/raw/BTCUSDC/1h.csv.meta.json`
 - `data/raw/BTCETH/1h.parquet.meta.json`
-- `data/processed/BTCUSDT/1h_features.jsonl.meta.json`
+- `data/processed/BTCUSDC/1h_features.jsonl.meta.json`
 
 Schéma minimal :
 
@@ -73,10 +73,10 @@ Schéma minimal :
   "layer": "raw",
   "dataset": "ohlcv",
   "source": "binance",
-  "symbol": "BTCUSDT",
+  "symbol": "BTCUSDC",
   "interval": "1h",
   "registered_at": "2026-06-01T19:00:00+00:00",
-  "path": "data/raw/BTCUSDT/1h.csv",
+  "path": "data/raw/BTCUSDC/1h.csv",
   "file_name": "1h.csv",
   "file_size_bytes": 12345,
   "format": "csv",
@@ -115,7 +115,7 @@ Schéma minimal :
 
 ```json
 {
-  "symbol": "BTCUSDT",
+  "symbol": "BTCUSDC",
   "interval": "1h",
   "timestamp": "2026-05-01T00:00:00Z",
   "close": 60200.0,
@@ -144,7 +144,7 @@ Le mapping doit être stocké dans `label_mapping.json`.
 
 ```json
 {
-  "symbol": "BTCUSDT",
+  "symbol": "BTCUSDC",
   "interval": "1h",
   "model_name": "random_forest",
   "model_version": "2026-06-01T19-00-00Z",
@@ -195,7 +195,7 @@ Liste les artefacts disponibles.
     {
       "name": "random_forest",
       "version": "2026-06-01T19-00-00Z",
-      "symbols": ["BTCUSDT", "BTCETH"],
+      "symbols": ["BTCUSDC", "BTCETH"],
       "metrics": {
         "f1_macro": 0.41,
         "directional_accuracy": 0.56
@@ -211,7 +211,7 @@ Paramètres :
 
 | Nom | Type | Défaut |
 |---|---|---|
-| `symbol` | string | `BTCUSDT` |
+| `symbol` | string | `BTCUSDC` |
 | `interval` | string | `1h` |
 | `model` | string | `random_forest` |
 
@@ -240,7 +240,7 @@ Le signal peut être converti en format stratégie :
 ```json
 {
   "strategy_name": "ml_mvp_signal",
-  "symbol": "BTCUSDT",
+  "symbol": "BTCUSDC",
   "signal": 1,
   "metadata": {
     "model": "random_forest",

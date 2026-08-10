@@ -31,8 +31,8 @@ class DataTests(unittest.TestCase):
             "200.0",
             "0",
         ]
-        mapped = map_kline("btcusdt", "1h", kline)
-        self.assertEqual(mapped["symbol"], "BTCUSDT")
+        mapped = map_kline("btcusdc", "1h", kline)
+        self.assertEqual(mapped["symbol"], "BTCUSDC")
         self.assertEqual(mapped["interval"], "1h")
         self.assertEqual(mapped["open"], 100.0)
         self.assertEqual(mapped["number_of_trades"], 42)
@@ -54,11 +54,11 @@ class DataTests(unittest.TestCase):
 
     def test_apply_symbol_mapping_without_inversion(self) -> None:
         df = pd.DataFrame(
-            [{"symbol": "ethusdt", "open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5}]
+            [{"symbol": "ethusdc", "open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5}]
         )
-        mapped = apply_symbol_mapping(df, source_symbol="ethusdt", invert_price=False)
+        mapped = apply_symbol_mapping(df, source_symbol="ethusdc", invert_price=False)
         row = mapped.iloc[0]
-        self.assertEqual(row["symbol"], "ETHUSDT")  # source_symbol.upper()
+        self.assertEqual(row["symbol"], "ETHUSDC")  # source_symbol.upper()
         self.assertEqual(row["open"], 1.0)  # prix inchanges
         self.assertEqual(row["high"], 2.0)
         self.assertEqual(row["low"], 0.5)
@@ -73,13 +73,13 @@ class DataTests(unittest.TestCase):
     def test_write_and_read_multiformat_dataset(self) -> None:
         data = sample_ohlcv(5)
         with tempfile.TemporaryDirectory() as tmp:
-            base_path = Path(tmp) / "BTCUSDT" / "1h"
+            base_path = Path(tmp) / "BTCUSDC" / "1h"
             paths = write_dataset(
                 data,
                 base_path,
                 "parquet",
                 ["csv", "jsonl"],
-                metadata={"layer": "raw", "symbol": "BTCUSDT", "interval": "1h"},
+                metadata={"layer": "raw", "symbol": "BTCUSDC", "interval": "1h"},
             )
             self.assertEqual({path.suffix for path in paths}, {".parquet", ".csv", ".jsonl"})
             for path in paths:
@@ -90,7 +90,7 @@ class DataTests(unittest.TestCase):
                 metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
                 self.assertEqual(metadata["row_count"], len(data))
                 self.assertEqual(metadata["layer"], "raw")
-                self.assertEqual(metadata["symbol"], "BTCUSDT")
+                self.assertEqual(metadata["symbol"], "BTCUSDC")
                 self.assertEqual(metadata["file_name"], path.name)
 
 

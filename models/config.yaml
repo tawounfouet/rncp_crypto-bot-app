@@ -4,13 +4,13 @@
 project:
   name: "dst-crypto-bot-models-training"
   version: "0.1.0"
-  description: "MVP ML pour signaux BUY/SELL/HOLD sur BTCUSDT et BTCETH"
+  description: "MVP ML pour signaux BUY/SELL/HOLD sur BTCUSDC et BTCETH"
   timezone: "UTC"
   random_state: 42
 
 data:
   symbols:
-    - "BTCUSDT"
+    - "BTCUSDC"
     - "BTCETH"
   symbol_mappings:
     BTCETH:

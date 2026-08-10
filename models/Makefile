@@ -3,9 +3,9 @@
 PYTHON ?= ../../.venv/bin/python
 PIP ?= $(PYTHON) -m pip
 CONFIG ?= config.yaml
-SYMBOLS ?= BTCUSDT BTCETH
+SYMBOLS ?= BTCUSDC BTCETH
 INTERVAL ?= 1h
-DATASET ?= data/processed/BTCUSDT/1h_features.parquet
+DATASET ?= data/processed/BTCUSDC/1h_features.parquet
 HOST ?= 0.0.0.0
 PORT ?= 8010
 

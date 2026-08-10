@@ -141,7 +141,7 @@ Schema partage :
 
 ```json
 {
-  "symbol": "BTCUSDT", "interval": "1h", "open_time": "...Z",
+  "symbol": "BTCUSDC", "interval": "1h", "open_time": "...Z",
   "open": 60000.0, "high": 60500.0, "low": 59800.0,
   "close": 60200.0, "volume": 123.45, "close_time": "...Z", "source": "binance"
 }

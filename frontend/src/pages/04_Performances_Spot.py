@@ -80,11 +80,11 @@ def main() -> None:
     metrics = snapshot.metrics
     render_kpi_cards(
         [
-            KpiItem("PnL realise", format_currency(metrics.pnl_realized_usdt)),
+            KpiItem("PnL realise", format_currency(metrics.pnl_realized_usdc)),
             KpiItem("ROI", format_pct(metrics.roi_pct)),
             KpiItem("Max drawdown", f"{metrics.max_drawdown_pct:.2f}%"),
             KpiItem("Win rate", f"{metrics.win_rate_pct:.2f}%"),
-            KpiItem("Frais", format_currency(metrics.fees_usdt)),
+            KpiItem("Frais", format_currency(metrics.fees_usdc)),
         ],
         columns=5,
     )
@@ -101,7 +101,7 @@ def main() -> None:
             data=[
                 go.Scatter(
                     x=eq_df["timestamp"],
-                    y=eq_df["equity_usdt"],
+                    y=eq_df["equity_usdc"],
                     mode="lines",
                     line=dict(color=plotly_line_color(theme_mode), width=2.5),
                     name="Equity",

@@ -361,7 +361,7 @@ class TestUserExportData:
             user_id=user_id,
             name="Bot export",
             strategy_type="ml_lstm",
-            parameters={"budget_usdt": 1000.0},
+            parameters={"budget_usdc": 1000.0},
         )
         patch_db_session.add(strategy)
         patch_db_session.flush()
@@ -609,7 +609,7 @@ class TestCascadeDelete:
             user_id=user_id,
             name="Bot cascade",
             strategy_type="ml_lstm",
-            parameters={"budget_usdt": 1000.0},
+            parameters={"budget_usdc": 1000.0},
         )
         patch_db_session.add(strategy)
         patch_db_session.flush()

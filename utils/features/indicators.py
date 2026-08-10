@@ -82,7 +82,7 @@ def add_order_flow_features(data: pd.DataFrame) -> pd.DataFrame:
     These features capture buy/sell pressure directly from the order book:
     - buy_pressure_ratio: fraction of quote volume initiated by buyers (0=all sellers, 1=all buyers)
     - volume_delta: net BTC volume bought minus sold by takers
-    - trade_size_avg: average USDT size per trade (proxy for institutional vs retail activity)
+    - trade_size_avg: average USDC size per trade (proxy for institutional vs retail activity)
     """
     output = data.copy()
     quote_vol = output["quote_asset_volume"].replace(0, float("nan"))

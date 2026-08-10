@@ -68,11 +68,11 @@ def _snapshot(pnl: float) -> PerformanceSnapshot:
         bot_id="strat_btc",
         period_days=30,
         metrics=PerformanceMetrics(
-            pnl_realized_usdt=pnl,
+            pnl_realized_usdc=pnl,
             roi_pct=3.5,
             max_drawdown_pct=2.0,
             win_rate_pct=65.0,
-            fees_usdt=10.0,
+            fees_usdc=10.0,
         ),
         scenario_label="Live",
     )
@@ -82,7 +82,7 @@ def test_aggregate_overview_empty() -> None:
     overview = aggregate_overview(bots=[], snapshots={})
     assert overview.total_bots == 0
     assert overview.active_bots == 0
-    assert overview.pnl_usdt == 0.0
+    assert overview.pnl_usdc == 0.0
     assert overview.avg_roi_pct == 0.0
     assert overview.bots == []
 
@@ -105,9 +105,9 @@ def test_aggregate_overview_aggregates_pnl_and_active_count() -> None:
 
     assert overview.total_bots == 2
     assert overview.active_bots == 1
-    assert overview.pnl_usdt == pytest.approx(325.0)
+    assert overview.pnl_usdc == pytest.approx(325.0)
     assert overview.avg_roi_pct == pytest.approx(3.5)
-    assert overview.fees_usdt == pytest.approx(20.0)
+    assert overview.fees_usdc == pytest.approx(20.0)
     assert [row.status for row in overview.bots] == ["RUNNING", "STOPPED"]
 
 
@@ -117,9 +117,9 @@ def test_aggregate_overview_defaults_missing_snapshot_to_zero() -> None:
         snapshots={},
     )
     row = overview.bots[0]
-    assert row.pnl_usdt == 0.0
+    assert row.pnl_usdc == 0.0
     assert row.roi_pct == 0.0
-    assert row.fees_usdt == 0.0
+    assert row.fees_usdc == 0.0
 
 
 def test_aggregate_overview_preserves_input_order() -> None:
@@ -157,7 +157,7 @@ def test_get_overview_loads_snapshot_per_bot(store) -> None:
 
     assert overview.total_bots == 2
     assert overview.active_bots == 1
-    assert overview.pnl_usdt == pytest.approx(2501.5)
+    assert overview.pnl_usdc == pytest.approx(2501.5)
     assert client.get_trading_stats.call_count == 2
 
 

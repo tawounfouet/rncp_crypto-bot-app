@@ -68,7 +68,7 @@ def _render_portfolio_list(store, service: PortfolioService) -> None:
         with column:
             st.metric(
                 label=f"{exchange_id.capitalize()} ({mode_label})",
-                value=format_currency(snapshot.total_value_usdt),
+                value=format_currency(snapshot.total_value_usdc),
             )
             if not snapshot.system_status.exchange_ok:
                 st.caption(":orange[Cles invalides ou non configurees]")
@@ -116,8 +116,8 @@ def main() -> None:
         return
 
     kpis = [
-        KpiItem("Valeur totale", format_currency(snapshot.total_value_usdt)),
-        KpiItem("Cash USDC libre", format_currency(snapshot.free_cash_usdt)),
+        KpiItem("Valeur totale", format_currency(snapshot.total_value_usdc)),
+        KpiItem("Cash USDC libre", format_currency(snapshot.free_cash_usdc)),
         KpiItem("Nombre d'actifs", str(snapshot.asset_count)),
         KpiItem("Nombre d'ordres", str(snapshot.open_order_count)),
     ]
@@ -135,10 +135,10 @@ def main() -> None:
         elif px is None:
             show_feedback("warning", "Plotly indisponible dans cet environnement de test.")
         else:
-            allocation_df = top_assets_with_others(balances_df[["asset", "value_usdt"]], top_n=10)
+            allocation_df = top_assets_with_others(balances_df[["asset", "value_usdc"]], top_n=10)
             fig = px.pie(
                 allocation_df,
-                values="value_usdt",
+                values="value_usdc",
                 names="asset",
                 hole=0.45,
                 color_discrete_sequence=pie_color_sequence(theme_mode),
@@ -165,7 +165,7 @@ def main() -> None:
             )
             sort_by = st.selectbox(
                 "Trier par",
-                options=["value_usdt", "free", "locked", "asset"],
+                options=["value_usdc", "free", "locked", "asset"],
                 index=0,
             )
             ascending = st.toggle("Ordre croissant", value=False)

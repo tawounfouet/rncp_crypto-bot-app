@@ -35,7 +35,7 @@ def test_render_dataframe_uses_themed_html_table_in_light_mode(monkeypatch) -> N
     monkeypatch.setattr(tables.st, "dataframe", fake_dataframe)
     monkeypatch.setattr(tables.st, "markdown", fake_markdown)
 
-    frame = pd.DataFrame([{"asset": "ETH", "__field_validators__": {"asset": []}, "value_usdt": 1234}])
+    frame = pd.DataFrame([{"asset": "ETH", "__field_validators__": {"asset": []}, "value_usdc": 1234}])
     tables.render_dataframe(frame, key="light_table", height=200)
 
     assert calls["dataframe_called"] is False

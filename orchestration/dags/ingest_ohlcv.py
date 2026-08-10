@@ -47,9 +47,9 @@ except ImportError as exc:
 # ---------------------------------------------------------------------------
 
 #: Cibles d'ingestion. Ajouter un exchange = ajouter une entrée ici.
-#: (paires par exchange : Binance en USDT, Kraken en EUR — cf. contexte MiCA #13)
+#: (paires par exchange : Binance en USDC, Kraken en EUR — cf. contexte MiCA #13)
 INGESTION_TARGETS = [
-    {"exchange": "binance", "symbols": ["BTCUSDT", "ETHUSDT"], "interval": "1h"},
+    {"exchange": "binance", "symbols": ["BTCUSDC", "ETHUSDC"], "interval": "1h"},
     {"exchange": "kraken", "symbols": ["BTCEUR", "ETHEUR"], "interval": "1h"},
 ]
 LIMIT = 1000  # klines par run (max API = 1000)

@@ -26,7 +26,7 @@ class Balance:
 
 @dataclass(frozen=True)
 class Ticker:
-    """Dernier prix connu pour une paire, en symbole canonique (ex: BTCUSDT, BTCEUR)."""
+    """Dernier prix connu pour une paire, en symbole canonique (ex: BTCUSDC, BTCEUR)."""
 
     symbol: str
     price: Decimal

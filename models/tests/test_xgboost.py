@@ -40,7 +40,7 @@ class XGBoostTests(unittest.TestCase):
         result = train_xgboost(data, self.settings)
         with tempfile.TemporaryDirectory() as tmp:
             save_xgboost_artifacts(result, Path(tmp))
-            prediction = predict_xgboost_signal(Path(tmp), data, symbol="BTCUSDT", interval="1h")
+            prediction = predict_xgboost_signal(Path(tmp), data, symbol="BTCUSDC", interval="1h")
             self.assertEqual(prediction.model_name, "xgboost")
             self.assertIn(prediction.signal, {"SELL", "HOLD", "BUY"})
             self.assertGreaterEqual(prediction.confidence, 0.0)

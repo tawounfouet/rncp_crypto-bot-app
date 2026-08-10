@@ -22,7 +22,7 @@ Définition du Minimum Viable Product (MVP)
 Le MVP du CryptoBot est conçu pour valider notre hypothèse de gain avec un minimum de risques techniques.
 Périmètre Fonctionnel Prioritaire
 Le MVP se concentrera exclusivement sur :
-Récolte Automatisée : Extraction des cours BTC-USDT et BTC-ETH.
+Récolte Automatisée : Extraction des cours BTC-USDC et BTC-ETH.
 Moteur ML : Un algorithme de base (Random Forest et LSTM) délivrant un signal Achat/Vente/Hold.
 
 Justification du périmètre : La prédiction de gains à long terme et l'intégration de portefeuilles multiples sont exclues pour garantir une mise sur le marché rapide. Ce choix est dicté par notre KPI de "Latence de l'API" : nous privilégions d'abord la fluidité du flux de données sur la complexité du modèle.

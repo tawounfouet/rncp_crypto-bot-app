@@ -11,7 +11,7 @@ class PredictRequest(BaseModel):
     Accepts pre-computed feature values matching the model's ``feature_columns.json``.
     """
 
-    symbol: str = Field(..., description="Trading pair (e.g. BTCUSDT)")
+    symbol: str = Field(..., description="Trading pair (e.g. BTCUSDC)")
     interval: str = Field("1h", description="Kline interval")
     features: dict[str, float] = Field(
         ...,
@@ -20,7 +20,7 @@ class PredictRequest(BaseModel):
 
 
 class PredictLiveRequest(BaseModel):
-    symbol: str = Field(..., description="Trading pair (e.g. BTCUSDT)")
+    symbol: str = Field(..., description="Trading pair (e.g. BTCUSDC)")
     interval: str = Field("1h", description="Kline interval")
 
 

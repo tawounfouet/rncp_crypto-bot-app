@@ -19,8 +19,8 @@ Tout driver respecte le `Protocol` `MarketDataDriver` (`base.py`) :
 def fetch_klines(symbol, interval, limit=1000, start_time_ms=None, end_time_ms=None) -> list[dict]
 ```
 
-- `symbol` est **canonique** (style app, ex. `BTCUSDT`) — c'est ce qui est stocké en base.
-  Chaque driver traduit vers/depuis sa forme native (ex. ccxt attend `BTC/USDT`).
+- `symbol` est **canonique** (style app, ex. `BTCUSDC`) — c'est ce qui est stocké en base.
+  Chaque driver traduit vers/depuis sa forme native (ex. ccxt attend `BTC/USDC`).
 - Le retour est une liste de **dicts OHLCV canoniques** produits par `normalize_ohlcv`.
 
 ### Le dict OHLCV canonique (`normalize_ohlcv`)

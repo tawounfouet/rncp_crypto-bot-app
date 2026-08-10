@@ -15,17 +15,17 @@ class TestQuotes:
     def test_get_default_quote_binance(self):
         from market.clients.quotes import get_default_quote
 
-        assert get_default_quote("binance") == "USDT"
+        assert get_default_quote("binance") == "USDC"
 
     def test_get_default_quote_kraken(self):
         from market.clients.quotes import get_default_quote
 
         assert get_default_quote("kraken") == "EUR"
 
-    def test_get_default_quote_unknown_falls_back_to_usdt(self):
+    def test_get_default_quote_unknown_falls_back_to_usdc(self):
         from market.clients.quotes import get_default_quote
 
-        assert get_default_quote("unknown_exchange") == "USDT"
+        assert get_default_quote("unknown_exchange") == "USDC"
 
     def test_get_stable_quotes_kraken(self):
         from market.clients.quotes import get_stable_quotes
@@ -219,15 +219,15 @@ class TestBinanceNativeClient:
         from market.clients.binance_native import BinanceNativeClient
 
         mock_binance_cls.return_value.get_all_tickers.return_value = [
-            {"symbol": "BTCUSDT", "price": "60000"},
+            {"symbol": "BTCUSDC", "price": "60000"},
             {"symbol": "BTCEUR", "price": "55000"},
         ]
         client = BinanceNativeClient(api_key="k", api_secret="s")
 
-        tickers = client.get_tickers(quote="USDT")
+        tickers = client.get_tickers(quote="USDC")
 
         assert len(tickers) == 1
-        assert tickers[0].symbol == "BTCUSDT"
+        assert tickers[0].symbol == "BTCUSDC"
         assert tickers[0].price == Decimal("60000")
 
 

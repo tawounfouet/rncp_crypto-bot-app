@@ -113,10 +113,10 @@ def main() -> None:
             )
             c1, c2 = st.columns(2)
             with c1:
-                budget_usdt = st.number_input(
-                    "Budget USDT",
+                budget_usdc = st.number_input(
+                    "Budget USDC",
                     min_value=0.0,
-                    value=float(config.budget_usdt),
+                    value=float(config.budget_usdc),
                     step=100.0,
                     disabled=gate.actions_disabled,
                 )
@@ -170,7 +170,7 @@ def main() -> None:
             )
     update = BotConfigUpdate(
         strategy=f"ml_{strategy}",
-        budget_usdt=float(budget_usdt),
+        budget_usdc=float(budget_usdc),
         max_open_positions=int(max_open_positions),
         risk_per_trade_pct=float(risk_per_trade),
         take_profit_pct=float(take_profit),

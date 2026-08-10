@@ -20,7 +20,7 @@ class BalanceRow(BaseModel):
     asset: str
     free: float
     locked: float
-    value_usdt: float
+    value_usdc: float
 
 
 class OpenOrder(BaseModel):
@@ -40,14 +40,14 @@ class SpotTrade(BaseModel):
     price: float
     quantity: float
     pnl_realized: float
-    fee_usdt: float
+    fee_usdc: float
     executed_at: datetime
 
 
 class PortfolioSnapshot(BaseModel):
     system_status: SystemStatus
-    total_value_usdt: float
-    free_cash_usdt: float
+    total_value_usdc: float
+    free_cash_usdc: float
     asset_count: int
     open_order_count: int
     balances: list[BalanceRow] = Field(default_factory=list)

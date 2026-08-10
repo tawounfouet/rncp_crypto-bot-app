@@ -103,34 +103,34 @@ client.upload_dataframe(df, "mon/fichier.parquet")
 ### Étape 1 : Collecte (jobs)
 
 ```bash
-python jobs/ingest/collect_ohlcv.py --symbol BTCUSDT --interval 1h
+python jobs/ingest/collect_ohlcv.py --symbol BTCUSDC --interval 1h
 ```
 
 1. Appelle `GET /api/v3/klines` sur Binance (pas de clé API nécessaire)
 2. Mappe les klines via `utils.connectors.binance.map_kline()`
-3. Sérialise en Parquet → MinIO : `raw/ohlcv/BTCUSDT/1h/2026-06-12.parquet`
+3. Sérialise en Parquet → MinIO : `raw/ohlcv/BTCUSDC/1h/2026-06-12.parquet`
 
 ### Étape 2 : Feature engineering (models)
 
 ```bash
-python -m src.main features --symbols BTCUSDT BTCETH --interval 1h
+python -m src.main features --symbols BTCUSDC BTCETH --interval 1h
 ```
 
 ```
 models/src/features/build.py
 └── build_symbol_features()
-    ├── read_raw_ohlcv_from_minio("BTCUSDT", "1h")     ← MinIO
-    │   └── liste tous les fichiers raw/ohlcv/BTCUSDT/1h/*.parquet
+    ├── read_raw_ohlcv_from_minio("BTCUSDC", "1h")     ← MinIO
+    │   └── liste tous les fichiers raw/ohlcv/BTCUSDC/1h/*.parquet
     │   └── télécharge + concatène → DataFrame
     ├── apply_symbol_mapping() si invert_price = true    ← pour BTCETH
     ├── build_features()                                  ← calcule RSI, MACD, etc.
-    └── write_dataset() → data/processed/BTCUSDT/1h_features.parquet
+    └── write_dataset() → data/processed/BTCUSDC/1h_features.parquet
 ```
 
 ### Étape 3 : Entraînement (models)
 
 ```bash
-python -m src.main train-rf --dataset data/processed/BTCUSDT/1h_features.parquet
+python -m src.main train-rf --dataset data/processed/BTCUSDC/1h_features.parquet
 ```
 
 ```
@@ -234,7 +234,7 @@ result = svc.predict({
 **Request :**
 ```json
 {
-    "symbol": "BTCUSDT",
+    "symbol": "BTCUSDC",
     "interval": "1h",
     "features": {
         "rsi_14": 42.15,
@@ -265,7 +265,7 @@ result = svc.predict({
 ```json
 {
     "success": true,
-    "symbol": "BTCUSDT",
+    "symbol": "BTCUSDC",
     "interval": "1h",
     "model_name": "random_forest",
     "model_version": "minio",
@@ -306,14 +306,14 @@ Retourne la liste des colonnes attendues (utile pour construire le payload).
 
 ```bash
 # 1. Ingester les données depuis Binance
-python jobs/ingest/collect_ohlcv.py --symbol BTCUSDT --interval 1h
+python jobs/ingest/collect_ohlcv.py --symbol BTCUSDC --interval 1h
 
 # 2. Construire les features (lit depuis MinIO)
-cd models && python -m src.main features --symbols BTCUSDT --interval 1h
+cd models && python -m src.main features --symbols BTCUSDC --interval 1h
 
 # 3. Entraîner le modèle
 cd models && python -m src.main train-rf \
-    --dataset data/processed/BTCUSDT/1h_features.parquet
+    --dataset data/processed/BTCUSDC/1h_features.parquet
 
 # 4. Déployer le meilleur modèle vers MinIO
 python jobs/deploy_model.py
@@ -325,7 +325,7 @@ cd backend && uvicorn src.main:app --reload
 curl -X POST http://localhost:8000/api/v1/inference/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "symbol": "BTCUSDT",
+    "symbol": "BTCUSDC",
     "features": {
       "rsi_14": 42.0, "sma_20": 67000.0, "sma_50": 65000.0,
       "ema_12": 67100.0, "ema_26": 65500.0, "macd": 160.0,

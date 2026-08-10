@@ -32,7 +32,7 @@ class BotConfig(BaseModel):
     strategy: str
     base_asset: str
     quote_asset: str = "USDC"
-    budget_usdt: float
+    budget_usdc: float
     max_open_positions: int
     risk_per_trade_pct: float
     take_profit_pct: float
@@ -43,7 +43,7 @@ class BotConfig(BaseModel):
 
 class BotConfigUpdate(BaseModel):
     strategy: str
-    budget_usdt: float
+    budget_usdc: float
     max_open_positions: int
     risk_per_trade_pct: float
     take_profit_pct: float

@@ -28,7 +28,7 @@ def _overview_to_dataframe(overview: DashboardOverview) -> pd.DataFrame:
                 "Strategie": row.strategy,
                 "Statut": row.status,
                 "Mode": mode,
-                "PnL": format_currency(row.pnl_usdt),
+                "PnL": format_currency(row.pnl_usdc),
                 "ROI": format_pct(row.roi_pct),
                 "Dernier signal": format_datetime(row.last_signal_at),
                 "Derniere action": row.last_action_result,
@@ -63,9 +63,9 @@ def main() -> None:
     render_kpi_cards(
         [
             KpiItem("Bots actifs", f"{overview.active_bots} / {overview.total_bots}"),
-            KpiItem("PnL global", format_currency(overview.pnl_usdt)),
+            KpiItem("PnL global", format_currency(overview.pnl_usdc)),
             KpiItem("ROI moyen", format_pct(overview.avg_roi_pct)),
-            KpiItem("Frais globaux", format_currency(overview.fees_usdt)),
+            KpiItem("Frais globaux", format_currency(overview.fees_usdc)),
         ],
         columns=4,
     )

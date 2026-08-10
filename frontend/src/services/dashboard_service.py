@@ -31,9 +31,9 @@ def aggregate_overview(
                 strategy=bot.strategy,
                 mode_live=bot.mode_live,
                 status=bot.status.value,
-                pnl_usdt=metrics.pnl_realized_usdt if metrics else 0.0,
+                pnl_usdc=metrics.pnl_realized_usdc if metrics else 0.0,
                 roi_pct=metrics.roi_pct if metrics else 0.0,
-                fees_usdt=metrics.fees_usdt if metrics else 0.0,
+                fees_usdc=metrics.fees_usdc if metrics else 0.0,
                 last_signal_at=bot.last_action_at,
                 last_action_result=bot.last_action_result,
             )
@@ -44,9 +44,9 @@ def aggregate_overview(
         period_days=period_days,
         total_bots=len(rows),
         active_bots=active_bots,
-        pnl_usdt=sum(row.pnl_usdt for row in rows),
+        pnl_usdc=sum(row.pnl_usdc for row in rows),
         avg_roi_pct=(sum(row.roi_pct for row in rows) / len(rows)) if rows else 0.0,
-        fees_usdt=sum(row.fees_usdt for row in rows),
+        fees_usdc=sum(row.fees_usdc for row in rows),
         bots=rows,
     )
 

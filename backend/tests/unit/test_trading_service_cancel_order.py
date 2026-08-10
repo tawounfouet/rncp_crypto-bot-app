@@ -66,7 +66,7 @@ async def test_trading_service_cancel_order_success(
 
     mock_client = MagicMock()
     fake_order_result = OrderResult(
-        order_id="12345", symbol="BTCUSDT", side="BUY", order_type="MARKET",
+        order_id="12345", symbol="BTCUSDC", side="BUY", order_type="MARKET",
         status="CANCELED", quantity=Decimal("0.01"),
     )
     mock_client.cancel_order.return_value = fake_order_result

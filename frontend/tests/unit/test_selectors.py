@@ -13,14 +13,14 @@ from utils.selectors import (
 
 def test_balances_to_dataframe_empty() -> None:
     frame = balances_to_dataframe([])
-    assert list(frame.columns) == ["asset", "free", "locked", "value_usdt"]
+    assert list(frame.columns) == ["asset", "free", "locked", "value_usdc"]
     assert frame.empty
 
 
 def test_top_assets_with_others() -> None:
     df = pd.DataFrame(
         [
-            {"asset": f"A{i}", "value_usdt": 100 - i}
+            {"asset": f"A{i}", "value_usdc": 100 - i}
             for i in range(12)
         ]
     )
@@ -42,7 +42,7 @@ def test_balances_to_dataframe_filters_technical_metadata() -> None:
                 "asset": "BTC",
                 "free": 1.0,
                 "locked": 0.0,
-                "value_usdt": 1000.0,
+                "value_usdc": 1000.0,
                 "__field_validators__": {"asset": []},
             }
         ]
@@ -59,7 +59,7 @@ def test_to_records_df_filters_technical_metadata() -> None:
 def test_models_to_dataframe_filters_technical_metadata() -> None:
     class _FakeModel:
         def model_dump(self) -> dict[str, object]:
-            return {"asset": "ETH", "value_usdt": 2000.0, "__field_validators__": {"asset": []}}
+            return {"asset": "ETH", "value_usdc": 2000.0, "__field_validators__": {"asset": []}}
 
     frame = models_to_dataframe([_FakeModel()])
     assert "__field_validators__" not in frame.columns
