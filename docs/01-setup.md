@@ -388,11 +388,22 @@ Procedure propre :
 2. Ajouter le paquet dans le(s) template(s) concerne(s) avec le placeholder :
    `ma-lib==$MA_LIB_VERSION`. Templates disponibles :
    - `backend/requirements.txt.template` (API FastAPI)
+   - `frontend/requirements.txt.template` (app Streamlit)
    - `jobs/requirements.txt.template` (jobs batch, tournent dans l'image Airflow)
    - `orchestration/requirements.txt.template` (DAGs Airflow)
+   - `models/requirements.txt.template` (entrainement ML, conteneur ml-api)
 3. Regenerer : `make generate-requirements` (ou `make dev-config`)
 4. Committer `versions.env`, le `*.template` **et** le `requirements.txt` regenere
    (les trois doivent rester coherents).
+
+**Dependances partagees backend <-> models** : `SCIKIT_LEARN_VERSION` et
+`JOBLIB_VERSION` dans `versions.env` pinent la **meme** version pour le backend
+(inference, chargement joblib/pickle) et pour `models/` (entrainement).
+`models/pyproject.toml` ne declare **aucune** dependance runtime (metadata de
+build uniquement) : la seule source de verite est `requirements.txt`, genere
+depuis `versions.env`. Un bump de sklearn/joblib doit donc etre teste ensemble
+cote backend et models, sinon risque de mismatch train<->inference
+(`InconsistentVersionWarning` sklearn).
 
 ### Commandes Makefile
 
