@@ -2,7 +2,7 @@
 
 **Date :** 2026-06-01
 **Run de référence :** `20260601-193838` (Random Forest), `20260601-193849` (LSTM)
-**Dataset :** `data/processed/BTCUSDT/1h_features.parquet` — 950 lignes, 35 colonnes, 27 features
+**Dataset :** `data/processed/BTCUSDC/1h_features.parquet` — 950 lignes, 35 colonnes, 27 features
 
 ---
 
@@ -52,7 +52,7 @@ Quand le recall macro vaut exactement 1/3 sur 3 classes, le modèle attribue tou
 
 ## 3. Distribution des labels
 
-### BTCUSDT 1h (950 lignes après dropna)
+### BTCUSDC 1h (950 lignes après dropna)
 
 | Label | Train (665) | Val (142) | Test (143) | % global |
 |---|---|---|---|---|
@@ -146,7 +146,7 @@ while len(total_rows) < target:
     end_time = df["open_time"].min() - 1  # page précédente
 ```
 
-Pour BTCUSDT 1h, 3 ans d'historique = ~26 000 candles. Viser 3–5 ans.
+Pour BTCUSDC 1h, 3 ans d'historique = ~26 000 candles. Viser 3–5 ans.
 
 ### Priorité 2 — Rééquilibrage des classes
 
@@ -182,7 +182,7 @@ Avant tout tuning, implémenter deux baselines et les tracer dans mlruns :
 
 | Baseline | Description | Expected accuracy |
 |---|---|---|
-| Always HOLD | Prédit HOLD à 100% | ~60% sur BTCUSDT |
+| Always HOLD | Prédit HOLD à 100% | ~60% sur BTCUSDC |
 | Random uniform | Prédit aléatoirement 1/3 chaque | ~33% |
 
 Tout modèle en dessous de la baseline "Always HOLD" en accuracy, ou en dessous du random en f1_macro, doit être considéré comme non formé.
@@ -228,7 +228,7 @@ Cela donne une estimation plus robuste sur données financières et détecte le 
 
 | Étape | Action | Impact attendu | Effort |
 |---|---|---|---|
-| 1 | Collecte paginée → 3 ans BTCUSDT | Débloquer l'apprentissage | Moyen |
+| 1 | Collecte paginée → 3 ans BTCUSDC | Débloquer l'apprentissage | Moyen |
 | 2 | Baseline always-HOLD + random dans mlruns | Référence honnête | Faible |
 | 3 | Matrice de confusion dans les logs | Diagnostic immédiat | Faible |
 | 4 | Focal loss LSTM + class_weight explicite | Rééquilibre | Faible |

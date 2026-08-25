@@ -136,7 +136,7 @@ Ce dépôt porte le MVP **Data Engineering + Machine Learning** du CryptoBot v2.
 
 Le périmètre est volontairement réduit pour valider l'hypothèse de valeur sans multiplier les risques techniques :
 
-- collecte automatisée des paires `BTCUSDT` et `BTCETH`
+- collecte automatisée des paires `BTCUSDC` et `BTCETH`
 - dataset OHLCV reproductible
 - exports raw et processed en Parquet, CSV et JSONL
 - baseline `RandomForestClassifier`
@@ -196,8 +196,8 @@ Les mêmes actions sont disponibles via le CLI central :
 
 ```bash
 python -m src.main config
-python -m src.main collect --symbols BTCUSDT BTCETH --interval 1h
-python -m src.main features --symbols BTCUSDT BTCETH --interval 1h
+python -m src.main collect --symbols BTCUSDC BTCETH --interval 1h
+python -m src.main features --symbols BTCUSDC BTCETH --interval 1h
 python -m src.main check
 ```
 ```
@@ -367,9 +367,9 @@ docs/specs/04-spec-collecte-paginee.md
 PYTHON ?= ../.venv/bin/python
 PIP ?= $(PYTHON) -m pip
 CONFIG ?= config.yaml
-SYMBOLS ?= BTCUSDT BTCETH
+SYMBOLS ?= BTCUSDC BTCETH
 INTERVAL ?= 1h
-DATASET ?= data/processed/BTCUSDT/1h_features.parquet
+DATASET ?= data/processed/BTCUSDC/1h_features.parquet
 HOST ?= 0.0.0.0
 PORT ?= 8010
 
@@ -437,7 +437,7 @@ clean: ## Supprime les caches Python locaux
 project:
   name: "dst-crypto-bot-models-training"
   version: "0.1.0"
-  description: "MVP ML pour signaux BUY/SELL/HOLD sur BTCUSDT et BTCETH"
+  description: "MVP ML pour signaux BUY/SELL/HOLD sur BTCUSDC et BTCETH"
   timezone: "UTC"
   random_state: 42
 
@@ -452,7 +452,7 @@ exchange:
 
 data:
   symbols:
-    - "BTCUSDT"
+    - "BTCUSDC"
     - "BTCETH"
   symbol_mappings:
     BTCETH:

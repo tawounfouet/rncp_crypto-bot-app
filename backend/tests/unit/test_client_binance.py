@@ -98,17 +98,17 @@ class TestClientBinanceGetPrice:
 
         mock_client = MagicMock()
         mock_client.get_symbol_ticker.return_value = {
-            "symbol": "BTCUSDT",
+            "symbol": "BTCUSDC",
             "price": "50000.00",
         }
         mock_client_class.return_value = mock_client
 
         client = ClientBinance()
-        result = client.get_price("BTCUSDT")
+        result = client.get_price("BTCUSDC")
 
-        assert result["symbol"] == "BTCUSDT"
+        assert result["symbol"] == "BTCUSDC"
         assert result["price"] == "50000.00"
-        mock_client.get_symbol_ticker.assert_called_once_with(symbol="BTCUSDT")
+        mock_client.get_symbol_ticker.assert_called_once_with(symbol="BTCUSDC")
 
     @patch.dict(
         "os.environ",
@@ -156,7 +156,7 @@ class TestClientBinanceGetAccountBalances:
         mock_client.get_account.return_value = {
             "balances": [
                 {"asset": "BTC", "free": "0.5", "locked": "0.0"},
-                {"asset": "USDT", "free": "1000.0", "locked": "0.0"},
+                {"asset": "USDC", "free": "1000.0", "locked": "0.0"},
                 {"asset": "ETH", "free": "0.0", "locked": "0.0"},
             ]
         }
@@ -165,7 +165,7 @@ class TestClientBinanceGetAccountBalances:
         client = ClientBinance()
         result = client.get_account_balances()
 
-        assert result == {"BTC": 0.5, "USDT": 1000.0}
+        assert result == {"BTC": 0.5, "USDC": 1000.0}
         assert "ETH" not in result  # Solde = 0, exclu
 
 
@@ -193,7 +193,7 @@ class TestClientBinanceGetHistoricalKlines:
         mock_client_class.return_value = mock_client
 
         client = ClientBinance()
-        result = client.get_historical_klines("BTCUSDT", "1h", "1 day ago UTC")
+        result = client.get_historical_klines("BTCUSDC", "1h", "1 day ago UTC")
 
         assert result == mock_klines
         assert len(result) == 2

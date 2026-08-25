@@ -102,6 +102,42 @@ class BotControlService:
 
         return sorted(bots, key=lambda b: b.name)
 
+    def create_bot(
+        self,
+        name: str,
+        strategy_type: str,
+        parameters: dict,
+        description: str | None = None,
+    ) -> BotActionResult:
+        token = self._token()
+        response = self.client.create_strategy(
+            token,
+            name=name,
+            strategy_type=strategy_type,
+            parameters=parameters,
+            description=description,
+        )
+        if not response.success:
+            msg = (
+                response.error
+                or (response.data.get("detail") if isinstance(response.data, dict) else None)
+                or f"Erreur backend ({response.status_code})."
+            )
+            return BotActionResult(success=False, message=msg)
+        return BotActionResult(success=True, message=f"Bot '{name}' créé.")
+
+    def delete_bot(self, bot_id: str) -> BotActionResult:
+        token = self._token()
+        response = self.client.delete_strategy(token, bot_id)
+        if not response.success and response.status_code != 204:
+            msg = (
+                response.error
+                or (response.data.get("detail") if isinstance(response.data, dict) else None)
+                or f"Erreur backend ({response.status_code})."
+            )
+            return BotActionResult(success=False, message=msg)
+        return BotActionResult(success=True, message="Bot supprimé.")
+
     def apply_action(self, bot_id: str, action: str) -> BotActionResult:
         token = self._token()
 
@@ -123,11 +159,7 @@ class BotControlService:
         if action == ACTION_START:
             return BotActionResult(
                 success=False,
-                message=(
-                    "Le demarrage d'un deployment necessite de renseigner "
-                    "exchange, symbole, timeframe et capital -- utilisez le formulaire "
-                    "de demarrage (methode deploy)."
-                ),
+                message="Utilisez start_bot() en passant les parametres de deployment.",
             )
 
         # ACTION_PAUSE - pas de endpoint backend dedie
@@ -136,15 +168,16 @@ class BotControlService:
             message="La mise en pause n'est pas supportee par l'API backend.",
         )
 
-    def deploy(
+    def start_bot(
         self,
         bot_id: str,
-        *,
         exchange: str,
         symbol: str,
         timeframe: str,
-        amount: str,
+        amount: float,
+        is_paper: bool = True,
     ) -> BotActionResult:
+        """Cree un nouveau deployment pour le bot donne."""
         token = self._token()
         response = self.client.deploy_strategy(
             token,
@@ -153,6 +186,7 @@ class BotControlService:
             symbol=symbol,
             timeframe=timeframe,
             amount=amount,
+            is_paper=is_paper,
         )
         if not response.success:
             msg = (
@@ -161,4 +195,8 @@ class BotControlService:
                 or f"Erreur backend ({response.status_code})."
             )
             return BotActionResult(success=False, message=msg)
-        return BotActionResult(success=True, message="Deployment demarre.")
+        mode = "Paper" if is_paper else "Live"
+        return BotActionResult(
+            success=True,
+            message=f"Bot deploye en mode {mode} — {symbol} {timeframe}, capital {amount} USDC.",
+        )

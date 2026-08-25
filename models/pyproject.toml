@@ -7,30 +7,12 @@ name = "dst-crypto-bot-models-training"
 version = "0.1.0"
 description = "MVP Data Engineering and ML training pipeline for CryptoBot v2"
 requires-python = ">=3.11"
-dependencies = [
-  "fastapi>=0.104",
-  "uvicorn[standard]>=0.24",
-  "pydantic>=2.5",
-  "pydantic-settings>=2.1",
-  "PyYAML>=6.0",
-  "pandas>=2.2",
-  "numpy>=1.26",
-  "pyarrow>=17.0",
-  "requests>=2.32",
-  "python-dotenv>=1.0",
-  "scikit-learn>=1.4",
-  "joblib>=1.3",
-  "torch>=2.2",
-  "mlflow>=2.10",
-  "matplotlib>=3.8",
-]
 
-[project.optional-dependencies]
-dev = [
-  "pytest>=8.0",
-  "httpx>=0.27",
-  "ruff>=0.6",
-]
+# Les dependances runtime sont declarees dans requirements.txt uniquement
+# (source de verite, generee depuis versions.env via requirements.txt.template).
+# Ce pyproject ne porte que le metadata de build + la config outils. Garder les
+# versions de scikit-learn / joblib alignees avec le backend (inference) via
+# versions.env : SCIKIT_LEARN_VERSION / JOBLIB_VERSION — compat train<->inference.
 
 [tool.setuptools.packages.find]
 include = ["src*"]

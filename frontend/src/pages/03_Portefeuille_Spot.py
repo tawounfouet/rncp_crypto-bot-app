@@ -30,21 +30,20 @@ from utils.streamlit_compat import plotly_chart as compat_plotly_chart
 
 
 def _render_status_banner(snapshot) -> None:
-    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
-    with col1:
-        render_status_badge("Backend", "OK" if snapshot.system_status.backend_ok else "ERROR")
-    with col2:
-        render_status_badge(
-            snapshot.system_status.exchange.capitalize(),
-            "OK" if snapshot.system_status.exchange_ok else "WARNING",
-        )
-    with col3:
-        st.caption(f"Derniere synchro: {format_datetime(snapshot.system_status.last_sync)}")
-    with col4:
-        if compat_button("Refresh", width="stretch"):
-            st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        col1, col2, col3, col4 = st.columns([1, 1, 2, 1])
+        with col1:
+            render_status_badge("Backend", "OK" if snapshot.system_status.backend_ok else "ERROR")
+        with col2:
+            render_status_badge(
+                snapshot.system_status.exchange.capitalize(),
+                "OK" if snapshot.system_status.exchange_ok else "WARNING",
+            )
+        with col3:
+            st.caption(f"Derniere synchro: {format_datetime(snapshot.system_status.last_sync)}")
+        with col4:
+            if compat_button("Refresh", width="stretch"):
+                st.rerun()
 
 
 def _to_df(items: list) -> pd.DataFrame:
@@ -69,7 +68,7 @@ def _render_portfolio_list(store, service: PortfolioService) -> None:
         with column:
             st.metric(
                 label=f"{exchange_id.capitalize()} ({mode_label})",
-                value=format_currency(snapshot.total_value_usdt),
+                value=format_currency(snapshot.total_value_usdc),
             )
             if not snapshot.system_status.exchange_ok:
                 st.caption(":orange[Cles invalides ou non configurees]")
@@ -114,10 +113,11 @@ def main() -> None:
             f"{snapshot.system_status.exchange.capitalize()} n'est pas configure. "
             "Ajoutez vos cles dans Gestion de compte.",
         )
+        return
 
     kpis = [
-        KpiItem("Valeur totale", format_currency(snapshot.total_value_usdt)),
-        KpiItem("Cash USDT libre", format_currency(snapshot.free_cash_usdt)),
+        KpiItem("Valeur totale", format_currency(snapshot.total_value_usdc)),
+        KpiItem("Cash USDC libre", format_currency(snapshot.free_cash_usdc)),
         KpiItem("Nombre d'actifs", str(snapshot.asset_count)),
         KpiItem("Nombre d'ordres", str(snapshot.open_order_count)),
     ]
@@ -135,10 +135,10 @@ def main() -> None:
         elif px is None:
             show_feedback("warning", "Plotly indisponible dans cet environnement de test.")
         else:
-            allocation_df = top_assets_with_others(balances_df[["asset", "value_usdt"]], top_n=10)
+            allocation_df = top_assets_with_others(balances_df[["asset", "value_usdc"]], top_n=10)
             fig = px.pie(
                 allocation_df,
-                values="value_usdt",
+                values="value_usdc",
                 names="asset",
                 hole=0.45,
                 color_discrete_sequence=pie_color_sequence(theme_mode),
@@ -165,7 +165,7 @@ def main() -> None:
             )
             sort_by = st.selectbox(
                 "Trier par",
-                options=["value_usdt", "free", "locked", "asset"],
+                options=["value_usdc", "free", "locked", "asset"],
                 index=0,
             )
             ascending = st.toggle("Ordre croissant", value=False)

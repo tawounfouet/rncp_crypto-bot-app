@@ -34,8 +34,8 @@ class MarketDataResponse(BaseModel):
         from_attributes=True,
         json_schema_extra={
             "example": {
-                "id": "BTCUSDT_1h_2024-01-01T00:00:00",
-                "symbol": "BTCUSDT",
+                "id": "BTCUSDC_1h_2024-01-01T00:00:00",
+                "symbol": "BTCUSDC",
                 "exchange": "binance",
                 "interval_timeframe": "1h",
                 "open_time": "2024-01-01T00:00:00",
@@ -55,13 +55,13 @@ class MarketDataRequest(BaseModel):
     """Request for market data."""
 
     exchange: str = Field("binance", description="Exchange source (e.g., binance, kraken)")
-    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
+    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDC)")
     interval: str = Field(..., description="Timeframe (e.g., 1h, 4h, 1d)")
     start_time: datetime | None = Field(None, description="Start time")
     end_time: datetime | None = Field(None, description="End time")
     limit: int = Field(100, ge=1, le=1000, description="Number of records")
     model_config = ConfigDict(
-        json_schema_extra={"example": {"exchange": "binance", "symbol": "BTCUSDT", "interval": "1h", "limit": 100}}
+        json_schema_extra={"example": {"exchange": "binance", "symbol": "BTCUSDC", "interval": "1h", "limit": 100}}
     )
 
 

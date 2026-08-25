@@ -22,6 +22,9 @@ class StrategyTypeEnum(str, Enum):
     MEAN_REVERSION = "mean_reversion"
     MOMENTUM = "momentum"
     ML_RANDOM_FOREST = "ml_random_forest"
+    ML_LSTM = "ml_lstm"
+    ML_MLP = "ml_mlp"
+    ML_XGBOOST = "ml_xgboost"
     CUSTOM = "custom"
 
 
@@ -99,18 +102,20 @@ class StrategyDeploymentCreate(BaseModel):
 
     strategy_id: str
     exchange: str = Field(..., description="Exchange name (e.g., binance)")
-    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
+    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDC)")
     timeframe: str = Field(..., description="Timeframe (e.g., 1h, 4h, 1d)")
     amount: Decimal = Field(..., gt=0, description="Amount to trade")
+    is_paper: bool = Field(True, description="True = paper trading (no real orders)")
     parameters: dict[str, Any] | None = Field(None, description="Deployment-specific parameters")
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "strategy_id": "strategy-123",
                 "exchange": "binance",
-                "symbol": "BTCUSDT",
+                "symbol": "BTCUSDC",
                 "timeframe": "1h",
                 "amount": "100.00",
+                "is_paper": True,
                 "parameters": {"risk_per_trade": 0.01, "max_positions": 3},
             }
         }
@@ -158,7 +163,7 @@ class BacktestCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "strategy_id": "strategy-123",
-                "symbol": "BTCUSDT",
+                "symbol": "BTCUSDC",
                 "timeframe": "1h",
                 "start_date": "2024-01-01T00:00:00Z",
                 "end_date": "2024-12-31T23:59:59Z",
@@ -218,9 +223,29 @@ class StrategyDeploymentResponse(BaseModel):
     timeframe: str
     amount: Decimal
     parameters: dict[str, Any] | None = None
+    is_paper: bool = True
     status: DeploymentStatusEnum
     start_time: datetime
     end_time: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Backtest response
+class BacktestResponse(BaseModel):
+    """Backtest result response."""
+
+    id: str
+    strategy_id: str
+    user_id: str
+    symbol: str
+    timeframe: str
+    start_date: datetime
+    end_date: datetime
+    parameters: dict[str, Any] | None = None
+    metrics: dict[str, Any]
+    transactions: list[dict[str, Any]] | None = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -267,25 +292,6 @@ class TradingSessionResponse(BaseModel):
     win_rate: Decimal | None = None
     status: SessionStatusEnum
     stop_reason: str | None = None
-    created_at: datetime
-    updated_at: datetime
-    model_config = ConfigDict(from_attributes=True)
-
-
-class BacktestResponse(BaseModel):
-    """Backtest response."""
-
-    id: str
-    strategy_id: str
-    user_id: str
-    symbol: str
-    timeframe: str
-    start_date: datetime
-    end_date: datetime
-    parameters: dict[str, Any] | None = None
-    results: dict[str, Any]
-    metrics: dict[str, Any]
-    transactions: list[dict[str, Any]] | None = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

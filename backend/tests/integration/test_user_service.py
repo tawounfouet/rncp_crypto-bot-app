@@ -336,6 +336,116 @@ class TestUserExportData:
 
         assert exc_info.value.status_code == 404
 
+    def test_export_user_data_includes_trading_data(self, patch_db_session):
+        """export_user_data inclut strategies, deployments, ordres, transactions, sessions et backtests."""
+        import uuid
+        from datetime import UTC, datetime, timedelta
+        from decimal import Decimal
+
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+        from strategy.models import BacktestResult, Strategy, StrategyDeployment, TradingSession
+        from trading.models import Order, Transaction
+
+        service = UserService()
+        created = service.create_user(UserCreate(
+            email="export3@test.com",
+            username="exportuser3",
+            password="SecurePass123!",
+        ))
+        user_id = created.id
+
+        now = datetime.now(UTC)
+        strategy = Strategy(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            name="Bot export",
+            strategy_type="ml_lstm",
+            parameters={"budget_usdc": 1000.0},
+        )
+        patch_db_session.add(strategy)
+        patch_db_session.flush()
+
+        deployment = StrategyDeployment(
+            id=str(uuid.uuid4()),
+            strategy_id=strategy.id,
+            user_id=user_id,
+            exchange="binance",
+            symbol="BTCUSDC",
+            timeframe="1h",
+            amount=Decimal("100.0"),
+            is_paper=True,
+            status="active",
+            start_time=now,
+        )
+        patch_db_session.add(deployment)
+        patch_db_session.flush()
+
+        patch_db_session.add(
+            Order(
+                id=str(uuid.uuid4()),
+                deployment_id=deployment.id,
+                user_id=user_id,
+                exchange="binance",
+                symbol="BTCUSDC",
+                order_type="MARKET",
+                side="BUY",
+                quantity=Decimal("0.01"),
+            )
+        )
+        patch_db_session.add(
+            Transaction(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                exchange="binance",
+                transaction_type="TRADE",
+                asset="BTC",
+                amount=Decimal("0.01"),
+                direction="IN",
+                timestamp=now,
+            )
+        )
+        patch_db_session.add(
+            TradingSession(
+                id=str(uuid.uuid4()),
+                deployment_id=deployment.id,
+                user_id=user_id,
+                start_time=now,
+                initial_balance=Decimal("1000.0"),
+                status="ACTIVE",
+            )
+        )
+        patch_db_session.add(
+            BacktestResult(
+                id=str(uuid.uuid4()),
+                strategy_id=strategy.id,
+                user_id=user_id,
+                symbol="BTCUSDC",
+                timeframe="1h",
+                start_date=now - timedelta(days=30),
+                end_date=now,
+                parameters={},
+                results={},
+                metrics={"total_return": 0.05},
+            )
+        )
+        patch_db_session.flush()
+
+        data = service.export_user_data(user_id)
+
+        assert len(data["strategies"]) == 1
+        assert data["strategies"][0]["name"] == "Bot export"
+        assert len(data["strategy_deployments"]) == 1
+        assert data["strategy_deployments"][0]["is_paper"] is True
+        assert len(data["orders"]) == 1
+        assert data["orders"][0]["side"] == "BUY"
+        assert len(data["transactions"]) == 1
+        assert data["transactions"][0]["asset"] == "BTC"
+        assert len(data["trading_sessions"]) == 1
+        assert data["trading_sessions"][0]["status"] == "ACTIVE"
+        assert len(data["backtest_results"]) == 1
+        assert data["backtest_results"][0]["metrics"]["total_return"] == 0.05
+
 
 class TestDeleteInactiveUsers:
     """Tests pour la suppression des utilisateurs inactifs."""
@@ -462,6 +572,151 @@ class TestCascadeDelete:
             UserSession.user_id == created.id
         ).all()
         assert len(sessions) == 0
+
+    def test_delete_user_removes_full_trading_tree(self, patch_db_session):
+        """Supprimer un user purge tout l'arbre trading (strategie, deployment, ordres, etats).
+
+        Meme chemin ORM (session.delete(user)) que la purge Airflow
+        delete_inactive_users_older_than -- valide que la purge ne casse pas
+        sur un user ayant des donnees de trading.
+        """
+        import uuid
+        from datetime import UTC, datetime, timedelta
+        from decimal import Decimal
+
+        from auth.schemas import UserCreate
+        from auth.user_service import UserService
+        from strategy.models import (
+            BacktestResult,
+            Strategy,
+            StrategyDeployment,
+            StrategyState,
+            TradingSession,
+        )
+        from trading.models import Order, OrderFill, Transaction
+
+        service = UserService()
+        created = service.create_user(UserCreate(
+            email="cascade3@test.com",
+            username="cascadeuser3",
+            password="SecurePass123!",  # noqa: S106
+        ))
+        user_id = created.id
+
+        now = datetime.now(UTC)
+        strategy = Strategy(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            name="Bot cascade",
+            strategy_type="ml_lstm",
+            parameters={"budget_usdc": 1000.0},
+        )
+        patch_db_session.add(strategy)
+        patch_db_session.flush()
+
+        deployment = StrategyDeployment(
+            id=str(uuid.uuid4()),
+            strategy_id=strategy.id,
+            user_id=user_id,
+            exchange="binance",
+            symbol="BTCUSDC",
+            timeframe="1h",
+            amount=Decimal("100.0"),
+            is_paper=True,
+            status="active",
+            start_time=now,
+        )
+        patch_db_session.add(deployment)
+        patch_db_session.flush()
+
+        patch_db_session.add(
+            StrategyState(
+                id=str(uuid.uuid4()),
+                deployment_id=deployment.id,
+                user_id=user_id,
+                position="LONG",
+                total_trades=3,
+            )
+        )
+
+        order = Order(
+            id=str(uuid.uuid4()),
+            deployment_id=deployment.id,
+            user_id=user_id,
+            exchange="binance",
+            symbol="BTCUSDC",
+            order_type="MARKET",
+            side="BUY",
+            quantity=Decimal("0.01"),
+        )
+        patch_db_session.add(order)
+        patch_db_session.flush()
+
+        patch_db_session.add(
+            OrderFill(
+                id=str(uuid.uuid4()),
+                order_id=order.id,
+                trade_id="trade-1",
+                price=Decimal("65000.0"),
+                quantity=Decimal("0.01"),
+                commission=Decimal("0.65"),
+                commission_asset="USDC",
+                timestamp=now,
+            )
+        )
+        patch_db_session.add(
+            Transaction(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                order_id=order.id,
+                exchange="binance",
+                transaction_type="TRADE",
+                asset="BTC",
+                amount=Decimal("0.01"),
+                direction="IN",
+                timestamp=now,
+            )
+        )
+        patch_db_session.add(
+            TradingSession(
+                id=str(uuid.uuid4()),
+                deployment_id=deployment.id,
+                user_id=user_id,
+                start_time=now,
+                initial_balance=Decimal("1000.0"),
+                status="ACTIVE",
+            )
+        )
+        patch_db_session.add(
+            BacktestResult(
+                id=str(uuid.uuid4()),
+                strategy_id=strategy.id,
+                user_id=user_id,
+                symbol="BTCUSDC",
+                timeframe="1h",
+                start_date=now - timedelta(days=30),
+                end_date=now,
+                parameters={},
+                results={},
+                metrics={"total_return": 0.05},
+            )
+        )
+        patch_db_session.flush()
+
+        service.delete_user(user_id)
+
+        assert patch_db_session.query(Strategy).filter(Strategy.user_id == user_id).first() is None
+        assert patch_db_session.query(StrategyDeployment).filter(
+            StrategyDeployment.user_id == user_id
+        ).first() is None
+        assert patch_db_session.query(StrategyState).filter(StrategyState.user_id == user_id).first() is None
+        assert patch_db_session.query(Order).filter(Order.user_id == user_id).first() is None
+        assert patch_db_session.query(OrderFill).filter(
+            OrderFill.order_id == order.id
+        ).first() is None
+        assert patch_db_session.query(Transaction).filter(Transaction.user_id == user_id).first() is None
+        assert patch_db_session.query(TradingSession).filter(TradingSession.user_id == user_id).first() is None
+        assert patch_db_session.query(BacktestResult).filter(BacktestResult.user_id == user_id).first() is None
 
 
 class TestUserSettingsCredentialModes:

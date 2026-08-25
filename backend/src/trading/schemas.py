@@ -79,7 +79,7 @@ class OrderCreate(BaseModel):
     """Schema for creating a new order."""
 
     deployment_id: str
-    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDT)")
+    symbol: str = Field(..., description="Trading symbol (e.g., BTCUSDC)")
     order_type: OrderTypeEnum
     side: OrderSideEnum
     quantity: Decimal = Field(..., gt=0, description="Order quantity")
@@ -91,7 +91,7 @@ class OrderCreate(BaseModel):
         json_schema_extra={
             "example": {
                 "deployment_id": "deploy-123",
-                "symbol": "BTCUSDT",
+                "symbol": "BTCUSDC",
                 "order_type": "LIMIT",
                 "side": "BUY",
                 "quantity": "0.001",
@@ -194,7 +194,7 @@ class TransactionCreate(BaseModel):
                 "asset": "BTC",
                 "amount": "0.001",
                 "direction": "IN",
-                "quote_asset": "USDT",
+                "quote_asset": "USDC",
                 "quote_amount": "45.00",
                 "price": "45000.00",
             }

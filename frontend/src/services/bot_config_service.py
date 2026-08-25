@@ -48,7 +48,7 @@ class BotConfigService:
 
         params: dict = strategy.get("parameters") or {}
         symbol: str = params.get("symbol") or ""
-        if len(symbol) > 4 and symbol.endswith("USDT"):
+        if len(symbol) > 4 and symbol.endswith("USDC"):
             base_asset = symbol[:-4]
         else:
             base_asset = params.get("base_asset") or "BTC"
@@ -59,8 +59,8 @@ class BotConfigService:
             updated_at=parse_dt_or_now(strategy.get("updated_at")),
             strategy=strategy.get("strategy_type") or "custom",
             base_asset=base_asset,
-            quote_asset=params.get("quote_asset") or "USDT",
-            budget_usdt=_float(params.get("budget_usdt"), 1000.0),
+            quote_asset=params.get("quote_asset") or "USDC",
+            budget_usdc=_float(params.get("budget_usdc"), 1000.0),
             max_open_positions=_int(params.get("max_open_positions"), 3),
             risk_per_trade_pct=_float(params.get("risk_per_trade_pct"), 1.0),
             take_profit_pct=_float(params.get("take_profit_pct"), 3.0),
@@ -71,7 +71,7 @@ class BotConfigService:
 
     def validate(self, update: BotConfigUpdate) -> list[str]:
         errors: list[str] = []
-        if update.budget_usdt <= 0:
+        if update.budget_usdc <= 0:
             errors.append("Le budget doit etre strictement positif.")
         if update.max_open_positions < 1:
             errors.append("Le nombre max de positions doit etre >= 1.")
@@ -104,7 +104,7 @@ class BotConfigService:
 
         new_params = {
             **current_params,
-            "budget_usdt": update.budget_usdt,
+            "budget_usdc": update.budget_usdc,
             "max_open_positions": update.max_open_positions,
             "risk_per_trade_pct": update.risk_per_trade_pct,
             "take_profit_pct": update.take_profit_pct,
@@ -131,7 +131,7 @@ class BotConfigService:
 
         updated_params: dict = updated_strategy.get("parameters") or new_params
         symbol = updated_params.get("symbol") or ""
-        if len(symbol) > 4 and symbol.endswith("USDT"):
+        if len(symbol) > 4 and symbol.endswith("USDC"):
             base_asset = symbol[:-4]
         else:
             base_asset = updated_params.get("base_asset") or "BTC"
@@ -142,8 +142,8 @@ class BotConfigService:
             updated_at=parse_dt_or_now(updated_strategy.get("updated_at")),
             strategy=updated_strategy.get("strategy_type") or update.strategy,
             base_asset=base_asset,
-            quote_asset=updated_params.get("quote_asset") or "USDT",
-            budget_usdt=_float(updated_params.get("budget_usdt"), update.budget_usdt),
+            quote_asset=updated_params.get("quote_asset") or "USDC",
+            budget_usdc=_float(updated_params.get("budget_usdc"), update.budget_usdc),
             max_open_positions=_int(
                 updated_params.get("max_open_positions"), update.max_open_positions
             ),
@@ -158,7 +158,23 @@ class BotConfigService:
 
     def create_bot(self, name, strategy_type):
         token = self._token()
-        response = self.client.create_strategy(token, name=name, strategy_type=strategy_type)
+        parameters = {
+            "symbol": "BTCUSDC",
+            "quote_asset": "USDC",
+            "budget_usdc": 1000.0,
+            "max_open_positions": 3,
+            "risk_per_trade_pct": 1.0,
+            "take_profit_pct": 3.0,
+            "stop_loss_pct": 2.0,
+            "cooldown_seconds": 300,
+            "version": 1,
+        }
+        response = self.client.create_strategy(
+            token,
+            name=name,
+            strategy_type=strategy_type,
+            parameters=parameters,
+        )
         if not response.success:
             raise ServiceError("Impossible de créer une stratégie.")
 

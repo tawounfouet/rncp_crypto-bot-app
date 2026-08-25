@@ -59,7 +59,7 @@ def _fake_deployment(deployment_id: str = "dep-1", strategy_id: str = "strat-1")
         "strategy_id": strategy_id,
         "user_id": "user-1",
         "exchange": "binance",
-        "symbol": "BTCUSDT",
+        "symbol": "BTCUSDC",
         "timeframe": "1h",
         "amount": "100",
         "parameters": {},
@@ -248,7 +248,7 @@ def test_deploy_strategy_returns_200(client: TestClient) -> None:
         json={
             "strategy_id": "strat-1",
             "exchange": "binance",
-            "symbol": "BTCUSDT",
+            "symbol": "BTCUSDC",
             "timeframe": "1h",
             "amount": "100",
         },
@@ -270,7 +270,7 @@ def test_deploy_strategy_returns_400_on_business_logic_error(client: TestClient)
         json={
             "strategy_id": "strat-1",
             "exchange": "binance",
-            "symbol": "BTCUSDT",
+            "symbol": "BTCUSDC",
             "timeframe": "1h",
             "amount": "100",
         },

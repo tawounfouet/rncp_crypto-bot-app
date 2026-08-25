@@ -5,7 +5,7 @@ from navigation.rules import allowed_page_keys_in_sidebar, can_access, sidebar_e
 
 def test_sidebar_entries_when_anonymous() -> None:
     labels = [entry.label for entry in sidebar_entries(None)]
-    assert labels == ["Marché", "Connexion", "Inscription"]
+    assert labels == ["Marché", "Connexion", "Inscription", "Politique de confidentialité"]
 
 
 def test_sidebar_entries_when_authenticated_standard_user(store) -> None:
@@ -13,7 +13,23 @@ def test_sidebar_entries_when_authenticated_standard_user(store) -> None:
     keys = allowed_page_keys_in_sidebar(user)
     assert "signup" not in keys
     assert "admin" not in keys
-    assert keys == ["market", "portfolio", "performance", "bot_control", "bot_config", "account"]
+    assert keys == [
+        "dashboard",
+        "market",
+        "portfolio",
+        "performance",
+        "bot_control",
+        "bot_config",
+        "backtesting",
+        "account",
+        "privacy",
+    ]
+
+
+def test_privacy_page_accessible_to_everyone(store) -> None:
+    assert can_access("privacy", None) is True
+    assert can_access("privacy", store.users["alice@cryptobot.dev"]) is True
+    assert can_access("privacy", store.users["admin@cryptobot.dev"]) is True
 
 
 def test_sidebar_entries_when_authenticated_admin(store) -> None:

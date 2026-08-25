@@ -123,7 +123,7 @@ class JourneyBackendClient(BackendApiClient):
                 "strategy_type": "trend",
                 "is_active": True,
                 "updated_at": "2024-01-01T00:00:00Z",
-                "parameters": {"budget_usdt": 2000.0, "max_open_positions": 3, "version": 1},
+                "parameters": {"budget_usdc": 2000.0, "max_open_positions": 3, "version": 1},
             },
         }
         self._configured_exchanges: dict[str, set[str]] = {}
@@ -273,7 +273,7 @@ def test_end_to_end_auth_and_backend_pages_journey() -> None:
         "strat_sol",
         BotConfigUpdate(
             strategy="Trend Following",
-            budget_usdt=2500,
+            budget_usdc=2500,
             max_open_positions=3,
             risk_per_trade_pct=1.1,
             take_profit_pct=5.8,

@@ -300,7 +300,7 @@ def test_deploy_strategy_calls_correct_endpoint_with_payload() -> None:
             TOKEN,
             "strat-1",
             exchange="binance",
-            symbol="BTCUSDT",
+            symbol="BTCUSDC",
             timeframe="1h",
             amount="100",
         )
@@ -311,9 +311,10 @@ def test_deploy_strategy_calls_correct_endpoint_with_payload() -> None:
         json_body={
             "strategy_id": "strat-1",
             "exchange": "binance",
-            "symbol": "BTCUSDT",
+            "symbol": "BTCUSDC",
             "timeframe": "1h",
             "amount": "100",
+            "is_paper": True,
         },
         access_token=TOKEN,
     )
@@ -350,12 +351,12 @@ def test_get_public_prices_with_symbols_joins_them() -> None:
     client = BackendApiClient()
 
     with patch.object(client, "_request", return_value=_ok({})) as mock_request:
-        client.get_public_prices(exchange="binance", symbols=["BTCUSDT", "ETHUSDT"])
+        client.get_public_prices(exchange="binance", symbols=["BTCUSDC", "ETHUSDC"])
 
     mock_request.assert_called_once_with(
         "GET",
         "/api/v1/market/public/prices",
-        query_params={"exchange": "binance", "symbols": "BTCUSDT,ETHUSDT"},
+        query_params={"exchange": "binance", "symbols": "BTCUSDC,ETHUSDC"},
     )
 
 
@@ -363,14 +364,14 @@ def test_get_public_klines_default_params() -> None:
     client = BackendApiClient()
 
     with patch.object(client, "_request", return_value=_ok({})) as mock_request:
-        client.get_public_klines(exchange="binance", symbol="BTCUSDT")
+        client.get_public_klines(exchange="binance", symbol="BTCUSDC")
 
     mock_request.assert_called_once_with(
         "GET",
         "/api/v1/market/public/klines",
         query_params={
             "exchange": "binance",
-            "symbols": "BTCUSDT",
+            "symbols": "BTCUSDC",
             "interval": "1h",
             "limit": "24",
         },

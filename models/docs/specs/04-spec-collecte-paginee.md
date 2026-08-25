@@ -38,7 +38,7 @@ def collect_klines_paginated(
     Collecte target_rows klines en paginant vers l'arrière depuis end_time.
 
     Args:
-        symbol:        Symbole canonique MVP (ex: "BTCUSDT", "BTCETH").
+        symbol:        Symbole canonique MVP (ex: "BTCUSDC", "BTCETH").
         source_symbol: Symbole Binance réel (ex: "ETHBTC" pour BTCETH).
         interval:      Intervalle Binance (ex: "1h").
         target_rows:   Nombre de lignes cibles à collecter.
@@ -82,7 +82,7 @@ Chaque page est loggée :
 binance paginated page=1 cursor=2026-06-01 rows_fetched=1000 total=1000
 binance paginated page=2 cursor=2025-06-01 rows_fetched=1000 total=2000
 ...
-binance paginated complete symbol=BTCUSDT rows=26000 pages=26 duration_s=12.4
+binance paginated complete symbol=BTCUSDC rows=26000 pages=26 duration_s=12.4
 ```
 
 ---
@@ -199,7 +199,7 @@ def test_collect_klines_paginated_concatenates_pages(mock_fetch_klines):
     mock_fetch_klines.side_effect = [make_klines(1000, start=T0 - 2000h),
                                      make_klines(1000, start=T0 - 1000h),
                                      make_klines(1000, start=T0)]
-    df = collect_klines_paginated("BTCUSDT", "BTCUSDT", "1h", target_rows=2500)
+    df = collect_klines_paginated("BTCUSDC", "BTCUSDC", "1h", target_rows=2500)
     assert len(df) == 2500
     assert df["open_time"].is_monotonic_increasing
 ```
@@ -219,8 +219,8 @@ def test_gap_detection_reports_missing_candles(make_df_with_gap):
 ```python
 def test_collect_paginated_writes_meta_json(tmp_path, mock_binance):
     """Le meta.json doit contenir collection_mode=paginated et pages_fetched."""
-    collect_symbol("BTCUSDT", "1h", output_dir=tmp_path, mode="paginated", target_rows=2000)
-    meta = json.loads((tmp_path / "BTCUSDT/1h.parquet.meta.json").read_text())
+    collect_symbol("BTCUSDC", "1h", output_dir=tmp_path, mode="paginated", target_rows=2000)
+    meta = json.loads((tmp_path / "BTCUSDC/1h.parquet.meta.json").read_text())
     assert meta["collection_mode"] == "paginated"
     assert meta["pages_fetched"] >= 2
 ```
@@ -232,11 +232,11 @@ def test_collect_paginated_writes_meta_json(tmp_path, mock_binance):
 ```makefile
 collect:
     $(PYTHON) -m src.main --config config.yaml collect \
-        --symbols BTCUSDT BTCETH --interval 1h
+        --symbols BTCUSDC BTCETH --interval 1h
 
 collect-dry:
     $(PYTHON) -m src.main --config config.yaml collect \
-        --symbols BTCUSDT --interval 1h --dry-run
+        --symbols BTCUSDC --interval 1h --dry-run
 ```
 
 Le flag `--dry-run` (optionnel) logue combien de pages seraient nécessaires sans écrire de fichiers.
@@ -250,5 +250,5 @@ Le flag `--dry-run` (optionnel) logue combien de pages seraient nécessaires san
 - [ ] `src/data/collect.py` dispatche sur le mode configuré
 - [ ] Tests unitaires pagination et gaps passants
 - [ ] `make collect` produit ≥ 26 000 lignes par symbole en mode `paginated`
-- [ ] `data/raw/BTCUSDT/1h.parquet.meta.json` contient `pages_fetched` et `gaps_detected`
+- [ ] `data/raw/BTCUSDC/1h.parquet.meta.json` contient `pages_fetched` et `gaps_detected`
 - [ ] Aucune régression sur les tests existants en mode `single`

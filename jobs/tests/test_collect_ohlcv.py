@@ -20,7 +20,7 @@ class FakeMinioClient:
 
 def test_read_raw_ohlcv_from_minio_with_exchange(monkeypatch):
     fake = FakeMinioClient(
-        objects=[{"Key": "raw/ohlcv/kraken/BTCUSDT/1h/2023-01-01.parquet"}],
+        objects=[{"Key": "raw/ohlcv/kraken/BTCUSDC/1h/2023-01-01.parquet"}],
         frame=pd.DataFrame([{"open_time": 1, "close": 1.5}]),
     )
 
@@ -28,8 +28,8 @@ def test_read_raw_ohlcv_from_minio_with_exchange(monkeypatch):
 
     from models.src.data.storage import read_raw_ohlcv_from_minio
 
-    result = read_raw_ohlcv_from_minio(symbol="BTCUSDT", interval="1h", exchange="kraken")
-    assert fake.seen_prefix == "raw/ohlcv/kraken/BTCUSDT/1h/"
+    result = read_raw_ohlcv_from_minio(symbol="BTCUSDC", interval="1h", exchange="kraken")
+    assert fake.seen_prefix == "raw/ohlcv/kraken/BTCUSDC/1h/"
     assert not result.empty
 
 
@@ -39,7 +39,7 @@ def test_read_raw_ohlcv_from_minio_no_objects(monkeypatch):
 
     from models.src.data.storage import read_raw_ohlcv_from_minio
 
-    result = read_raw_ohlcv_from_minio(exchange="kraken", symbol="BTCUSDT", interval="1h")
+    result = read_raw_ohlcv_from_minio(exchange="kraken", symbol="BTCUSDC", interval="1h")
     assert result.empty
 
 

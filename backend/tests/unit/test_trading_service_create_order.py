@@ -34,7 +34,7 @@ def _make_settings(session, user: User, api_keys: dict | None = None) -> UserSet
 def _make_order_data(deployment: StrategyDeployment) -> OrderCreate:
     return OrderCreate(
         deployment_id=deployment.id,
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         order_type=OrderTypeEnum.MARKET,
         side=OrderSideEnum.BUY,
         quantity=Decimal("0.01"),
@@ -61,7 +61,7 @@ async def test_trading_service_create_order_success(
 
     fake_order_result = OrderResult(
         order_id="12345",
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         side="BUY",
         order_type="MARKET",
         status="FILLED",

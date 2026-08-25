@@ -4,18 +4,20 @@ Enchaîne les étapes du pipeline ML après que les données brutes ont été
 ingérées par le DAG ``ingest_ohlcv_binance_to_minio`` :
 
     start
-      ├── build_features_BTCUSDT_1h
-      ├── build_features_ETHUSDT_1h
+      ├── build_features_BTCUSDC_1h
+      ├── build_features_ETHUSDC_1h
       │
-      ├── train_random_forest  (attend toutes les features)
+      ├── train_random_forest    (attendent toutes les features)
+      ├── train_mlp
+      ├── train_xgboost
       │
-      ├── deploy_model         (copie le meilleur modèle → MinIO)
+      ├── deploy_model           (copie les meilleurs modèles → MinIO)
       │
-      └── verify_inference     (appelle l'endpoint backend)
+      └── verify_inference       (appelle l'endpoint backend)
 
 Planning : quotidien à 06:00 UTC (après les runs d'ingestion nocturnes).
 
-Les étapes ``build_features_*`` et ``train_random_forest`` sont déclenchées via un
+Les étapes ``build_features_*`` et ``train_*`` sont déclenchées via un
 appel HTTP au conteneur ``crypto-bot-ml-api`` (routes ``/internal/pipeline/...``),
 plutôt que d'exécuter ``python -m src.main`` dans l'environnement Python d'Airflow.
 Raison : ml-api a déjà torch/mlflow/scikit-learn qui fonctionnent ; les installer
@@ -66,7 +68,7 @@ except ImportError:
 # Configuration
 # ---------------------------------------------------------------------------
 
-SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+SYMBOLS = ["BTCUSDC", "ETHUSDC"]
 INTERVAL = "1h"
 
 # Dataset processed (output de build_features, input de train-rf). Chemin relatif au
@@ -115,6 +117,30 @@ def _train_random_forest_callable() -> None:
     logger.info("train_random_forest: %s", response.json())
 
 
+def _train_mlp_callable() -> None:
+    """Appelle POST /internal/pipeline/train-mlp sur crypto-bot-ml-api."""
+    dataset = _feature_path(SYMBOLS[0])
+    response = requests.post(
+        f"{ML_API_URL}/internal/pipeline/train-mlp",
+        json={"dataset": dataset, "config": "config.yaml"},
+        timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    logger.info("train_mlp: %s", response.json())
+
+
+def _train_xgboost_callable() -> None:
+    """Appelle POST /internal/pipeline/train-xgboost sur crypto-bot-ml-api."""
+    dataset = _feature_path(SYMBOLS[0])
+    response = requests.post(
+        f"{ML_API_URL}/internal/pipeline/train-xgboost",
+        json={"dataset": dataset, "config": "config.yaml"},
+        timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    logger.info("train_xgboost: %s", response.json())
+
+
 def _verify_inference_callable() -> None:
     """Appelle /inference/predict avec un vrai vecteur de features (derniere ligne du
     dataset traite), pas un features factice — un vecteur incomplet echoue en 400,
@@ -136,7 +162,7 @@ def _verify_inference_callable() -> None:
     logger.info("verify_inference: %s", response.json())
 
 
-def _deploy_callable() -> None:
+def _deploy_callable(model_name: str = "random_forest") -> None:
     """Appelle le job de déploiement (importé depuis jobs/).
 
     ``registry_root`` doit être explicite : le registre local est écrit par
@@ -148,9 +174,9 @@ def _deploy_callable() -> None:
     if not _DEPLOY_AVAILABLE:
         raise RuntimeError("deploy_model.py non disponible dans jobs/")
     registry_root = Path(MODELS_DIR) / "artifacts" / "registry"
-    ok = _deploy(model_name="random_forest", registry_root=registry_root)
+    ok = _deploy(model_name=model_name, registry_root=registry_root)
     if not ok:
-        raise RuntimeError("Échec du déploiement du modèle random_forest")
+        raise RuntimeError(f"Échec du déploiement du modèle {model_name}")
 
 
 # ---------------------------------------------------------------------------
@@ -170,8 +196,9 @@ with DAG(
     dag_id="cryptobot_ml_pipeline",
     default_args=default_args,
     description=(
-        "Pipeline ML complet : build features → entraînement Random Forest "
-        "→ déploiement du modèle vers MinIO → vérification de l'API d'inférence"
+        "Pipeline ML complet : build features → entraînement Random Forest / "
+        "MLP / XGBoost → déploiement des modèles vers MinIO → vérification de "
+        "l'API d'inférence"
     ),
     schedule_interval="0 6 * * *",       # chaque jour à 06:00 UTC
     catchup=False,
@@ -191,18 +218,41 @@ with DAG(
         )
         build_tasks.append(task)
 
-    # -- 2. Entraînement Random Forest (appel HTTP a crypto-bot-ml-api) --------
+    # -- 2. Entraînements (appels HTTP a crypto-bot-ml-api) -----------------------
     train_rf = PythonOperator(
         task_id="train_random_forest",
         python_callable=_train_random_forest_callable,
         retries=1,
         retry_delay=timedelta(minutes=5),
     )
+    train_mlp = PythonOperator(
+        task_id="train_mlp",
+        python_callable=_train_mlp_callable,
+        retries=1,
+        retry_delay=timedelta(minutes=5),
+    )
+    train_xgboost = PythonOperator(
+        task_id="train_xgboost",
+        python_callable=_train_xgboost_callable,
+        retries=1,
+        retry_delay=timedelta(minutes=5),
+    )
 
-    # -- 3. Déploiement vers MinIO ---------------------------------------------
-    deploy = PythonOperator(
-        task_id="deploy_model",
+    # -- 3. Déploiement vers MinIO -------------------------------------------------
+    deploy_rf = PythonOperator(
+        task_id="deploy_model_random_forest",
         python_callable=_deploy_callable,
+        op_kwargs={"model_name": "random_forest"},
+    )
+    deploy_mlp = PythonOperator(
+        task_id="deploy_model_mlp",
+        python_callable=_deploy_callable,
+        op_kwargs={"model_name": "mlp"},
+    )
+    deploy_xgboost = PythonOperator(
+        task_id="deploy_model_xgboost",
+        python_callable=_deploy_callable,
+        op_kwargs={"model_name": "xgboost"},
     )
 
     # -- 4. Vérification de l'API d'inférence -----------------------------------
@@ -212,7 +262,11 @@ with DAG(
     )
 
     # -- Ordonnancement ---------------------------------------------------------
-    # Toutes les features en parallèle → puis training → deploy → verify
-    train_rf.set_upstream(build_tasks)
-    deploy.set_upstream(train_rf)
-    verify.set_upstream(deploy)
+    # Toutes les features en parallèle → puis les entraînements (parallèles)
+    # → puis les déploiements (parallèles) → puis la vérification
+    for task in (train_rf, train_mlp, train_xgboost):
+        task.set_upstream(build_tasks)
+    deploy_rf.set_upstream(train_rf)
+    deploy_mlp.set_upstream(train_mlp)
+    deploy_xgboost.set_upstream(train_xgboost)
+    verify.set_upstream([deploy_rf, deploy_mlp, deploy_xgboost])

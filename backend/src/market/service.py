@@ -37,7 +37,7 @@ class MarketDataService:
         Get historical market data.
 
         Args:
-            symbol: Trading symbol (e.g., 'BTCUSDT')
+            symbol: Trading symbol (e.g., 'BTCUSDC')
             timeframe: Timeframe (e.g., '1h', '4h', '1d')
             start_date: Start date
             end_date: End date
@@ -134,28 +134,28 @@ class MarketDataService:
         """Get list of available trading symbols."""
         # In production, this would query the exchange API
         return [
-            "BTCUSDT",
-            "ETHUSDT",
-            "BNBUSDT",
-            "ADAUSDT",
-            "DOGEUSDT",
-            "XRPUSDT",
-            "DOTUSDT",
-            "UNIUSDT",
-            "LTCUSDT",
-            "LINKUSDT",
-            "SOLUSDT",
-            "MATICUSDT",
-            "AVAXUSDT",
-            "SHIBUSDT",
-            "ATOMUSDT",
+            "BTCUSDC",
+            "ETHUSDC",
+            "BNBUSDC",
+            "ADAUSDC",
+            "DOGEUSDC",
+            "XRPUSDC",
+            "DOTUSDC",
+            "UNIUSDC",
+            "LTCUSDC",
+            "LINKUSDC",
+            "SOLUSDC",
+            "MATICUSDC",
+            "AVAXUSDC",
+            "SHIBUSDC",
+            "ATOMUSDC",
         ]
 
     async def get_symbol_info(self, symbol: str) -> dict[str, Any]:
         """Get detailed information about a symbol."""
         # In production, this would query the exchange API
         base_asset = symbol[:-4] if len(symbol) > 4 else symbol[:3]
-        quote_asset = symbol[-4:] if len(symbol) > 4 else "USDT"
+        quote_asset = symbol[-4:] if len(symbol) > 4 else "USDC"
 
         return {
             "symbol": symbol,

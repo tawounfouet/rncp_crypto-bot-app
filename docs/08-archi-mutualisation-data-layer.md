@@ -295,8 +295,8 @@ Le format de bougie de référence (défini dans `crypto-bot-models/docs/specs/0
 
 ```json
 {
-  "symbol": "BTCUSDT",          // la paire (Bitcoin contre dollar)
-  "source_symbol": "BTCUSDT",   // le symbole réellement interrogé chez Binance
+  "symbol": "BTCUSDC",          // la paire (Bitcoin contre dollar)
+  "source_symbol": "BTCUSDC",   // le symbole réellement interrogé chez Binance
   "price_inverted": false,      // a-t-on dû inverser le prix ? (cas BTCETH)
   "interval": "1h",             // la durée d'une bougie (ici 1 heure)
   "open_time": "2026-05-01T00:00:00Z",   // début de la bougie (heure UTC)

@@ -7,7 +7,7 @@ Ce dépôt porte le MVP **Data Engineering + Machine Learning** du CryptoBot v2.
 
 Le périmètre est volontairement réduit pour valider l'hypothèse de valeur sans multiplier les risques techniques :
 
-- collecte automatisée des paires `BTCUSDT` et `BTCETH`
+- collecte automatisée des paires `BTCUSDC` et `BTCETH`
 - dataset OHLCV reproductible
 - exports raw et processed en Parquet, CSV et JSONL
 - baseline `RandomForestClassifier`
@@ -66,8 +66,8 @@ Les mêmes actions sont disponibles via le CLI central :
 
 ```bash
 python -m src.main config
-python -m src.main collect --symbols BTCUSDT BTCETH --interval 1h
-python -m src.main features --symbols BTCUSDT BTCETH --interval 1h
+python -m src.main collect --symbols BTCUSDC BTCETH --interval 1h
+python -m src.main features --symbols BTCUSDC BTCETH --interval 1h
 python -m src.main check
 ```
 

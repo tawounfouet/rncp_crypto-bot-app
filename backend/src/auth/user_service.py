@@ -5,9 +5,11 @@ Handles user CRUD operations and business logic.
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from auth.models import User, UserSettings
@@ -16,6 +18,20 @@ from auth.service import auth_service
 
 # Constants
 USER_NOT_FOUND = "User not found"
+
+
+def _export_value(value: object) -> object:
+    """Serialize scalar column values for a portable export (JSON-safe)."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def _model_to_dict(obj: object) -> dict:
+    """Serialize a SQLAlchemy model to a plain dict (columns only, no relations)."""
+    return {column.key: _export_value(getattr(obj, column.key)) for column in sa_inspect(obj).mapper.column_attrs}
 
 
 class UserService:
@@ -192,7 +208,7 @@ class UserService:
             settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if settings is None:
                 return None
-            configured_exchanges = sorted(settings.api_keys) if settings.api_keys else []
+            configured_exchanges = sorted(settings.exchange_credentials_detail())
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
@@ -215,7 +231,8 @@ class UserService:
                     "theme": settings.theme,
                     "risk_profile": settings.risk_profile,
                     "notification_preferences": settings.notification_preferences,
-                    "configured_exchanges": sorted(settings.api_keys) if settings.api_keys else [],
+                    "has_binance_credentials": settings.has_credentials_for_exchange("binance"),
+                    "configured_exchanges": sorted(settings.exchange_credentials_detail()),
                     "exchange_credentials": settings.exchange_credentials_detail(),
                 }
 
@@ -229,6 +246,14 @@ class UserService:
                 for account in user.accounts
             ]
 
+            # Trading data (relations du modele User) pour l'export RGPD complet
+            strategies_data = [_model_to_dict(s) for s in user.strategies]
+            deployments_data = [_model_to_dict(d) for d in user.strategy_deployments]
+            orders_data = [_model_to_dict(o) for o in user.orders]
+            transactions_data = [_model_to_dict(t) for t in user.transactions]
+            sessions_data = [_model_to_dict(s) for s in user.trading_sessions]
+            backtests_data = [_model_to_dict(b) for b in user.backtest_results]
+
             return {
                 "user": {
                     "id": user.id,
@@ -238,12 +263,18 @@ class UserService:
                     "last_name": user.last_name,
                     "is_active": user.is_active,
                     "is_admin": user.is_admin,
-                    "last_active_at": user.last_active_at,
-                    "created_at": user.created_at,
-                    "updated_at": user.updated_at,
+                    "last_active_at": _export_value(user.last_active_at),
+                    "created_at": _export_value(user.created_at),
+                    "updated_at": _export_value(user.updated_at),
                 },
                 "settings": settings_data,
                 "accounts": accounts_data,
+                "strategies": strategies_data,
+                "strategy_deployments": deployments_data,
+                "orders": orders_data,
+                "transactions": transactions_data,
+                "trading_sessions": sessions_data,
+                "backtest_results": backtests_data,
             }
 
     def delete_inactive_users_older_than(self, days: int = 730) -> int:
@@ -316,7 +347,7 @@ class UserService:
                     setattr(settings, field, value)
 
             # Capture return values before session closes
-            configured_exchanges = sorted(settings.api_keys) if settings.api_keys else []
+            configured_exchanges = sorted(settings.exchange_credentials_detail())
             return {
                 "theme": settings.theme,
                 "risk_profile": settings.risk_profile,
@@ -324,6 +355,81 @@ class UserService:
                 "configured_exchanges": configured_exchanges,
                 "exchange_credentials": settings.exchange_credentials_detail(),
             }
+
+    # ---------------------------------------------------------------------------
+    # Multi-credential management
+    # ---------------------------------------------------------------------------
+
+    def _get_or_create_settings(self, session, user_id: str) -> UserSettings:
+        settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+        if not settings:
+            settings = UserSettings(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                theme="light",
+                notification_preferences={"email": True, "push": False},
+                risk_profile="moderate",
+                api_keys=None,
+            )
+            session.add(settings)
+        return settings
+
+    def list_api_credentials(self, user_id: str) -> list[dict]:
+        """List all API credentials for a user (masked)."""
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                return []
+            return settings.get_all_credentials()
+
+    def add_api_credential(self, user_id: str, label: str, exchange: str, api_key: str, api_secret: str) -> dict:
+        """Add a named API credential. Returns the masked credential dict."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        with get_db_session() as session:
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND)
+            settings = self._get_or_create_settings(session, user_id)
+            key_id = settings.add_credential(label, exchange, api_key, api_secret)
+            flag_modified(settings, "api_keys")
+            session.commit()
+            raw = api_key
+            return {
+                "id": key_id,
+                "exchange": exchange,
+                "label": label,
+                "api_key_masked": (raw[:4] + "****") if len(raw) > 4 else "****",
+                "created_at": None,
+            }
+
+    def remove_api_credential(self, user_id: str, key_id: str) -> bool:
+        """Remove an API credential by key_id. Returns True if removed."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                return False
+            removed = settings.remove_credential(key_id)
+            if removed:
+                flag_modified(settings, "api_keys")
+                session.commit()
+            return removed
+
+    def set_primary_credential(self, user_id: str, key_id: str) -> bool:
+        """Mark key_id as primary for its exchange. Returns True if found."""
+        from sqlalchemy.orm.attributes import flag_modified
+
+        with get_db_session() as session:
+            settings = session.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+            if not settings:
+                return False
+            updated = settings.set_primary_credential(key_id)
+            if updated:
+                flag_modified(settings, "api_keys")
+                session.commit()
+            return updated
 
     # Admin operations
     def activate_user(self, user_id: str) -> bool:

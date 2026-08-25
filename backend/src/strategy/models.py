@@ -103,6 +103,7 @@ class StrategyDeployment(BaseModel):
     # Trading configuration
     amount = Column(DECIMAL(20, 8), nullable=False)
     parameters = Column(JSON, nullable=True)  # Deployment-specific parameters
+    is_paper = Column(Boolean, nullable=False, default=True)  # True = paper trading, no real orders
 
     # Status and timing
     status = Column(String(20), nullable=False, default="active", index=True)

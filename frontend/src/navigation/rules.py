@@ -20,6 +20,13 @@ class NavPage:
 
 
 PAGES: dict[str, NavPage] = {
+    "dashboard": NavPage(
+        key="dashboard",
+        label="Tableau de bord",
+        path="pages/00_Tableau_de_bord.py",
+        requires_auth=True,
+        show_when_authenticated=True,
+    ),
     "market": NavPage(
         key="market",
         label="Marché",
@@ -74,12 +81,26 @@ PAGES: dict[str, NavPage] = {
         requires_auth=True,
         show_when_authenticated=True,
     ),
+    "backtesting": NavPage(
+        key="backtesting",
+        label="Backtesting",
+        path="pages/09_Backtesting.py",
+        requires_auth=True,
+        show_when_authenticated=True,
+    ),
     "admin": NavPage(
         key="admin",
         label="Admin",
         path="pages/08_Admin.py",
         requires_auth=True,
         requires_admin=True,
+        show_when_authenticated=True,
+    ),
+    "privacy": NavPage(
+        key="privacy",
+        label="Politique de confidentialité",
+        path="pages/10_Politique_de_confidentialite.py",
+        show_when_anonymous=True,
         show_when_authenticated=True,
     ),
 }
@@ -94,11 +115,21 @@ def get_page(page_key: str) -> NavPage:
 
 def allowed_page_keys_in_sidebar(user: MockUser | None) -> list[str]:
     if user is None:
-        return ["market", "login", "signup"]
+        return ["market", "login", "signup", "privacy"]
 
-    keys = ["market", "portfolio", "performance", "bot_control", "bot_config", "account"]
+    keys = [
+        "dashboard",
+        "market",
+        "portfolio",
+        "performance",
+        "bot_control",
+        "bot_config",
+        "backtesting",
+        "account",
+    ]
     if user.role == UserRole.ADMIN:
         keys.append("admin")
+    keys.append("privacy")
     return keys
 
 

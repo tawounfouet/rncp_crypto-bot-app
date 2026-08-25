@@ -165,8 +165,9 @@ class BackendApiClient(AuthApiClient):
         *,
         name: str,
         strategy_type: str,
+        parameters: dict,
+        description: str | None = None,
         asset_class: str = "crypto",
-        parameters: dict[str, Any] | None = None,
     ) -> ApiResponse:
         return self._request(
             "POST",
@@ -174,9 +175,18 @@ class BackendApiClient(AuthApiClient):
             json_body={
                 "name": name,
                 "strategy_type": strategy_type,
+                "parameters": parameters,
+                "description": description,
                 "asset_class": asset_class,
-                "parameters": parameters or {},
+                "is_public": False,
             },
+            access_token=access_token,
+        )
+
+    def delete_strategy(self, access_token: str, strategy_id: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/strategies/{strategy_id}",
             access_token=access_token,
         )
 
@@ -223,6 +233,31 @@ class BackendApiClient(AuthApiClient):
             access_token=access_token,
         )
 
+    def deploy_strategy(
+        self,
+        access_token: str,
+        strategy_id: str,
+        *,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        amount: float,
+        is_paper: bool = True,
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/{strategy_id}/deploy",
+            json_body={
+                "strategy_id": strategy_id,
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "amount": str(amount),
+                "is_paper": is_paper,
+            },
+            access_token=access_token,
+        )
+
     def stop_deployment(self, access_token: str, deployment_id: str) -> ApiResponse:
         return self._request(
             "POST",
@@ -237,25 +272,115 @@ class BackendApiClient(AuthApiClient):
             access_token=access_token,
         )
 
-    def deploy_strategy(
+    # ─── API Credentials (multi-key) ────────────────────────────────────────
+
+    def list_api_credentials(self, access_token: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/users/me/api-keys", access_token=access_token)
+
+    def add_api_credential(
         self,
         access_token: str,
-        strategy_id: str,
         *,
+        label: str,
         exchange: str,
-        symbol: str,
-        timeframe: str,
-        amount: str,
+        api_key: str,
+        api_secret: str,
     ) -> ApiResponse:
         return self._request(
             "POST",
-            f"{API_PREFIX}/strategies/{strategy_id}/deploy",
+            f"{API_PREFIX}/users/me/api-keys",
             json_body={
-                "strategy_id": strategy_id,
+                "label": label,
                 "exchange": exchange,
+                "api_key": api_key,
+                "api_secret": api_secret,
+            },
+            access_token=access_token,
+        )
+
+    def set_primary_api_credential(self, access_token: str, key_id: str) -> ApiResponse:
+        return self._request(
+            "PUT",
+            f"{API_PREFIX}/users/me/api-keys/{key_id}/primary",
+            access_token=access_token,
+        )
+
+    def delete_api_credential(self, access_token: str, key_id: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/users/me/api-keys/{key_id}",
+            access_token=access_token,
+        )
+
+    # ─── Backtesting ─────────────────────────────────────────────────────────
+
+    def run_backtest(
+        self,
+        access_token: str,
+        *,
+        strategy_id: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        initial_balance: float,
+        parameters: dict | None = None,
+    ) -> ApiResponse:
+        payload: dict[str, Any] = {
+            "strategy_id": strategy_id,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "start_date": start_date,
+            "end_date": end_date,
+            "initial_balance": str(initial_balance),
+        }
+        if parameters:
+            payload["parameters"] = parameters
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/backtests",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def list_backtests(self, access_token: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/strategies/backtests", access_token=access_token)
+
+    def get_backtest(self, access_token: str, backtest_id: str) -> ApiResponse:
+        return self._request(
+            "GET", f"{API_PREFIX}/strategies/backtests/{backtest_id}", access_token=access_token
+        )
+
+    # ─── Market data ─────────────────────────────────────────────────────────
+
+    def get_market_coverage(self, access_token: str) -> ApiResponse:
+        """GET /market/data/coverage — résumé des données OHLCV stockées en base."""
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/market/data/coverage",
+            access_token=access_token,
+        )
+
+    def insert_market_data(
+        self,
+        access_token: str,
+        *,
+        symbol: str,
+        interval: str,
+        start_time: str,
+        end_time: str,
+        limit: int = 1000,
+    ) -> ApiResponse:
+        """POST /market/data/insert — importe les klines en base (upsert)."""
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/market/data/insert",
+            json_body={
                 "symbol": symbol,
-                "timeframe": timeframe,
-                "amount": amount,
+                "interval": interval,
+                "start_time": start_time,
+                "end_time": end_time,
+                "limit": limit,
             },
             access_token=access_token,
         )

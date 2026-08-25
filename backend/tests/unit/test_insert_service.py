@@ -14,7 +14,7 @@ import pytest
 
 def _kline_row(
     *,
-    symbol="BTCUSDT",
+    symbol="BTCUSDC",
     source="binance",
     interval="1h",
     open_time=None,
@@ -67,7 +67,7 @@ class TestInsertHistoricalData:
             with pytest.raises(ValueError, match="Invalid interval"):
                 service.insert_historical_data(
                     exchange="binance",
-                    symbol="BTCUSDT",
+                    symbol="BTCUSDC",
                     interval="3m",
                     start_time=datetime(2026, 1, 1, tzinfo=UTC),
                 )
@@ -124,7 +124,7 @@ class TestInsertHistoricalData:
                 mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
                 service.insert_historical_data(
                     exchange="binance",
-                    symbol="BTCUSDT",
+                    symbol="BTCUSDC",
                     interval="1h",
                     start_time=datetime(2026, 1, 1, tzinfo=UTC),
                 )
@@ -140,7 +140,7 @@ class TestInsertHistoricalData:
             with pytest.raises(RuntimeError, match="boom"):
                 service.insert_historical_data(
                     exchange="binance",
-                    symbol="BTCUSDT",
+                    symbol="BTCUSDC",
                     interval="1h",
                     start_time=datetime(2026, 1, 1, tzinfo=UTC),
                 )
@@ -173,7 +173,7 @@ class TestSaveToMinio:
 
         result = service._save_to_minio(
             "binance",
-            "BTCUSDT",
+            "BTCUSDC",
             "1h",
             datetime(2026, 1, 1, tzinfo=UTC),
             datetime(2026, 1, 2, tzinfo=UTC),
@@ -260,7 +260,7 @@ class TestGetDataCount:
         filtered_by_exchange.count.return_value = 3
 
         count = service.get_data_count(
-            "BTCUSDT", "1h", datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 2, tzinfo=UTC), exchange="Kraken"
+            "BTCUSDC", "1h", datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 2, tzinfo=UTC), exchange="Kraken"
         )
 
         assert count == 3
@@ -271,7 +271,7 @@ class TestGetDataCount:
         filtered = query.filter.return_value
         filtered.count.return_value = 5
 
-        count = service.get_data_count("BTCUSDT", "1h", datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 2, tzinfo=UTC))
+        count = service.get_data_count("BTCUSDC", "1h", datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 2, tzinfo=UTC))
 
         assert count == 5
         filtered.filter.assert_not_called()
@@ -279,7 +279,7 @@ class TestGetDataCount:
     def test_returns_zero_and_logs_on_db_error(self, service):
         service.db.query.side_effect = RuntimeError("db down")
 
-        assert service.get_data_count("BTCUSDT", "1h", datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 2, tzinfo=UTC)) == 0
+        assert service.get_data_count("BTCUSDC", "1h", datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 1, 2, tzinfo=UTC)) == 0
 
 
 class TestGetLatestData:
@@ -288,7 +288,7 @@ class TestGetLatestData:
     def _mock_record(self, exchange="binance"):
         record = MagicMock()
         record.id = 1
-        record.symbol = "BTCUSDT"
+        record.symbol = "BTCUSDC"
         record.exchange = exchange
         record.interval_timeframe = "1h"
         record.open_time = datetime(2026, 1, 1, tzinfo=UTC)
@@ -310,10 +310,10 @@ class TestGetLatestData:
         ordered = filtered.order_by.return_value
         ordered.limit.return_value.all.return_value = [self._mock_record()]
 
-        data = service.get_latest_data("BTCUSDT", "1h", limit=10)
+        data = service.get_latest_data("BTCUSDC", "1h", limit=10)
 
         assert len(data) == 1
-        assert data[0]["symbol"] == "BTCUSDT"
+        assert data[0]["symbol"] == "BTCUSDC"
         assert data[0]["open_price"] == 100.0
 
     def test_filters_by_exchange_when_provided(self, service):
@@ -322,11 +322,11 @@ class TestGetLatestData:
         filtered_by_exchange = filtered_by_base.filter.return_value
         filtered_by_exchange.order_by.return_value.limit.return_value.all.return_value = []
 
-        service.get_latest_data("BTCUSDT", "1h", limit=10, exchange="binance")
+        service.get_latest_data("BTCUSDC", "1h", limit=10, exchange="binance")
 
         filtered_by_base.filter.assert_called_once()
 
     def test_returns_empty_list_and_logs_on_db_error(self, service):
         service.db.query.side_effect = RuntimeError("db down")
 
-        assert service.get_latest_data("BTCUSDT", "1h") == []
+        assert service.get_latest_data("BTCUSDC", "1h") == []

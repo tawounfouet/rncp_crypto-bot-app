@@ -237,9 +237,9 @@ DAG: ingest_ohlcv_binance_to_minio
 Planification: @hourly
 Max active runs: 1
 
-start → collect_BTCUSDT_1h ─┐
+start → collect_BTCUSDC_1h ─┐
                               ├→ notify_success
-        collect_ETHUSDT_1h ─┘
+        collect_ETHUSDC_1h ─┘
 ```
 1. **collect_ohlcv** (PythonOperator) : Binance API → DataFrame → Parquet → MinIO (`raw/ohlcv/<SYMBOL>/<interval>/<date>.parquet`)
 2. **load_ohlcv** (PythonOperator) : MinIO → PostgreSQL (`market_data` table avec upsert via UUIDv5 déterministe)

@@ -164,7 +164,7 @@ def make_deployment():
             strategy_id=strategy.id,
             user_id=user.id,
             exchange="binance",
-            symbol="BTCUSDT",
+            symbol="BTCUSDC",
             timeframe="1h",
             amount=100,
             status="active",

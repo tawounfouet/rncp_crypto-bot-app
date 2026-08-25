@@ -49,7 +49,7 @@ Cibles d'historique :
 
 | Symbole | Intervalle | Cible lignes | Couverture approx |
 |---|---|---:|---|
-| BTCUSDT | 1h | 26 000 | 3 ans |
+| BTCUSDC | 1h | 26 000 | 3 ans |
 | BTCETH | 1h | 26 000 | 3 ans |
 
 Paramètre config à ajouter :
@@ -69,7 +69,7 @@ Preuve observable :
 
 ```bash
 make collect
-wc -l data/raw/BTCUSDT/1h.csv   # ~26000
+wc -l data/raw/BTCUSDC/1h.csv   # ~26000
 ```
 
 Spec complète dans [04-spec-collecte-paginee.md](../specs/04-spec-collecte-paginee.md).
@@ -99,7 +99,7 @@ Commande Makefile à ajouter :
 ```makefile
 train-baselines:
     $(PYTHON) -m src.main --config config.yaml train-baselines \
-        --dataset data/processed/BTCUSDT/1h_features.parquet
+        --dataset data/processed/BTCUSDC/1h_features.parquet
 ```
 
 Sortie attendue dans mlruns :
@@ -262,7 +262,7 @@ Résolution : croiser la distribution des labels avec la volatilité historique.
 Preuve observable :
 
 ```bash
-python -m src.features.threshold_analysis --symbol BTCUSDT --interval 1h
+python -m src.features.threshold_analysis --symbol BTCUSDC --interval 1h
 # threshold=0.001 : BUY=35%, SELL=33%, HOLD=32%
 # threshold=0.005 : BUY=20%, SELL=19%, HOLD=61%
 # threshold=0.01  : BUY=12%, SELL=11%, HOLD=77%
@@ -332,13 +332,13 @@ Step 5 — TimeSeriesSplit RF      ← si len(df) >= 5000
 ```makefile
 collect-full:
     $(PYTHON) -m src.main --config config.yaml collect \
-        --symbols BTCUSDT BTCETH --interval 1h --mode paginated
+        --symbols BTCUSDC BTCETH --interval 1h --mode paginated
 
 train-baselines:
     $(PYTHON) -m src.main --config config.yaml train-baselines \
-        --dataset data/processed/BTCUSDT/1h_features.parquet
+        --dataset data/processed/BTCUSDC/1h_features.parquet
 
 threshold-analysis:
     $(PYTHON) -m src.features.threshold_analysis \
-        --symbol BTCUSDT --interval 1h
+        --symbol BTCUSDC --interval 1h
 ```

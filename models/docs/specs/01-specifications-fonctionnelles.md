@@ -5,7 +5,7 @@ Derniere revision: 2026-06-10
 
 ## Objectif fonctionnel
 
-Le système models-training doit produire un signal `BUY`, `SELL` ou `HOLD` pour `BTCUSDT` et `BTCETH`, à partir de données OHLCV collectées automatiquement.
+Le système models-training doit produire un signal `BUY`, `SELL` ou `HOLD` pour `BTCUSDC` et `BTCETH`, à partir de données OHLCV collectées automatiquement.
 
 ## Utilisateurs cibles
 
@@ -24,7 +24,7 @@ Le système models-training doit produire un signal `BUY`, `SELL` ou `HOLD` pour
 
 Le système doit collecter les klines Binance pour :
 
-- `BTCUSDT`
+- `BTCUSDC`
 - `BTCETH`
 
 Paramètres MVP :

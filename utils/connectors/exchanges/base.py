@@ -52,7 +52,7 @@ def normalize_ohlcv(
     """Normalize OHLCV data from various sources into a standard dictionary format.
 
     Args:
-        symbol: Trading pair (e.g. ``BTCUSDT``)
+        symbol: Trading pair (e.g. ``BTCUSDC``)
         interval: Kline interval (e.g. ``1h``, ``4h``, ``1d``)
         source: Data source (e.g. ``binance``, ``kraken``, etc.)
         open_time: Open time in datetime
@@ -109,7 +109,7 @@ class MarketDataDriver(Protocol):
         """Fetch klines from the market data source.
 
         Args:
-            symbol: Trading pair (e.g. ``BTCUSDT``)
+            symbol: Trading pair (e.g. ``BTCUSDC``)
             interval: Kline interval (e.g. ``1h``, ``4h``, ``1d``)
             limit: Number of klines (max 1000 per call)
             start_time_ms: Start timestamp in milliseconds

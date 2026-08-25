@@ -48,11 +48,11 @@ def test_predict_live_returns_200_with_signal(client: TestClient) -> None:
     ):
         response = client.post(
             "/inference/predict-live",
-            json={"symbol": "BTCUSDT", "interval": "1h"},
+            json={"symbol": "BTCUSDC", "interval": "1h"},
         )
 
     assert response.status_code == 200
     data = response.json()
 
     assert "signal" in data
-    assert "symbol" in data and data["symbol"] == "BTCUSDT"
+    assert "symbol" in data and data["symbol"] == "BTCUSDC"

@@ -30,8 +30,8 @@ class PortfolioService:
         portfolio_resp = self.client.get_portfolio(token, exchange=exchange)
         backend_ok = portfolio_resp.success
         balances: list[BalanceRow] = []
-        total_value_usdt = 0.0
-        free_cash_usdt = 0.0
+        total_value_usdc = 0.0
+        free_cash_usdc = 0.0
 
         exchange_ok = False
         exchange_message = "Non configure"
@@ -41,17 +41,17 @@ class PortfolioService:
             inner_success = portfolio_resp.data.get("success", True)  # absent in stub → True
             inner_message = portfolio_resp.data.get("message") or ""
             raw_balances = raw_portfolio.get("balances") or []
-            total_value_usdt = _float(raw_portfolio.get("total_usd_value"))
+            total_value_usdc = _float(raw_portfolio.get("total_usd_value"))
             for b in raw_balances:
                 asset = b.get("asset", "")
                 free = _float(b.get("available"))
                 locked = _float(b.get("locked"))
                 value = _float(b.get("usd_value"))
-                if asset == "USDT":
-                    free_cash_usdt = free
+                if asset in ("USDC",):
+                    free_cash_usdc = free
                 if free > 0 or locked > 0:
                     balances.append(
-                        BalanceRow(asset=asset, free=free, locked=locked, value_usdt=value)
+                        BalanceRow(asset=asset, free=free, locked=locked, value_usdc=value)
                     )
             if inner_success:
                 exchange_ok = True
@@ -91,12 +91,12 @@ class PortfolioService:
                 recent_trades.append(
                     SpotTrade(
                         trade_id=t.get("id", ""),
-                        symbol=t.get("asset", "") + (t.get("quote_asset") or "USDT"),
+                        symbol=t.get("asset", "") + (t.get("quote_asset") or "USDC"),
                         side="BUY" if t.get("direction") == "IN" else "SELL",
                         price=_float(t.get("price")),
                         quantity=_float(t.get("amount")),
                         pnl_realized=0.0,
-                        fee_usdt=_float(t.get("fee_amount")),
+                        fee_usdc=_float(t.get("fee_amount")),
                         executed_at=parse_dt_or_now(t.get("timestamp")),
                     )
                 )
@@ -112,8 +112,8 @@ class PortfolioService:
 
         return PortfolioSnapshot(
             system_status=system_status,
-            total_value_usdt=total_value_usdt,
-            free_cash_usdt=free_cash_usdt,
+            total_value_usdc=total_value_usdc,
+            free_cash_usdc=free_cash_usdc,
             asset_count=len(balances),
             open_order_count=len(open_orders),
             balances=balances,

@@ -257,7 +257,7 @@ if __name__ == "__main__":
     # Créer un DataFrame de test
     df = pd.DataFrame(
         {
-            "symbol": ["BTCUSDT", "ETHUSDT", "DOGEUSDT"],
+            "symbol": ["BTCUSDC", "ETHUSDC", "DOGEUSDC"],
             "price": [40000.0, 2500.0, 0.15],
             "timestamp": [
                 datetime.now().isoformat(),

@@ -37,6 +37,9 @@ Thumbs.db
 # Claude Code
 .claude/
 
+# OpenCode
+AGENTS.md
+
 # Sauvegardes locales d'assets (non destinees au commit)
 frontend/assets/* copy*.png
 frontend/assets/*_copy.png

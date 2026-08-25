@@ -2,7 +2,7 @@
 
 **Date :** 2026-06-01
 **Run :** `20260601-210403`
-**Dataset :** `data/processed/BTCUSDT/1h_features.parquet` — 25 950 lignes
+**Dataset :** `data/processed/BTCUSDC/1h_features.parquet` — 25 950 lignes
 
 ---
 
@@ -65,7 +65,7 @@ Ces 8 features représentent ~14% de l'importance au total mais **aucune individ
 
 ### `price_inverted` = 0.0% — feature parasite
 
-Ce flag (toujours `False` pour BTCUSDT, toujours `True` pour BTCETH) n'apporte aucun signal dans un dataset mono-symbole. À supprimer des features d'entraînement.
+Ce flag (toujours `False` pour BTCUSDC, toujours `True` pour BTCETH) n'apporte aucun signal dans un dataset mono-symbole. À supprimer des features d'entraînement.
 
 ### `bb_width` et `volatility_20` sont utiles (7% + 6%)
 

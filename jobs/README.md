@@ -51,7 +51,7 @@ crypto-bot-data/
 └── raw/
     └── ohlcv/
         └── binance/
-            └── BTCUSDT/
+            └── BTCUSDC/
                 └── 1h/
                     ├── 2026-06-09.parquet
                     ├── 2026-06-10.parquet
@@ -70,7 +70,7 @@ Soit `raw/ohlcv/{exchange}/{SYMBOL}/{interval}/{date}.parquet`.
 # Dans le conteneur Airflow (qui a accès au réseau dev-network)
 docker compose exec airflow-webserver python /opt/airflow/jobs/ingest/collect_ohlcv.py \
     --exchange binance \
-    --symbol BTCUSDT \
+    --symbol BTCUSDC \
     --interval 1h \
     --limit 1000
 ```

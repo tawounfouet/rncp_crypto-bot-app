@@ -507,7 +507,7 @@ class TradingService:
 
         # Retrieve stored API credentials
         settings = self.db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
-        if not settings or not (settings.api_keys and target_exchange in settings.api_keys):
+        if not settings or not settings.has_credentials_for_exchange(target_exchange):
             return PortfolioResponse(
                 success=False,
                 message=f"Clés API {target_exchange} non configurées",

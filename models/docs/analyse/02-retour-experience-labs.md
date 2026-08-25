@@ -20,7 +20,7 @@ Ce document synthétise ce qu'il faut reprendre des travaux antérieurs et ce qu
 
 Le lab `crypto-lstm-models` contient une bonne base conceptuelle : client Binance, collecte OHLCV, multi-symboles, sauvegarde CSV. Pour le MVP, on reprend l'idée mais on réduit :
 
-- deux symboles seulement : `BTCUSDT`, `BTCETH`
+- deux symboles seulement : `BTCUSDC`, `BTCETH`
 - un intervalle prioritaire : `1h`
 - sauvegarde locale simple : `data/raw`, `data/processed`
 - pas de WebSocket pour la première version

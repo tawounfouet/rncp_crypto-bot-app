@@ -9,12 +9,17 @@ from components.headers import render_page_header
 from layouts.page_shell import setup_page
 from schemas.auth import LoginRequest
 from services.auth_service import AuthService
+from utils.streamlit_compat import button as compat_button
 from utils.streamlit_compat import form_submit_button as compat_form_submit_button
 from utils.validators import validate_email, validate_required
 
 
 def _render_logged_in_state() -> None:
     st.success("Vous etes deja connecte.")
+    if compat_button(
+        "Ouvrir le tableau de bord", key="open_dashboard", type="primary", width="stretch"
+    ):
+        st.switch_page("pages/00_Tableau_de_bord.py")
     col1, col2, col3 = st.columns(3)
     with col1:
         try:
@@ -60,7 +65,7 @@ def _render_login_form(service: AuthService) -> None:
         result = service.login(LoginRequest(email=email, password=password))
     if result.success:
         show_feedback("success", result.message)
-        st.switch_page("pages/03_Portefeuille_Spot.py")
+        st.switch_page("pages/00_Tableau_de_bord.py")
     else:
         show_feedback("error", result.message)
 

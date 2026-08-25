@@ -4,13 +4,14 @@ import json
 import logging
 import tempfile
 import time
+from numbers import Integral
 from pathlib import Path
 
 import joblib
 import numpy as np
 
 from utils.connectors.minio import MinioClient
-from utils.trading.signals import SIGNAL_TO_VALUE
+from utils.trading.signals import CLASS_ID_TO_SIGNAL, SIGNAL_TO_VALUE
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,13 @@ class InferenceService:
 
         proba = self._model.predict_proba(x_scaled)[0]
         classes = list(self._model.classes_)
-        probabilities = {str(label): float(p) for label, p in zip(classes, proba, strict=False)}
+        probabilities = {}
+        for raw_label, p in zip(classes, proba, strict=False):
+            if isinstance(raw_label, Integral):
+                # Classes entieres (ex: XGBoost entraîne sur 0..N-1) -> label canonique.
+                probabilities[CLASS_ID_TO_SIGNAL.get(int(raw_label), str(raw_label))] = float(p)
+            else:
+                probabilities[str(raw_label)] = float(p)
         signal = max(probabilities, key=probabilities.get)
 
         latency_ms = (time.perf_counter() - start) * 1000

@@ -5,7 +5,7 @@ d'ingestion, transforme les colonnes pour correspondre au schéma de la
 table ``market_data`` et exécute un upsert idempotent.
 
 Usage CLI :
-    python load_ohlcv.py --object-key raw/ohlcv/BTCUSDT/1h/2026-06-10.parquet
+    python load_ohlcv.py --object-key raw/ohlcv/BTCUSDC/1h/2026-06-10.parquet
 """
 
 from __future__ import annotations

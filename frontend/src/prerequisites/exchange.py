@@ -16,6 +16,7 @@ class ExchangeRequirementMode(str, Enum):
 
 
 EXCHANGE_PAGE_POLICY: dict[str, ExchangeRequirementMode] = {
+    "dashboard": ExchangeRequirementMode.BLOCK_CONTENT,
     "portfolio": ExchangeRequirementMode.BLOCK_CONTENT,
     "performance": ExchangeRequirementMode.BLOCK_CONTENT,
     "bot_control": ExchangeRequirementMode.DISABLE_ACTIONS,
@@ -23,6 +24,10 @@ EXCHANGE_PAGE_POLICY: dict[str, ExchangeRequirementMode] = {
 }
 
 EXCHANGE_MISSING_COPY: dict[str, tuple[str, str]] = {
+    "dashboard": (
+        "Pré-requis exchange manquant",
+        "Configurez vos clés d'exchange pour consulter la vue d'ensemble de vos bots et de leurs performances.",
+    ),
     "portfolio": (
         "Pré-requis exchange manquant",
         "Configurez vos clés d'exchange pour afficher le portefeuille, les ordres et les trades.",

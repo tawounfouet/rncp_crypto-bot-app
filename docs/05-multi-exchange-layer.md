@@ -19,7 +19,7 @@ Derniere revision: 2026-07-27
 | **ccxt** | Librairie tierce qui parle nativement à des dizaines d'exchanges (Binance, Kraken, ...) avec une API unifiée. C'est le chemin **par défaut** des deux couches. |
 | **Driver/client natif** | Implémentation écrite à la main pour un exchange précis (ex: `binance_native.py`), utilisée seulement si ccxt gère mal un cas particulier. C'est la **trappe**, l'exception. |
 | **Registry** | Le "standardiste" : on lui donne un nom d'exchange (`"kraken"`), il retourne l'objet driver/client prêt à l'emploi — natif si enregistré, sinon ccxt. |
-| **Symbole canonique** | Notre format interne, ex: `BTCUSDT`, `BTCEUR` — indépendant de la syntaxe propre à chaque exchange (`BTC/USDT` chez ccxt). |
+| **Symbole canonique** | Notre format interne, ex: `BTCUSDC`, `BTCEUR` — indépendant de la syntaxe propre à chaque exchange (`BTC/USDC` chez ccxt). |
 
 ---
 

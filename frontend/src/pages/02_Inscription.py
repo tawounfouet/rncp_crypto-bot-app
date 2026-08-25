@@ -43,6 +43,19 @@ def main() -> None:
         username = st.text_input("Nom d'utilisateur *")
         password = st.text_input("Mot de passe *", type="password")
         confirm_password = st.text_input("Confirmation mot de passe *", type="password")
+        st.markdown("---")
+        accept_privacy = st.checkbox(
+            "J'accepte la politique de confidentialite et le traitement de mes donnees personnelles (RGPD).",
+            value=False,
+            key="accept_privacy",
+        )
+        try:
+            st.page_link(
+                "pages/10_Politique_de_confidentialite.py",
+                label="Consulter la politique de confidentialite",
+            )
+        except Exception:
+            st.caption("Consulter la politique de confidentialite")
         submitted = compat_form_submit_button("Creer mon compte", type="primary", width="stretch")
 
     try:
@@ -64,6 +77,13 @@ def main() -> None:
         if not ok:
             show_feedback("error", message)
             return
+
+    if not accept_privacy:
+        show_feedback(
+            "error",
+            "Vous devez accepter la politique de confidentialite et le traitement de vos donnees pour creer un compte.",
+        )
+        return
 
     with st.spinner("Creation du compte en cours..."):
         result = service.register(

@@ -8,7 +8,7 @@ from unittest.mock import patch
 def _fake_candle(index: int, price: float) -> dict:
     """Construit une bougie factice au format retourné par fetch_klines/normalize_ohlcv."""
     return {
-        "symbol": "BTCUSDT",
+        "symbol": "BTCUSDC",
         "interval": "1h",
         "source": "binance",
         "open_time": 10,
@@ -39,7 +39,7 @@ class TestBuildLiveFeatureFrame:
         fake_rows = _fake_candles(count=120)
 
         with patch("inference.live_features.fetch_klines", return_value=fake_rows):
-            df = build_live_feature_frame("BTCUSDT", "1h", bars=len(fake_rows))
+            df = build_live_feature_frame("BTCUSDC", "1h", bars=len(fake_rows))
 
         assert not df.empty,  "df is empty"
         assert not df.isna().any().any(),  "df contient des NaN"
@@ -49,6 +49,6 @@ class TestBuildLiveFeatureFrame:
         from inference.live_features import build_live_feature_frame
 
         with patch("inference.live_features.fetch_klines", return_value=[]):
-            df = build_live_feature_frame("BTCUSDT", "1h")
+            df = build_live_feature_frame("BTCUSDC", "1h")
 
         assert df.empty

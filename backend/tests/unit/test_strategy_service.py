@@ -89,6 +89,44 @@ async def test_execute_strategy_ml_random_forest_calls_inference(
 
 
 @pytest.mark.asyncio
+async def test_execute_strategy_ml_mlp_calls_inference_with_model_name(
+        patch_db_session,
+        make_user,
+        make_deployment,
+        make_state
+    ) -> None:
+    user = make_user(patch_db_session)
+    deployment = make_deployment(patch_db_session, user)
+    deployment.strategy.strategy_type = "ml_mlp"
+    state = make_state(patch_db_session, deployment)
+
+    fake_features_df = pd.DataFrame([{"ema_12": 55.0, "macd_signal": 1.2}])
+
+    fake_predict_result = {
+        "signal": "BUY",
+        "signal_value": 1,
+        "confidence": 0.61,
+        "probabilities": {"SELL": 0.2, "HOLD": 0.19, "BUY": 0.61},
+        "latency_ms": 5.5,
+    }
+
+    service = StrategyService(market_data_service=MagicMock())
+
+    with (
+        patch("strategy.service.build_live_feature_frame", return_value=fake_features_df),
+        patch("strategy.service.InferenceService") as mock_inference_cls,
+    ):
+        mock_inference_cls.return_value.feature_columns = list(fake_features_df.columns)
+        mock_inference_cls.return_value.predict.return_value = fake_predict_result
+
+        result = await service.execute_strategy(deployment.id)
+
+    mock_inference_cls.assert_called_once_with(model_name="mlp")
+    assert result["latest_signal"] == fake_predict_result["signal_value"]
+    assert result["signal_info"]["confidence"] == fake_predict_result["confidence"]
+
+
+@pytest.mark.asyncio
 async def test_execute_active_deployments_activ_cooldown(
         patch_db_session,
         make_user,

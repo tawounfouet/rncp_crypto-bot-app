@@ -17,7 +17,7 @@ _STUB_STRATEGIES = [
         "is_active": True,
         "updated_at": "2024-01-01T00:00:00Z",
         "parameters": {
-            "version": 1, "budget_usdt": 1000.0, "max_open_positions": 3,
+            "version": 1, "budget_usdc": 1000.0, "max_open_positions": 3,
             "risk_per_trade_pct": 1.0, "take_profit_pct": 3.0, "stop_loss_pct": 2.0,
             "cooldown_seconds": 300,
         },
@@ -29,7 +29,7 @@ _STUB_STRATEGIES = [
         "is_active": True,
         "updated_at": "2024-01-01T00:00:00Z",
         "parameters": {
-            "version": 2, "budget_usdt": 2000.0, "max_open_positions": 3,
+            "version": 2, "budget_usdc": 2000.0, "max_open_positions": 3,
             "risk_per_trade_pct": 1.0, "take_profit_pct": 3.0, "stop_loss_pct": 2.0,
             "cooldown_seconds": 300,
         },
@@ -49,12 +49,12 @@ _STUB_ADMIN_USERS = [
 
 _STUB_TRANSACTIONS = [
     {
-        "id": "tx1", "transaction_type": "TRADE", "asset": "BTC", "quote_asset": "USDT",
+        "id": "tx1", "transaction_type": "TRADE", "asset": "BTC", "quote_asset": "USDC",
         "direction": "IN", "price": 45000.0, "amount": 0.1, "fee_amount": 2.5,
         "timestamp": "2024-01-15T10:00:00Z",
     },
     {
-        "id": "tx2", "transaction_type": "TRADE", "asset": "ETH", "quote_asset": "USDT",
+        "id": "tx2", "transaction_type": "TRADE", "asset": "ETH", "quote_asset": "USDC",
         "direction": "OUT", "price": 2500.0, "amount": 1.0, "fee_amount": 1.5,
         "timestamp": "2024-01-16T10:00:00Z",
     },
@@ -91,8 +91,8 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
         # (comme le fait reellement FastAPI/pydantic), pas en nombre natif.
         return ApiResponse(status_code=200, data={
             "data": [
-                {"symbol": "BTCUSDT", "exchange": exchange, "price": "65000.0", "as_of": "2024-01-01T00:00:00Z"},
-                {"symbol": "ETHUSDT", "exchange": exchange, "price": "3200.0", "as_of": "2024-01-01T00:00:00Z"},
+                {"symbol": "BTCUSDC", "exchange": exchange, "price": "65000.0", "as_of": "2024-01-01T00:00:00Z"},
+                {"symbol": "ETHUSDC", "exchange": exchange, "price": "3200.0", "as_of": "2024-01-01T00:00:00Z"},
             ],
             "warnings": [],
         })
@@ -100,7 +100,7 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
     # ── /market/public/klines (public, pas d'auth) ───────────────────────────
     if "/market/public/klines" in path:
         exchange = (kwargs.get("query_params") or {}).get("exchange", "binance")
-        symbol = (kwargs.get("query_params") or {}).get("symbols", "BTCUSDT")
+        symbol = (kwargs.get("query_params") or {}).get("symbols", "BTCUSDC")
         interval = (kwargs.get("query_params") or {}).get("interval", "1h")
         return ApiResponse(status_code=200, data={
             "data": [
@@ -126,6 +126,26 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
         return ApiResponse(
             status_code=200,
             data={"configured_exchanges": [exchange] if configured else []},
+        )
+
+    # ── /users/me/api-keys (multi-credential) ────────────────────────────────
+    if "/users/me/api-keys" in path and method == "GET":
+        _, user = _get_store_user()
+        configured = bool(getattr(user, "binance_configured", False)) if user else False
+        if not configured:
+            return ApiResponse(status_code=200, data=[])
+        return ApiResponse(
+            status_code=200,
+            data=[
+                {
+                    "id": "cred_binance_1",
+                    "exchange": "binance",
+                    "label": "Binance Spot principal",
+                    "api_key_masked": "AK_****",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "is_primary": True,
+                }
+            ],
         )
 
     # ── /users/me (GET ou PUT) ────────────────────────────────────────────────
@@ -199,7 +219,7 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
         return ApiResponse(status_code=200, data={
             "total_usd_value": 10000.0,
             "balances": [
-                {"asset": "USDT", "available": 5000.0, "locked": 0.0, "usd_value": 5000.0},
+                {"asset": "USDC", "available": 5000.0, "locked": 0.0, "usd_value": 5000.0},
                 {"asset": "BTC", "available": 0.1, "locked": 0.0, "usd_value": 4500.0},
             ],
         })

@@ -61,7 +61,7 @@ MODULE: pytest  [OK]
   [OK]     test_get_balances_filters_zero_amounts (tests.unit.test_market_clients_execution.TestCcxtClient)
   [OK]     test_get_default_quote_binance (tests.unit.test_market_clients_execution.TestQuotes)
   [OK]     test_get_default_quote_kraken (tests.unit.test_market_clients_execution.TestQuotes)
-  [OK]     test_get_default_quote_unknown_falls_back_to_usdt (tests.unit.test_market_clients_execution.TestQuotes)
+  [OK]     test_get_default_quote_unknown_falls_back_to_usdc (tests.unit.test_market_clients_execution.TestQuotes)
   [OK]     test_get_exchange_client_defaults_to_ccxt (tests.unit.test_market_clients_execution.TestRegistry)
   [OK]     test_get_exchange_client_uses_native_trapdoor_when_registered (tests.unit.test_market_clients_execution.TestRegistry)
   [OK]     test_get_historical_klines_success (tests.unit.test_client_binance.TestClientBinanceGetHistoricalKlines)

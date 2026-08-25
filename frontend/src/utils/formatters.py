@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 
-def format_currency(value: float, suffix: str = "USDT") -> str:
+def format_currency(value: float, suffix: str = "USDC") -> str:
     return f"{value:,.2f} {suffix}".replace(",", " ")
 
 

@@ -28,7 +28,6 @@ from strategy.schemas import (
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
     StrategyResponse,
-    StrategyTypeEnum,
     StrategyUpdate,
 )
 from utils.trading.signals import VALUE_TO_SIGNAL
@@ -221,6 +220,7 @@ class StrategyService:
                 timeframe=deployment_data.timeframe,
                 amount=deployment_data.amount,
                 parameters=deployment_data.parameters,
+                is_paper=deployment_data.is_paper,
                 start_time=datetime.now(UTC),
             )
 
@@ -250,6 +250,7 @@ class StrategyService:
                 timeframe=deployment.timeframe,
                 amount=deployment.amount,
                 parameters=deployment.parameters,
+                is_paper=deployment.is_paper,
                 status=deployment.status,
                 start_time=deployment.start_time,
                 end_time=deployment.end_time,
@@ -267,7 +268,7 @@ class StrategyService:
         Args:
             deployment_id: Deployment identifier
             data: Market data DataFrame, requis uniquement pour le moteur de règles fixes
-                (la branche ML_RANDOM_FOREST va chercher ses propres données live)
+                (la branche ML va chercher ses propres données live)
 
         Returns:
             Execution results with signals and metadata
@@ -289,10 +290,11 @@ class StrategyService:
             strategy_model = deployment.strategy
 
             try:
-                if strategy_model.strategy_type == StrategyTypeEnum.ML_RANDOM_FOREST:
+                if strategy_model.strategy_type.startswith("ml_"):
                     df = build_live_feature_frame(deployment.symbol, deployment.timeframe)
                     latest_row = df.iloc[-1]
-                    svc = InferenceService()
+                    model_name = strategy_model.strategy_type.removeprefix("ml_")
+                    svc = InferenceService(model_name=model_name)
                     features = {col: latest_row[col] for col in svc.feature_columns}
                     result = svc.predict(features)
                     latest_signal = result["signal_value"]
@@ -478,6 +480,7 @@ class StrategyService:
                 timeframe=deployment.timeframe,
                 amount=deployment.amount,
                 parameters=deployment.parameters,
+                is_paper=deployment.is_paper,
                 status=deployment.status,
                 start_time=deployment.start_time,
                 end_time=deployment.end_time,
@@ -502,6 +505,7 @@ class StrategyService:
         with get_db_session() as session:
             query = session.query(Strategy)
 
+            query = query.filter(Strategy.is_active.is_(True))
             if include_public:
                 query = query.filter(or_(Strategy.user_id == user_id, Strategy.is_public.is_(True)))
             else:
@@ -563,6 +567,7 @@ class StrategyService:
                     timeframe=deployment.timeframe,
                     amount=deployment.amount,
                     parameters=deployment.parameters,
+                    is_paper=deployment.is_paper,
                     status=deployment.status,
                     start_time=deployment.start_time,
                     end_time=deployment.end_time,
@@ -596,6 +601,397 @@ class StrategyService:
             Tuple of (is_valid, error_message)
         """
         return registry.validate_strategy(strategy_type, parameters)
+
+    # ---------------------------------------------------------------------------
+    # Backtesting
+    # ---------------------------------------------------------------------------
+
+    def _load_ohlcv(self, session, symbol: str, timeframe: str, start_date, end_date) -> pd.DataFrame:
+        """Load OHLCV rows from market_data table."""
+        from market.models import MarketData
+
+        rows = (
+            session.query(MarketData)
+            .filter(
+                and_(
+                    MarketData.symbol == symbol,
+                    MarketData.interval_timeframe == timeframe,
+                    MarketData.open_time >= start_date,
+                    MarketData.open_time <= end_date,
+                )
+            )
+            .order_by(MarketData.open_time.asc())
+            .all()
+        )
+        if not rows:
+            return pd.DataFrame()
+        data = [
+            {
+                "timestamp": r.open_time,
+                "open": float(r.open_price),
+                "high": float(r.high_price),
+                "low": float(r.low_price),
+                "close": float(r.close_price),
+                "volume": float(r.volume),
+            }
+            for r in rows
+        ]
+        df = pd.DataFrame(data)
+        df.set_index("timestamp", inplace=True)
+        return df
+
+    def _simulate_strategy(
+        self,
+        df: pd.DataFrame,
+        strategy_type: str,
+        params: dict,
+        initial_balance: float,
+    ) -> tuple[list[dict], dict]:
+        """
+        Run a simplified strategy simulation over OHLCV data.
+
+        Returns (trades_list, metrics_dict).
+        """
+        if df.empty or len(df) < 2:
+            return [], {
+                "total_return": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": 0.0,
+                "win_rate": 0.0,
+                "total_trades": 0,
+                "profit_factor": 0.0,
+            }
+
+        close = df["close"]
+        n = len(close)
+
+        # --- Generate signal series ---
+        signals = pd.Series(0, index=df.index)
+
+        st = strategy_type.lower()
+
+        if "mean_reversion" in st or "rsi" in st or "bollinger" in st:
+            # RSI-based mean reversion
+            period = int(params.get("rsi_period", params.get("period", 14)))
+            period = min(period, n - 1) or 14
+            delta = close.diff()
+            gain = delta.clip(lower=0).rolling(period).mean()
+            loss = (-delta.clip(upper=0)).rolling(period).mean()
+            rs = gain / loss.replace(0, 1e-9)
+            rsi = 100 - (100 / (1 + rs))
+            oversold = float(params.get("oversold", 30))
+            overbought = float(params.get("overbought", 70))
+            signals[rsi < oversold] = 1  # BUY
+            signals[rsi > overbought] = -1  # SELL
+
+        elif "momentum" in st or "trend" in st or "moving_average" in st or "crossover" in st:
+            # MA crossover
+            fast = int(params.get("fast_period", params.get("fast_ma", 10)))
+            slow = int(params.get("slow_period", params.get("slow_ma", 20)))
+            fast = min(fast, n // 2) or 5
+            slow = min(slow, n - 1) or 20
+            ma_fast = close.rolling(fast).mean()
+            ma_slow = close.rolling(slow).mean()
+            signals[ma_fast > ma_slow] = 1
+            signals[ma_fast <= ma_slow] = -1
+
+        elif "grid" in st:
+            # Simple grid: buy at every 2% dip from reference, sell at +2%
+            grid_pct = float(params.get("grid_pct", 0.02))
+            ref = close.iloc[0]
+            for ts, price in close.items():
+                if price <= ref * (1 - grid_pct):
+                    signals[ts] = 1
+                    ref = price
+                elif price >= ref * (1 + grid_pct):
+                    signals[ts] = -1
+                    ref = price
+
+        else:
+            # Default: random MA crossover (5/20)
+            ma_fast = close.rolling(5).mean()
+            ma_slow = close.rolling(20).mean()
+            signals[ma_fast > ma_slow] = 1
+            signals[ma_fast <= ma_slow] = -1
+
+        # --- Simulate trades ---
+        commission = float(params.get("commission", 0.001))
+        stop_loss_pct = float(params.get("stop_loss", params.get("stop_loss_pct", 0.02)))
+        take_profit_pct = float(params.get("take_profit", params.get("take_profit_pct", 0.04)))
+
+        balance = initial_balance
+        position = 0.0  # units held
+        entry_price = 0.0
+        trades = []
+        equity_curve = [balance]
+
+        prev_signal = 0
+        for ts, price in close.items():
+            sig = signals[ts]
+
+            # Check stop-loss / take-profit if in position
+            if position > 0:
+                pnl_pct = (price - entry_price) / entry_price
+                if pnl_pct <= -stop_loss_pct or pnl_pct >= take_profit_pct:
+                    # Force exit
+                    proceeds = position * price * (1 - commission)
+                    pnl = proceeds - (position * entry_price * (1 + commission))
+                    balance += proceeds
+                    trades.append(
+                        {
+                            "entry_price": entry_price,
+                            "exit_price": price,
+                            "pnl": round(pnl, 4),
+                            "pnl_pct": round(pnl_pct * 100, 2),
+                            "exit_reason": "stop_loss" if pnl_pct <= -stop_loss_pct else "take_profit",
+                            "timestamp": str(ts),
+                        }
+                    )
+                    position = 0.0
+                    entry_price = 0.0
+                    equity_curve.append(balance)
+                    continue
+
+            if sig == 1 and prev_signal != 1 and position == 0 and balance > 0:
+                # BUY
+                units = (balance * 0.95) / (price * (1 + commission))
+                cost = units * price * (1 + commission)
+                if cost <= balance:
+                    position = units
+                    entry_price = price
+                    balance -= cost
+
+            elif sig == -1 and position > 0:
+                # SELL
+                proceeds = position * price * (1 - commission)
+                pnl_pct = (price - entry_price) / entry_price
+                pnl = proceeds - (position * entry_price * (1 + commission))
+                balance += proceeds
+                trades.append(
+                    {
+                        "entry_price": entry_price,
+                        "exit_price": price,
+                        "pnl": round(pnl, 4),
+                        "pnl_pct": round(pnl_pct * 100, 2),
+                        "exit_reason": "signal",
+                        "timestamp": str(ts),
+                    }
+                )
+                position = 0.0
+                entry_price = 0.0
+
+            equity_curve.append(balance + position * price)
+            prev_signal = sig
+
+        # Close open position at last price
+        if position > 0:
+            last_price = float(close.iloc[-1])
+            proceeds = position * last_price * (1 - commission)
+            pnl_pct = (last_price - entry_price) / entry_price
+            pnl = proceeds - (position * entry_price * (1 + commission))
+            balance += proceeds
+            trades.append(
+                {
+                    "entry_price": entry_price,
+                    "exit_price": last_price,
+                    "pnl": round(pnl, 4),
+                    "pnl_pct": round(pnl_pct * 100, 2),
+                    "exit_reason": "end_of_data",
+                    "timestamp": str(close.index[-1]),
+                }
+            )
+
+        final_balance = balance
+        total_return = (final_balance - initial_balance) / initial_balance * 100
+
+        # Max drawdown
+        eq = pd.Series(equity_curve)
+        running_max = eq.cummax()
+        drawdowns = (eq - running_max) / running_max.replace(0, 1e-9)
+        max_drawdown = float(drawdowns.min() * 100)
+
+        # Sharpe (simplified, daily returns)
+        returns = eq.pct_change().dropna()
+        sharpe = float(returns.mean() / returns.std() * (252**0.5)) if returns.std() > 0 else 0.0
+
+        # Win rate
+        winning = [t for t in trades if t["pnl"] > 0]
+        win_rate = len(winning) / len(trades) * 100 if trades else 0.0
+
+        # Profit factor
+        gross_profit = sum(t["pnl"] for t in winning)
+        gross_loss = abs(sum(t["pnl"] for t in trades if t["pnl"] < 0))
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+
+        metrics = {
+            "total_return": round(total_return, 2),
+            "final_balance": round(final_balance, 2),
+            "max_drawdown": round(max_drawdown, 2),
+            "sharpe_ratio": round(sharpe, 3),
+            "win_rate": round(win_rate, 2),
+            "total_trades": len(trades),
+            "winning_trades": len(winning),
+            "profit_factor": round(min(profit_factor, 999.0), 2),
+        }
+        return trades, metrics
+
+    async def run_backtest(
+        self,
+        user_id: str,
+        backtest_data,
+    ):
+        """
+        Run a backtest for a strategy using stored OHLCV data.
+        Returns a BacktestResult object (committed to DB).
+        """
+        import uuid
+
+        from strategy.models import BacktestResult
+
+        with get_db_session() as session:
+            strategy = (
+                session.query(Strategy)
+                .filter(
+                    and_(
+                        Strategy.id == backtest_data.strategy_id,
+                        Strategy.user_id == user_id,
+                    )
+                )
+                .first()
+            )
+            if not strategy:
+                raise NotFoundError(f"Strategy {backtest_data.strategy_id} not found")
+
+            df = self._load_ohlcv(
+                session,
+                symbol=backtest_data.symbol,
+                timeframe=backtest_data.timeframe,
+                start_date=backtest_data.start_date,
+                end_date=backtest_data.end_date,
+            )
+            if df.empty:
+                raise BusinessLogicError(
+                    f"Aucune donnée OHLCV pour {backtest_data.symbol}/{backtest_data.timeframe} "
+                    f"entre {backtest_data.start_date} et {backtest_data.end_date}. "
+                    "Vérifiez que le DAG Airflow a ingéré des données pour cette paire."
+                )
+
+            params = {**(strategy.parameters or {})}
+            if backtest_data.parameters:
+                params.update(backtest_data.parameters)
+
+            trades, metrics = self._simulate_strategy(
+                df,
+                strategy_type=strategy.strategy_type,
+                params=params,
+                initial_balance=float(backtest_data.initial_balance),
+            )
+
+            bt = BacktestResult(
+                id=str(uuid.uuid4()),
+                strategy_id=backtest_data.strategy_id,
+                user_id=user_id,
+                symbol=backtest_data.symbol,
+                timeframe=backtest_data.timeframe,
+                start_date=backtest_data.start_date,
+                end_date=backtest_data.end_date,
+                parameters=params,
+                results={"equity_final": metrics.get("final_balance")},
+                metrics=metrics,
+                transactions=trades,
+            )
+            session.add(bt)
+            session.commit()
+            session.refresh(bt)
+
+            logger.info(
+                "Backtest user=%s strategy=%s symbol=%s: %d trades, return=%.2f%%",
+                user_id,
+                backtest_data.strategy_id,
+                backtest_data.symbol,
+                len(trades),
+                metrics.get("total_return", 0),
+            )
+
+            from strategy.schemas import BacktestResponse
+
+            return BacktestResponse(
+                id=bt.id,
+                strategy_id=bt.strategy_id,
+                user_id=bt.user_id,
+                symbol=bt.symbol,
+                timeframe=bt.timeframe,
+                start_date=bt.start_date,
+                end_date=bt.end_date,
+                parameters=bt.parameters,
+                metrics=bt.metrics,
+                transactions=bt.transactions,
+                created_at=bt.created_at,
+                updated_at=bt.updated_at,
+            )
+
+    def get_user_backtests(self, user_id: str) -> list:
+        """List all backtest results for a user (no transactions to keep payload small)."""
+        from strategy.models import BacktestResult
+        from strategy.schemas import BacktestResponse
+
+        with get_db_session() as session:
+            rows = (
+                session.query(BacktestResult)
+                .filter(BacktestResult.user_id == user_id)
+                .order_by(BacktestResult.created_at.desc())
+                .all()
+            )
+            return [
+                BacktestResponse(
+                    id=r.id,
+                    strategy_id=r.strategy_id,
+                    user_id=r.user_id,
+                    symbol=r.symbol,
+                    timeframe=r.timeframe,
+                    start_date=r.start_date,
+                    end_date=r.end_date,
+                    parameters=r.parameters,
+                    metrics=r.metrics,
+                    transactions=None,
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                )
+                for r in rows
+            ]
+
+    def get_backtest(self, user_id: str, backtest_id: str):
+        """Get a specific backtest result with full transactions."""
+        from strategy.models import BacktestResult
+        from strategy.schemas import BacktestResponse
+
+        with get_db_session() as session:
+            r = (
+                session.query(BacktestResult)
+                .filter(
+                    and_(
+                        BacktestResult.id == backtest_id,
+                        BacktestResult.user_id == user_id,
+                    )
+                )
+                .first()
+            )
+            if not r:
+                raise NotFoundError(f"Backtest {backtest_id} not found")
+            return BacktestResponse(
+                id=r.id,
+                strategy_id=r.strategy_id,
+                user_id=r.user_id,
+                symbol=r.symbol,
+                timeframe=r.timeframe,
+                start_date=r.start_date,
+                end_date=r.end_date,
+                parameters=r.parameters,
+                metrics=r.metrics,
+                transactions=r.transactions,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
 
     def get_available_models(self) -> list[dict[str, Any]]:
         ML_API_URL = os.environ.get("ML_API_URL", "http://crypto-bot-ml-api:8010")

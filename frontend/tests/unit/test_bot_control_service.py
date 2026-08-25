@@ -91,17 +91,18 @@ def test_bot_pause_not_supported(store) -> None:
     assert result.success is False
 
 
-def test_deploy_success(store) -> None:
+def test_start_bot_success(store) -> None:
     client = MagicMock(spec=BackendApiClient)
     client.deploy_strategy.return_value = _ok({"id": "deploy_2", "status": "active"})
     service = BotControlService(store, client=client)
 
-    result = service.deploy(
+    result = service.start_bot(
         "strat_btc",
         exchange="binance",
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         timeframe="1h",
-        amount="100.0",
+        amount=100.0,
+        is_paper=True,
     )
 
     assert result.success is True
@@ -109,23 +110,25 @@ def test_deploy_success(store) -> None:
         "fake-token",
         "strat_btc",
         exchange="binance",
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         timeframe="1h",
-        amount="100.0",
+        amount=100.0,
+        is_paper=True,
     )
 
 
-def test_deploy_failure_returns_backend_message(store) -> None:
+def test_start_bot_failure_returns_backend_message(store) -> None:
     client = MagicMock(spec=BackendApiClient)
     client.deploy_strategy.return_value = ApiResponse(status_code=400, error="Strategie invalide")
     service = BotControlService(store, client=client)
 
-    result = service.deploy(
+    result = service.start_bot(
         "strat_btc",
         exchange="binance",
-        symbol="BTCUSDT",
+        symbol="BTCUSDC",
         timeframe="1h",
-        amount="100.0",
+        amount=100.0,
+        is_paper=True,
     )
 
     assert result.success is False
