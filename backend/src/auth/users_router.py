@@ -358,6 +358,60 @@ async def deactivate_user(user_id: str, current_admin: UserModel = Depends(get_c
         ) from None
 
 
+@router.post("/{user_id}/make-admin")
+async def make_user_admin(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> dict:
+    """Grant admin privileges to a user (admin only)."""
+    try:
+        user = user_service.get_user_by_id(user_id)
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
+
+        if user.is_admin:
+            return {"message": "User is already admin"}
+
+        user_service.make_admin(user_id)
+        return {"message": f"User {user_id} successfully promoted to admin"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to promote user: {e!s}",
+        ) from None
+
+
+@router.post("/{user_id}/remove-admin")
+async def remove_user_admin(user_id: str, current_admin: UserModel = Depends(get_current_admin_user)) -> dict:
+    """Remove admin privileges from a user (admin only)."""
+    try:
+        user = user_service.get_user_by_id(user_id)
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=USER_NOT_FOUND_MSG)
+
+        if user_id == current_admin.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove your own admin role",
+            )
+
+        if not user.is_admin:
+            return {"message": "User is already non-admin"}
+
+        user_service.remove_admin(user_id)
+        return {"message": f"Admin privileges removed from user {user_id}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove admin role: {e!s}",
+        ) from None
+
+
 @router.post("/purge-inactive", response_model=BaseResponse)
 def purge_inactive_users(
     days: int = Query(730, ge=1, description="Seuil d'inactivite en jours"),

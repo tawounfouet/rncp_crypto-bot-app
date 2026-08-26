@@ -47,6 +47,8 @@ def main() -> None:
             "last_name",
         ]
     ]
+    users_df["role"] = users_df["role"].apply(lambda value: getattr(value, "value", value))
+    users_df["status"] = users_df["status"].apply(lambda value: getattr(value, "value", value))
     users_df["last_login"] = users_df["last_login"].apply(format_datetime)
     users_df["exchange_configured"] = users_df["exchange_configured"].apply(bool_to_label)
     users_df = users_df.rename(columns={"exchange_configured": "Exchange configuré"})

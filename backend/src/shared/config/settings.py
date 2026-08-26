@@ -111,6 +111,10 @@ class Settings(BaseSettings):
     ENABLE_METRICS: bool = True
     ENABLE_HEALTH_CHECKS: bool = True
 
+    # Bot worker settings
+    BOT_WORKER_INTERVAL_SECONDS: int = 60
+    BOT_WORKER_LIMIT: int = 100
+
     # Environment detection
     IS_DOCKER: bool = False
 

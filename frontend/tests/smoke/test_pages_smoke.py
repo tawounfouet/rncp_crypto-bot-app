@@ -43,12 +43,6 @@ def _run_app(
         store.current_user_email = auth_email
         if exchange_configured is not None and auth_email in store.users:
             store.users[auth_email].exchange_configured = exchange_configured
-            if not exchange_configured:
-                store.exchange_credentials.pop(auth_email, None)
-                store.credential_updated_at.pop(auth_email, None)
-            elif auth_email not in store.exchange_credentials:
-                store.exchange_credentials[auth_email] = ("AK_RESTORED_1234", "AS_RESTORED_9876")
-                store.credential_updated_at[auth_email] = datetime.now(UTC)
         at.session_state["app_store"] = store
         # Injecte un token factice pour que les services puissent appeler le backend stub
         at.session_state["access_token"] = _SMOKE_TOKEN

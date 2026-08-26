@@ -3,6 +3,8 @@ Authentication router for the Crypto Trading Bot API.
 Provides endpoints for user authentication, registration, and token management.
 """
 
+import logging
+from importlib.util import find_spec
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -13,6 +15,8 @@ from auth.service import auth_service
 from auth.user_service import user_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+logger = logging.getLogger(__name__)
+HAS_MULTIPART = bool(find_spec("multipart") or find_spec("python_multipart"))
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -41,49 +45,36 @@ async def register(request: Request, user_data: UserCreate) -> TokenResponse:
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Failed to register user")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register user: {e!s}",
+            detail="Failed to register user.",
         ) from None
 
 
-@router.post("/login", response_model=TokenResponse)
-async def login(request: Request, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> TokenResponse:
-    """
-    Authenticate user and return access tokens.
+if HAS_MULTIPART:
 
-    Compatible with OAuth2 password flow.
-    - **username**: Username or email address
-    - **password**: User's password
-    """
-    try:
-        # Authenticate user
-        user = auth_service.authenticate_user(form_data.username, form_data.password)
+    @router.post("/login", response_model=TokenResponse)
+    async def login(request: Request, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]) -> TokenResponse:
+        """
+        Authenticate user and return access tokens.
 
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        Compatible with OAuth2 password flow.
+        - **username**: Username or email address
+        - **password**: User's password
+        """
+        return await _login_with_credentials(request, form_data.username, form_data.password)
 
-        # Get client info for session tracking
-        ip_address = request.client.host if request.client else "unknown"
-        user_agent = request.headers.get("user-agent", "unknown")
+else:
 
-        # Create tokens
-        tokens = auth_service.create_user_tokens(user, ip_address, user_agent)
-
-        return tokens
-
-    except HTTPException:
-        raise
-    except Exception as e:
+    @router.post("/login")
+    async def login_without_multipart() -> dict:
+        """Return a clear error when OAuth2 form support is unavailable."""
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {e!s}",
-        ) from None
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Form login requires python-multipart. Use /auth/login/json instead.",
+        )
 
 
 @router.post("/login/json", response_model=TokenResponse)
@@ -95,9 +86,12 @@ async def login_json(request: Request, login_data: LoginRequest) -> TokenRespons
     - **username**: Username or email address
     - **password**: User's password
     """
+    return await _login_with_credentials(request, login_data.username, login_data.password)
+
+
+async def _login_with_credentials(request: Request, username: str, password: str) -> TokenResponse:
     try:
-        # Authenticate user
-        user = auth_service.authenticate_user(login_data.username, login_data.password)
+        user = auth_service.authenticate_user(username, password)
 
         if not user:
             raise HTTPException(
@@ -106,21 +100,17 @@ async def login_json(request: Request, login_data: LoginRequest) -> TokenRespons
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        # Get client info for session tracking
         ip_address = request.client.host if request.client else "unknown"
         user_agent = request.headers.get("user-agent", "unknown")
-
-        # Create tokens
-        tokens = auth_service.create_user_tokens(user, ip_address, user_agent)
-
-        return tokens
+        return auth_service.create_user_tokens(user, ip_address, user_agent)
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
+        logger.exception("Login failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login failed: {e!s}",
+            detail="Login failed.",
         ) from None
 
 

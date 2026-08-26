@@ -47,12 +47,20 @@ liaison par contrat documente uniquement, sans code partage ni appel direct.
 - **Trading** : `POST/GET/DELETE /trading/orders`, `/trading/portfolio`,
   `/trading/positions` — services sous-jacents encore stub/TODO
 - **Strategies** : `GET /strategies/available`, CRUD `/strategies/*`,
-  `/strategies/{id}/deploy`
+  `/strategies/{id}/deploy` — moteur de regles fixes, plus atteignable depuis le
+  frontend depuis le passage au catalogue de bots verrouilles (cf. `bots/` ci-dessous
+  et `docs/07-bot-strategy-architecture.md` §4.7)
+- **Bots** (catalogue verrouille, remplace le flux Strategies cote frontend) :
+  `GET /bot-templates`, `GET /bot-templates/{id}`, `GET/POST /user-bots`,
+  `POST /user-bots/{id}/start|pause|stop`, `GET /user-bots/{id}/decisions|orders|trades|
+  position|performance`, `GET /user-bots/performance-summary`
+- **Admin** (reserve `is_admin`) : `GET /users/`, `POST /users/{id}/activate|deactivate|
+  make-admin|remove-admin`, `POST /users/purge-inactive` (Airflow, sans auth)
 - **Session** : JWT HS256, access 30 min / refresh 7 j, refresh auto toutes
   les 60 s cote frontend
 
 Sources : `backend/README.md`, `docs/05-multi-exchange-layer.md` §2.2-2.3,
-`docs/06-testnet-simulation-modes.md` §4.2.
+`docs/06-testnet-simulation-modes.md` §4.2, `docs/07-bot-strategy-architecture.md` §4.7.
 
 ## 2. Backend ↔ Base de donnees
 

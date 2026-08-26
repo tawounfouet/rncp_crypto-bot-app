@@ -11,7 +11,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from shared.config.settings import get_settings
@@ -164,6 +164,52 @@ class DatabaseManager:
             self._session_factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
         return self._session_factory
 
+    def _apply_schema_compatibility_fixes(self, engine: Engine) -> None:
+        """Apply small idempotent fixes for existing development databases."""
+        inspector = inspect(engine)
+        if not inspector.has_table("users"):
+            return
+
+        statements = []
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "last_active_at" not in user_columns:
+            if engine.dialect.name == "postgresql":
+                statements.extend(
+                    [
+                        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP NULL",
+                        "CREATE INDEX IF NOT EXISTS ix_users_last_active_at ON users (last_active_at)",
+                    ]
+                )
+            elif engine.dialect.name == "sqlite":
+                statements.extend(
+                    [
+                        "ALTER TABLE users ADD COLUMN last_active_at DATETIME",
+                        "CREATE INDEX IF NOT EXISTS ix_users_last_active_at ON users (last_active_at)",
+                    ]
+                )
+            else:
+                logger.warning(
+                    "Skipping automatic users.last_active_at migration for unsupported dialect: %s",
+                    engine.dialect.name,
+                )
+
+        dialect = engine.dialect.name
+        if inspector.has_table("user_sessions"):
+            session_columns = {column["name"]: column for column in inspector.get_columns("user_sessions")}
+            token_column = session_columns.get("token")
+            token_length = getattr(token_column["type"], "length", None) if token_column else None
+            if dialect == "postgresql" and token_length and token_length < 1024:
+                statements.append("ALTER TABLE user_sessions ALTER COLUMN token TYPE VARCHAR(1024)")
+
+        if not statements:
+            return
+
+        with engine.begin() as connection:
+            for statement in statements:
+                connection.execute(text(statement))
+
+        logger.info("Applied schema compatibility fixes")
+
     @contextmanager
     def get_session(self) -> Generator[Session]:
         """
@@ -201,6 +247,7 @@ class DatabaseManager:
 
             # Create all tables
             Base.metadata.create_all(bind=engine)
+            self._apply_schema_compatibility_fixes(engine)
             logger.info("Database tables created successfully")
             return True
 

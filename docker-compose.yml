@@ -146,6 +146,7 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./utils:/app/utils
+      - ./backend/scripts:/app/scripts
       - ./data:/app/data
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -158,6 +159,8 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
+      - ML_API_URL=http://crypto-bot-ml-api:8010
+      - BOT_TEMPLATE_AUTO_MIGRATE=1
       - ENVIRONMENT=development
       - DEBUG=true
       - EXCHANGE_ENC_KEY=${EXCHANGE_ENC_KEY}
@@ -197,6 +200,7 @@ services:
       - API_URL=http://crypto-bot-backend:8009
       - ENVIRONMENT=development
       - APP_VERSION=${APP_VERSION:-dev}
+      - DISABLE_MOCK_FALLBACK=1
     depends_on:
       crypto-bot-backend:
         condition: service_healthy
@@ -268,6 +272,8 @@ services:
       - ./models/artifacts:/app/artifacts
       - ./models/logs:/app/logs
       - ./utils:/app/utils
+      - ./models/src:/app/src
+      - ./models/config.yaml:/app/config.yaml
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
@@ -283,6 +289,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    command: >
+      /bin/sh -c "python -m src.mlops.bootstrap_dev_artifacts --config config.yaml &&
+      python -m src.mlops.bootstrap_bot_models --config config.yaml &&
+      python -m src.main --config config.yaml api --host 0.0.0.0 --port 8010"
     networks:
       - dev-network
 

@@ -7,7 +7,6 @@ import streamlit as st
 from mocks.db import create_mock_store
 from schemas.account import AccountProfile
 from schemas.auth import LoginRequest, RegisterRequest
-from schemas.bot import BotConfigUpdate
 from schemas.common import UserRole
 from services.account_service import AccountService
 from services.admin_service import AdminService
@@ -16,6 +15,7 @@ from services.auth_api_client import ApiResponse
 from services.auth_service import AuthService
 from services.bot_config_service import BotConfigService
 from services.bot_control_service import BotControlService
+from state.session import set_auth_tokens
 from utils.constants import ACTION_START
 
 
@@ -186,6 +186,12 @@ class JourneyBackendClient(BackendApiClient):
     def deactivate_user(self, access_token, user_id):
         return ApiResponse(status_code=200, data={"message": "deactivated"})
 
+    def make_user_admin(self, access_token, user_id):
+        return ApiResponse(status_code=200, data={"message": "promoted"})
+
+    def remove_user_admin(self, access_token, user_id):
+        return ApiResponse(status_code=200, data={"message": "demoted"})
+
     # ─── Strategies ──────────────────────────────────────────────────────────
 
     def list_strategies(self, access_token):
@@ -262,36 +268,28 @@ def test_end_to_end_auth_and_backend_pages_journey() -> None:
     # L'email dans le store est mis a jour via sync_current_user_from_backend
     assert store.current_user_email == "nina2@cryptobot.dev"
 
-    # ── Bot control: START retourne un message informatif (params requis) ─────
-    bot_control = BotControlService(store, client=backend)
-    action_result = bot_control.apply_action("strat_sol", ACTION_START)
-    assert action_result.success is False  # intentionnel: START necessite des params de deployment
+    # ── Bot control/config: bascule sur le fallback mock (pas simule par
+    # JourneyBackendClient) ────────────────────────────────────────────────────
+    set_auth_tokens(None, None)
+    bot_control = BotControlService(store)
+    action_result = bot_control.apply_action("bot_sol_trend", ACTION_START)
+    assert action_result.success is True
 
-    # ── Bot config: sauvegarde incrementee ───────────────────────────────────
-    bot_config = BotConfigService(store, client=backend)
-    save_ok, _, config = bot_config.save(
-        "strat_sol",
-        BotConfigUpdate(
-            strategy="Trend Following",
-            budget_usdc=2500,
-            max_open_positions=3,
-            risk_per_trade_pct=1.1,
-            take_profit_pct=5.8,
-            stop_loss_pct=2.2,
-            cooldown_seconds=180,
-        ),
-    )
-    assert save_ok is True
+    bot_config = BotConfigService(store)
+    template = bot_config.list_templates()[0]
+    select_result = bot_config.select_template(template.id)
+    assert select_result[0] is True
+    assert select_result[2] is not None
+    assert select_result[2].config_snapshot["symbol"] == template.symbol
 
-    # ── Admin: set_role non disponible via API, set_enabled fonctionne ────────
+    # ── Admin: set_role fonctionne (mock fallback) ─────────────────────────────
     store.current_user_email = "nina2@cryptobot.dev"
     # Simuler un admin pour le store (pre-requis de AdminService._ensure_admin)
     store.users["nina2@cryptobot.dev"].role = UserRole.ADMIN
 
-    admin = AdminService(store, client=backend)
-    ok, message = admin.set_role("nina2@cryptobot.dev", UserRole.ADMIN)
-    assert ok is False
-    assert "non disponible" in message
+    admin = AdminService(store)
+    ok, _ = admin.set_role("nina2@cryptobot.dev", UserRole.ADMIN)
+    assert ok is True
 
     # list_users puis set_enabled fonctionne
     admin.list_users()

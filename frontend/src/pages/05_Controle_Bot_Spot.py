@@ -12,51 +12,24 @@ from components.headers import render_page_header, render_section_title
 from components.prerequisites import render_exchange_prerequisite_state
 from layouts.page_shell import setup_page
 from prerequisites.exchange import evaluate_exchange_prerequisite
+from schemas.bot import BotInfo
 from services.base import ServiceError
-from services.bot_control_service import BotControlService
-from utils.constants import ACTION_PAUSE, ACTION_STOP
+from services.bot_control_service import (
+    BotControlService,
+    normalise_decision_trace,
+    select_badge_decision_trace,
+)
+from utils.constants import ACTION_PAUSE, ACTION_START, ACTION_STOP
 from utils.formatters import format_datetime
 from utils.streamlit_compat import button as compat_button
-from utils.streamlit_compat import form_submit_button as compat_form_submit_button
-
-_SYMBOLS = [
-    "BTCUSDC",
-    "ETHUSDC",
-    "BNBUSDC",
-    "SOLUSDC",
-    "ADAUSDC",
-    "XRPUSDC",
-    "DOGEUSDC",
-    "DOTUSDC",
-    "LINKUSDC",
-    "AVAXUSDC",
-    "LTCUSDC",
-    "UNIUSDC",
-    "MATICUSDC",
-    "ATOMUSDC",
-    "SHIBUSDC",
-]
-_TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
-_EXCHANGES = ["binance", "kraken", "bybit", "coinbase", "okx"]
-
-_STRATEGY_TYPES = {
-    "moving_average_crossover": "Croisement Moyennes Mobiles",
-    "rsi_reversal": "RSI Reversal",
-    "bollinger_bands": "Bandes de Bollinger",
-    "custom": "Personnalisé",
-}
-
-_STRATEGY_DESCRIPTIONS = {
-    "moving_average_crossover": "Achète quand la MA rapide croise au-dessus de la MA lente, vend dans le sens inverse.",
-    "rsi_reversal": "Achète en zone de survente (RSI bas), vend en zone de surachat (RSI élevé).",
-    "bollinger_bands": "Trade les rebonds sur les bandes extrêmes, confirmés par le RSI.",
-    "custom": "Paramètres libres — à définir selon votre logique de trading.",
-}
+from utils.streamlit_compat import dataframe as compat_dataframe
 
 
 def _heartbeat_label(heartbeat_at: datetime) -> str:
-    aware = heartbeat_at if heartbeat_at.tzinfo is not None else heartbeat_at.replace(tzinfo=UTC)
-    delta = datetime.now(UTC) - aware
+    if heartbeat_at.tzinfo is None:
+        heartbeat_at = heartbeat_at.replace(tzinfo=UTC)
+    heartbeat_at = heartbeat_at.astimezone(UTC)
+    delta = datetime.now(UTC) - heartbeat_at
     if delta.total_seconds() < 90:
         return "Actif"
     if delta.total_seconds() < 300:
@@ -64,211 +37,253 @@ def _heartbeat_label(heartbeat_at: datetime) -> str:
     return "Retard heartbeat"
 
 
-def _render_create_bot_form(service: BotControlService) -> None:
-    st.markdown("#### Nouveau bot")
-    with st.form("create_bot_form", clear_on_submit=True):
-        name = st.text_input("Nom du bot", placeholder="Ex: BTC RSI 14")
-        description = st.text_input("Description (optionnel)", placeholder="Courte description")
+def _parse_backend_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
-        strategy_type = st.selectbox(
-            "Type de stratégie",
-            options=list(_STRATEGY_TYPES.keys()),
-            format_func=lambda k: _STRATEGY_TYPES[k],
+
+def _short_id(value: object) -> str:
+    text = str(value or "").strip()
+    return text[:8] if text else "-"
+
+
+def _link_orders_to_decisions(
+    decisions: list[dict[str, object]],
+    orders: list[dict[str, object]],
+) -> tuple[dict[str, str], dict[str, list[dict[str, object]]]]:
+    decision_traces = [normalise_decision_trace(item) for item in decisions]
+    decision_times = {
+        trace["id"]: _parse_backend_datetime(trace.get("timestamp"))
+        for trace in decision_traces
+        if trace.get("id") and trace.get("id") != "-"
+    }
+    order_to_decision: dict[str, str] = {}
+    decision_to_orders: dict[str, list[dict[str, object]]] = {}
+    for order in orders:
+        order_id = str(order.get("id") or "")
+        order_time = _parse_backend_datetime(order.get("created_at"))
+        order_side = str(order.get("side") or "").upper()
+        if not order_id or order_time is None or order_side not in {"BUY", "SELL"}:
+            continue
+        candidates = []
+        for trace in decision_traces:
+            decision_id = str(trace.get("id") or "")
+            decision_time = decision_times.get(decision_id)
+            if decision_time is None or str(trace.get("final_action")).upper() != order_side:
+                continue
+            elapsed = (order_time - decision_time).total_seconds()
+            if 0 <= elapsed <= 300:
+                candidates.append((elapsed, decision_id))
+        if not candidates:
+            continue
+        _, decision_id = min(candidates, key=lambda item: item[0])
+        order_to_decision[order_id] = decision_id
+        decision_to_orders.setdefault(decision_id, []).append(order)
+    return order_to_decision, decision_to_orders
+
+
+def _render_ai_badge(bot: BotInfo, latest_trace: dict[str, object] | None = None) -> None:
+    source = str((latest_trace or {}).get("model_source") or bot.model_source_label)
+    registry = str((latest_trace or {}).get("registry_source") or bot.registry_source_label)
+    model_name = str((latest_trace or {}).get("model_name") or bot.model_name)
+    model_version = str((latest_trace or {}).get("model_version") or bot.model_version)
+    last_signal = str((latest_trace or {}).get("signal") or bot.last_signal)
+    st.caption(
+        f"IA: {source} | Registry: {registry} | Modele: {model_name} | "
+        f"Version: {model_version} | Mode: {bot.mode_label} | Dernier signal: {last_signal}"
+    )
+
+
+def _render_decision_details(
+    traces: list[dict[str, object]],
+    decision_to_orders: dict[str, list[dict[str, object]]],
+) -> None:
+    for trace in traces:
+        decision_id = str(trace.get("id") or "-")
+        label = (
+            f"{trace.get('timestamp')} | {trace.get('model_source')} | "
+            f"{trace.get('signal')} -> {trace.get('final_action')} | {trace.get('risk_decision')}"
         )
-        st.caption(_STRATEGY_DESCRIPTIONS.get(strategy_type, ""))
-
-        st.markdown("**Paramètres de la stratégie**")
-        params: dict = {}
-
-        if strategy_type == "moving_average_crossover":
-            c1, c2 = st.columns(2)
+        with st.expander(label):
+            c1, c2, c3, c4 = st.columns(4)
             with c1:
-                params["fast_period"] = st.number_input(
-                    "Période MA rapide", min_value=2, max_value=49, value=10
-                )
-                params["stop_loss"] = st.number_input(
-                    "Stop loss (%)",
-                    min_value=0.01,
-                    max_value=0.10,
-                    value=0.02,
-                    step=0.005,
-                    format="%.3f",
-                )
+                st.metric("Signal IA", trace.get("raw_ai_signal", "-"))
             with c2:
-                params["slow_period"] = st.number_input(
-                    "Période MA lente", min_value=3, max_value=200, value=20
-                )
-                params["take_profit"] = st.number_input(
-                    "Take profit (%)",
-                    min_value=0.02,
-                    max_value=0.20,
-                    value=0.05,
-                    step=0.005,
-                    format="%.3f",
-                )
+                st.metric("Confiance", trace.get("confidence", "-"))
+            with c3:
+                st.metric("Signal deterministe", trace.get("deterministic_signal", "-"))
+            with c4:
+                st.metric("Decision finale", trace.get("final_action", "-"))
 
-        elif strategy_type == "rsi_reversal":
-            c1, c2 = st.columns(2)
-            with c1:
-                params["rsi_period"] = st.number_input(
-                    "Période RSI", min_value=5, max_value=30, value=14
-                )
-                params["oversold_threshold"] = st.number_input(
-                    "Seuil survente", min_value=10, max_value=40, value=30
-                )
-                params["stop_loss"] = st.number_input(
-                    "Stop loss (%)",
-                    min_value=0.01,
-                    max_value=0.10,
-                    value=0.03,
-                    step=0.005,
-                    format="%.3f",
-                )
-            with c2:
-                params["overbought_threshold"] = st.number_input(
-                    "Seuil surachat", min_value=60, max_value=90, value=70
-                )
-                params["take_profit"] = st.number_input(
-                    "Take profit (%)",
-                    min_value=0.02,
-                    max_value=0.20,
-                    value=0.06,
-                    step=0.005,
-                    format="%.3f",
-                )
-
-        elif strategy_type == "bollinger_bands":
-            c1, c2 = st.columns(2)
-            with c1:
-                params["bb_period"] = st.number_input(
-                    "Période BB", min_value=10, max_value=50, value=20
-                )
-                params["bb_std"] = st.number_input(
-                    "Écart-type BB", min_value=1.0, max_value=3.0, value=2.0, step=0.1
-                )
-                params["rsi_period"] = st.number_input(
-                    "Période RSI", min_value=5, max_value=30, value=14
-                )
-                params["stop_loss"] = st.number_input(
-                    "Stop loss (%)",
-                    min_value=0.01,
-                    max_value=0.10,
-                    value=0.025,
-                    step=0.005,
-                    format="%.3f",
-                )
-            with c2:
-                params["rsi_oversold"] = st.number_input(
-                    "RSI survente", min_value=10, max_value=40, value=30
-                )
-                params["rsi_overbought"] = st.number_input(
-                    "RSI surachat", min_value=60, max_value=90, value=70
-                )
-                params["take_profit"] = st.number_input(
-                    "Take profit (%)",
-                    min_value=0.02,
-                    max_value=0.20,
-                    value=0.05,
-                    step=0.005,
-                    format="%.3f",
-                )
-
-        else:
-            c1, c2 = st.columns(2)
-            with c1:
-                params["stop_loss"] = st.number_input(
-                    "Stop loss (%)",
-                    min_value=0.01,
-                    max_value=0.10,
-                    value=0.02,
-                    step=0.005,
-                    format="%.3f",
-                )
-            with c2:
-                params["take_profit"] = st.number_input(
-                    "Take profit (%)",
-                    min_value=0.02,
-                    max_value=0.20,
-                    value=0.05,
-                    step=0.005,
-                    format="%.3f",
-                )
-
-        submitted = compat_form_submit_button("Créer le bot", type="primary", width="stretch")
-
-    if submitted:
-        if not name.strip():
-            show_feedback("error", "Le nom du bot est requis.")
-        elif strategy_type == "moving_average_crossover" and params.get(
-            "fast_period", 0
-        ) >= params.get("slow_period", 0):
-            show_feedback(
-                "error", "La période MA rapide doit être inférieure à la période MA lente."
+            st.write(f"**Moteur**: {trace.get('model_source', '-')}")
+            st.write(
+                f"**MLflow**: {trace.get('model_name', '-')} {trace.get('model_version', '-')}"
             )
-        else:
-            result = service.create_bot(
-                name=name.strip(),
-                strategy_type=strategy_type,
-                parameters=params,
-                description=description.strip() or None,
-            )
-            show_feedback("success" if result.success else "error", result.message)
-            if result.success:
-                st.session_state["show_create_bot"] = False
-                st.rerun()
+            st.write(f"**Risk Manager**: {trace.get('risk_decision', '-')}")
+            st.write(f"**Raison**: {trace.get('reason', '-')}")
+
+            linked_orders = decision_to_orders.get(decision_id, [])
+            if linked_orders:
+                order_labels = [
+                    f"{order.get('side')} {order.get('symbol')} #{order.get('binance_order_id') or order.get('id')}"
+                    for order in linked_orders
+                ]
+                st.write(f"**Ordre envoye**: Oui ({', '.join(order_labels)})")
+            elif trace.get("order_expected"):
+                st.write(
+                    "**Ordre envoye**: action finale trade, ordre non retrouve dans ce journal."
+                )
+            else:
+                st.write("**Ordre envoye**: Non")
+
+            features = trace.get("features") if isinstance(trace.get("features"), dict) else {}
+            if features:
+                st.caption("Features envoyees au modele")
+                compat_dataframe(
+                    [{"feature": key, "value": value} for key, value in sorted(features.items())],
+                    width="stretch",
+                    hide_index=True,
+                )
+            else:
+                st.caption("Aucune feature IA disponible pour cette decision.")
 
 
-def _render_launch_form(service: BotControlService, bot_id: str, bot_name: str) -> None:
-    """Formulaire inline de lancement d'un deployment."""
-    with st.form(key=f"launch_form_{bot_id}", clear_on_submit=True):
-        st.markdown(f"**Lancer un deployment — {bot_name}**")
-        col1, col2 = st.columns(2)
-        with col1:
-            exchange = st.selectbox("Exchange", options=_EXCHANGES, key=f"lf_exchange_{bot_id}")
-            symbol = st.selectbox("Paire", options=_SYMBOLS, key=f"lf_symbol_{bot_id}")
-            timeframe = st.selectbox(
-                "Timeframe", options=_TIMEFRAMES, index=4, key=f"lf_tf_{bot_id}"
-            )
-        with col2:
-            amount = st.number_input(
-                "Capital (USDC)",
-                min_value=10.0,
-                max_value=100_000.0,
-                value=500.0,
-                step=50.0,
-                key=f"lf_amount_{bot_id}",
-            )
-            is_paper = st.toggle(
-                "Mode Paper (simulation)",
-                value=True,
-                key=f"lf_paper_{bot_id}",
-                help="Paper = simulation sans fonds reels. Desactivez pour trading live.",
-            )
-            if not is_paper:
-                st.warning("Mode LIVE : des ordres reels seront passes sur votre exchange.")
+def _render_runtime_journal(
+    service: BotControlService,
+    bot: BotInfo,
+    *,
+    prefetched_decisions: list[dict[str, object]] | None = None,
+) -> None:
+    if not service.has_backend_session():
+        return
 
-        submitted = compat_form_submit_button("Lancer le bot", type="primary", width="stretch")
-
-    if submitted:
-        result = service.start_bot(
-            bot_id=bot_id,
-            exchange=exchange,
-            symbol=symbol,
-            timeframe=timeframe,
-            amount=float(amount),
-            is_paper=is_paper,
+    st.markdown("##### Journal Testnet")
+    try:
+        performance = service.get_performance(bot.id)
+        position = service.get_position(bot.id)
+        decisions = (
+            prefetched_decisions
+            if prefetched_decisions is not None
+            else service.list_decisions(bot.id)
         )
-        show_feedback("success" if result.success else "error", result.message)
-        if result.success:
-            st.session_state[f"show_launch_{bot_id}"] = False
-            st.rerun()
+        orders = service.list_orders(bot.id)
+        trades = service.list_trades(bot.id)
+    except ServiceError as exc:
+        show_feedback("error", str(exc))
+        return
+
+    all_traces = [normalise_decision_trace(item) for item in decisions]
+    traces = all_traces[:10]
+    latest_trace = select_badge_decision_trace(all_traces)
+    _render_ai_badge(bot, latest_trace)
+    order_to_decision, decision_to_orders = _link_orders_to_decisions(decisions, orders)
+
+    if performance:
+        k1, k2, k3, k4 = st.columns(4)
+        with k1:
+            st.metric("Ordres", performance.get("total_orders", 0))
+        with k2:
+            st.metric("Trades", performance.get("total_trades", 0))
+        with k3:
+            st.metric(
+                "Dernier signal",
+                (latest_trace or {}).get("signal") or performance.get("last_signal") or "-",
+            )
+        with k4:
+            st.metric("Action", performance.get("last_action") or "-")
+
+    if position:
+        p1, p2, p3 = st.columns(3)
+        with p1:
+            st.metric("Quantite", position.get("quantity", "0"))
+        with p2:
+            st.metric("Prix moyen", position.get("average_entry_price") or "-")
+        with p3:
+            st.metric("PnL realise", position.get("realized_pnl", "0"))
+
+    if traces:
+        st.caption("Decisions")
+        compat_dataframe(
+            [
+                {
+                    "date": trace.get("timestamp"),
+                    "model_source": trace.get("model_source"),
+                    "registry_source": trace.get("registry_source"),
+                    "model_name": trace.get("model_name"),
+                    "model_version": trace.get("model_version"),
+                    "confidence": trace.get("confidence"),
+                    "raw_ai_signal": trace.get("raw_ai_signal"),
+                    "deterministic_signal": trace.get("deterministic_signal"),
+                    "final_action": trace.get("final_action"),
+                    "risk_decision": trace.get("risk_decision"),
+                    "reason": trace.get("reason"),
+                }
+                for trace in traces
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+        _render_decision_details(traces, decision_to_orders)
+
+    if orders:
+        st.caption("Ordres")
+        compat_dataframe(
+            [
+                {
+                    "date": item.get("created_at"),
+                    "decision_ia": _short_id(order_to_decision.get(str(item.get("id") or ""))),
+                    "symbole": item.get("symbol"),
+                    "side": item.get("side"),
+                    "type": item.get("order_type"),
+                    "statut": item.get("status"),
+                    "binance_id": item.get("binance_order_id"),
+                }
+                for item in orders[:10]
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+
+    if trades:
+        st.caption("Trades")
+        compat_dataframe(
+            [
+                {
+                    "date": item.get("trade_time"),
+                    "decision_ia": _short_id(
+                        order_to_decision.get(str(item.get("order_id") or ""))
+                    ),
+                    "symbole": item.get("symbol"),
+                    "side": item.get("side"),
+                    "quantite": item.get("quantity"),
+                    "prix": item.get("price"),
+                    "fee": item.get("fee"),
+                }
+                for item in trades[:10]
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+
+    if not any([performance, position, decisions, orders, trades]):
+        show_feedback("info", "Aucune execution journalisee.")
 
 
 def main() -> None:
     store, user = setup_page(title="Controle Bot Spot", icon="🤖", page_key="bot_control")
     render_page_header(
         "Controle Bot Spot",
-        "Supervision et pilotage des bots : lancement (paper / live), pause, arret.",
+        "Supervision et actions de pilotage: start, pause, stop (avec confirmation).",
     )
 
     gate = evaluate_exchange_prerequisite("bot_control", user)
@@ -276,25 +291,6 @@ def main() -> None:
         render_exchange_prerequisite_state("bot_control", cta_key="cta_exchange_bot_control")
 
     service = BotControlService(store)
-
-    if not gate.missing:
-        col_title, col_btn = st.columns([3, 1])
-        with col_title:
-            render_section_title("Bots Spot")
-        with col_btn:
-            if compat_button(
-                "Nouveau bot" if not st.session_state.get("show_create_bot") else "Annuler",
-                key="toggle_create_bot",
-                width="stretch",
-            ):
-                st.session_state["show_create_bot"] = not st.session_state.get(
-                    "show_create_bot", False
-                )
-                st.rerun()
-
-        if st.session_state.get("show_create_bot"):
-            with st.container(border=True):
-                _render_create_bot_form(service)
 
     try:
         with st.spinner("Chargement des bots..."):
@@ -304,108 +300,95 @@ def main() -> None:
         return
 
     if not bots:
-        show_feedback("info", 'Aucun bot configuré. Cliquez sur "Nouveau bot" pour en créer un.')
+        show_feedback("info", "Aucun bot configure.")
         return
 
     if gate.missing:
         render_section_title(
             "Bots Spot disponibles",
-            "Configuration de l'exchange requise avant toute supervision d'execution.",
+            "Configuration Binance requise avant toute supervision d'execution.",
         )
-        with st.container(border=True):
-            for bot in bots:
-                st.markdown(f"- **{bot.name}**")
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        for bot in bots:
+            st.markdown(f"- **{bot.name}**")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     for bot in bots:
-        with st.container(border=True):
-            head_col, actions_col = st.columns([2.1, 1.2], gap="medium")
-            with head_col:
-                st.markdown(f"#### {bot.name}")
-                render_status_badge("Statut", bot.status.value)
-                render_status_badge("Mode", "LIVE" if bot.mode_live else "PAPER")
-                st.caption(
-                    f"Strategie: {bot.strategy} | "
-                    f"Heartbeat: {format_datetime(bot.heartbeat_at)} "
-                    f"({_heartbeat_label(bot.heartbeat_at)})"
+        prefetched_decisions = None
+        badge_trace = None
+        if service.has_backend_session():
+            try:
+                prefetched_decisions = service.list_decisions(bot.id)
+                badge_trace = select_badge_decision_trace(
+                    [normalise_decision_trace(item) for item in prefetched_decisions]
                 )
-                st.caption(f"Derniere action: {bot.last_action_result}")
-            with actions_col:
-                btn_col1, btn_col2, btn_col3, btn_col4 = st.columns(4)
-                with btn_col1:
-                    if compat_button(
-                        "Start",
-                        key=f"start_{bot.id}",
-                        width="stretch",
-                        disabled=gate.actions_disabled,
-                    ):
-                        current = st.session_state.get(f"show_launch_{bot.id}", False)
-                        st.session_state[f"show_launch_{bot.id}"] = not current
-                        st.rerun()
-                with btn_col2:
-                    if compat_button(
-                        "Pause",
-                        key=f"pause_{bot.id}",
-                        width="stretch",
-                        disabled=gate.actions_disabled,
-                    ):
-                        result = service.apply_action(bot.id, ACTION_PAUSE)
-                        show_feedback("success" if result.success else "error", result.message)
-                        st.rerun()
-                with btn_col3:
-                    if compat_button(
-                        "Stop",
-                        key=f"stop_{bot.id}",
-                        width="stretch",
-                        disabled=gate.actions_disabled,
-                    ):
-                        st.session_state[f"confirm_stop_{bot.id}"] = True
-                with btn_col4:
-                    if compat_button(
-                        "Suppr.",
-                        key=f"delete_{bot.id}",
-                        width="stretch",
-                    ):
-                        st.session_state[f"confirm_delete_{bot.id}"] = True
+            except ServiceError:
+                prefetched_decisions = None
+                badge_trace = None
 
-            # Launch form (toggled by Start button)
-            if (not gate.actions_disabled) and st.session_state.get(f"show_launch_{bot.id}", False):
-                st.markdown("---")
-                _render_launch_form(service, bot.id, bot.name)
+        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
+        head_col, actions_col = st.columns([2.1, 1.2], gap="medium")
+        with head_col:
+            st.markdown(f"#### {bot.name}")
+            render_status_badge("Statut", bot.status.value)
+            render_status_badge("Mode", bot.mode_label)
+            _render_ai_badge(bot, badge_trace)
+            st.caption(
+                f"Strategie: {bot.strategy} | "
+                f"Heartbeat: {format_datetime(bot.heartbeat_at)} "
+                f"({_heartbeat_label(bot.heartbeat_at)})"
+            )
+            st.caption(f"Derniere action: {bot.last_action_result}")
+        with actions_col:
+            btn_col1, btn_col2, btn_col3 = st.columns(3)
+            with btn_col1:
+                if compat_button(
+                    "Start",
+                    key=f"start_{bot.id}",
+                    width="stretch",
+                    disabled=gate.actions_disabled,
+                ):
+                    result = service.apply_action(bot.id, ACTION_START)
+                    show_feedback("success" if result.success else "error", result.message)
+                    st.rerun()
+            with btn_col2:
+                if compat_button(
+                    "Pause",
+                    key=f"pause_{bot.id}",
+                    width="stretch",
+                    disabled=gate.actions_disabled,
+                ):
+                    result = service.apply_action(bot.id, ACTION_PAUSE)
+                    show_feedback("success" if result.success else "error", result.message)
+                    st.rerun()
+            with btn_col3:
+                if compat_button(
+                    "Stop",
+                    key=f"stop_{bot.id}",
+                    width="stretch",
+                    disabled=gate.actions_disabled,
+                ):
+                    st.session_state[f"confirm_stop_{bot.id}"] = True
 
-            # Stop confirmation
-            if (not gate.actions_disabled) and st.session_state.get(
-                f"confirm_stop_{bot.id}", False
-            ):
-                show_feedback("warning", f"Confirmer l'arret du bot {bot.name}.")
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button("Confirmer stop", key=f"confirm_{bot.id}", type="primary"):
-                        result = service.apply_action(bot.id, ACTION_STOP)
-                        st.session_state[f"confirm_stop_{bot.id}"] = False
-                        show_feedback("success" if result.success else "error", result.message)
-                        st.rerun()
-                with c2:
-                    if st.button("Annuler", key=f"cancel_{bot.id}"):
-                        st.session_state[f"confirm_stop_{bot.id}"] = False
-                        st.rerun()
+        if (not gate.actions_disabled) and st.session_state.get(f"confirm_stop_{bot.id}", False):
+            show_feedback("warning", f"Confirmer l'arret du bot {bot.name}.")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Confirmer stop", key=f"confirm_{bot.id}", type="primary"):
+                    result = service.apply_action(bot.id, ACTION_STOP)
+                    st.session_state[f"confirm_stop_{bot.id}"] = False
+                    show_feedback("success" if result.success else "error", result.message)
+                    st.rerun()
+            with c2:
+                if st.button("Annuler", key=f"cancel_{bot.id}"):
+                    st.session_state[f"confirm_stop_{bot.id}"] = False
+                    st.rerun()
 
-            # Delete confirmation
-            if st.session_state.get(f"confirm_delete_{bot.id}", False):
-                show_feedback("warning", f"Supprimer définitivement le bot **{bot.name}** ?")
-                c1, c2 = st.columns(2)
-                with c1:
-                    if st.button(
-                        "Confirmer suppression", key=f"confirm_del_{bot.id}", type="primary"
-                    ):
-                        result = service.delete_bot(bot.id)
-                        st.session_state[f"confirm_delete_{bot.id}"] = False
-                        show_feedback("success" if result.success else "error", result.message)
-                        st.rerun()
-                with c2:
-                    if st.button("Annuler", key=f"cancel_del_{bot.id}"):
-                        st.session_state[f"confirm_delete_{bot.id}"] = False
-                        st.rerun()
+        _render_runtime_journal(service, bot, prefetched_decisions=prefetched_decisions)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<br/>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

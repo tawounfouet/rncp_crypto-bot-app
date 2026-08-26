@@ -7,6 +7,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 
 from src.api.schemas import (
+    BotModelPredictionRequest,
+    BotModelPredictionResponse,
     BuildFeaturesRequest,
     BuildFeaturesResponse,
     BuildFeaturesResult,
@@ -24,6 +26,7 @@ from src.api.schemas import (
 from src.config.config_loader import load_config
 from src.data.storage import read_dataset
 from src.features.build import build_symbol_features
+from src.inference.mlflow_registry import ModelUnavailable, predict_registered_bot_model
 from src.inference.signal import INFERENCE_MODELS, predict_model_signal
 from src.training.train_mlp import train_from_processed_dataset as train_mlp_from_processed_dataset
 from src.training.train_random_forest import train_from_processed_dataset
@@ -143,3 +146,16 @@ def train_xgboost_endpoint(request: TrainXGBoostRequest) -> TrainXGBoostResponse
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_xgboost failed: {exc}") from exc
     return TrainXGBoostResponse(artifact_dir=str(artifact_dir))
+
+
+@app.post("/bot-models/predict", response_model=BotModelPredictionResponse)
+def predict_bot_model(payload: BotModelPredictionRequest) -> BotModelPredictionResponse:
+    try:
+        prediction = predict_registered_bot_model(
+            model_name=payload.model_name,
+            model_version=payload.model_version,
+            features=payload.features,
+        )
+    except ModelUnavailable as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return BotModelPredictionResponse(**prediction)

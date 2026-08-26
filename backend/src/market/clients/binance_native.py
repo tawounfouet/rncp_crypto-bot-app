@@ -46,9 +46,14 @@ class BinanceNativeClient(ExchangeClient):
         symbol: str,
         side: str,
         order_type: str,
-        quantity: Decimal,
+        quantity: Decimal | None = None,
         price: Decimal | None = None,
+        quote_quantity: Decimal | None = None,
     ) -> OrderResult:
+        if quote_quantity is not None:
+            raise NotImplementedError("quote_quantity n'est pas supporte par le client Binance natif")
+        if quantity is None:
+            raise ValueError("quantity est requis")
         raw = self._client.place_order(
             symbol=symbol,
             side=side.upper(),
@@ -61,6 +66,10 @@ class BinanceNativeClient(ExchangeClient):
     def cancel_order(self, symbol: str, order_id: str) -> OrderResult:
         raw = self._client.cancel_order(symbol=symbol, order_id=int(order_id))
         return self._to_order_result(symbol, raw or {})
+
+    def get_open_orders(self, symbol: str | None = None) -> list[OrderResult]:
+        raw_orders = self._client.get_open_orders(symbol=symbol) or []
+        return [self._to_order_result(order.get("symbol", symbol or ""), order) for order in raw_orders]
 
     def _to_order_result(self, symbol: str, raw: dict) -> OrderResult:
         return OrderResult(

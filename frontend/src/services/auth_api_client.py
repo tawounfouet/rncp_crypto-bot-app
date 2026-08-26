@@ -88,6 +88,299 @@ class AuthApiClient:
             access_token=access_token,
         )
 
+    def get_binance_credentials_status(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/users/me/binance-credentials/status",
+            access_token=access_token,
+        )
+
+    def save_binance_credentials(
+        self,
+        *,
+        access_token: str,
+        api_key: str,
+        api_secret: str,
+        password_confirmation: str,
+    ) -> ApiResponse:
+        return self._request(
+            "PUT",
+            f"{API_PREFIX}/users/me/binance-credentials",
+            json_body={
+                "api_key": api_key,
+                "api_secret": api_secret,
+                "password_confirmation": password_confirmation,
+            },
+            access_token=access_token,
+        )
+
+    def delete_binance_credentials(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/users/me/binance-credentials",
+            access_token=access_token,
+        )
+
+    def verify_exchange_credentials(
+        self,
+        access_token: str,
+        *,
+        credential_id: str = "binance_spot_testnet",
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/users/me/exchange-credentials/{credential_id}/verify",
+            access_token=access_token,
+        )
+
+    def get_testnet_ping(self, access_token: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/binance-testnet/ping", access_token=access_token)
+
+    def get_testnet_overview(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/overview",
+            query_params={"symbol": symbol},
+            access_token=access_token,
+        )
+
+    def get_testnet_account(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "GET", f"{API_PREFIX}/binance-testnet/account", access_token=access_token
+        )
+
+    def get_testnet_balances(self, access_token: str, *, non_zero: bool = True) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/balances",
+            query_params={"non_zero": str(non_zero).lower()},
+            access_token=access_token,
+        )
+
+    def get_testnet_ticker(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/ticker/{symbol}",
+            access_token=access_token,
+        )
+
+    def get_testnet_symbol_info(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/symbols/{symbol}",
+            access_token=access_token,
+        )
+
+    def get_testnet_open_orders(
+        self, access_token: str, *, symbol: str | None = None
+    ) -> ApiResponse:
+        query_params = {"symbol": symbol} if symbol else None
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/open-orders",
+            query_params=query_params,
+            access_token=access_token,
+        )
+
+    def get_testnet_all_orders(
+        self, access_token: str, *, symbol: str, limit: int = 50
+    ) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/all-orders/{symbol}",
+            query_params={"limit": str(limit)},
+            access_token=access_token,
+        )
+
+    def get_testnet_my_trades(
+        self, access_token: str, *, symbol: str, limit: int = 50
+    ) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/binance-testnet/my-trades/{symbol}",
+            query_params={"limit": str(limit)},
+            access_token=access_token,
+        )
+
+    def test_testnet_order(self, access_token: str, payload: Mapping[str, Any]) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/binance-testnet/orders/test",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def place_testnet_order(self, access_token: str, payload: Mapping[str, Any]) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/binance-testnet/orders",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def cancel_testnet_order(self, access_token: str, payload: Mapping[str, Any]) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/binance-testnet/orders",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def cancel_testnet_open_orders(self, access_token: str, *, symbol: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/binance-testnet/open-orders/{symbol}",
+            access_token=access_token,
+        )
+
+    def list_bot_templates(self, access_token: str | None = None) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/bot-templates",
+            access_token=access_token,
+        )
+
+    def get_bot_template(self, template_id: str, access_token: str | None = None) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/bot-templates/{template_id}",
+            access_token=access_token,
+        )
+
+    def create_user_bot(self, access_token: str, *, template_id: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/user-bots",
+            json_body={"bot_template_id": template_id},
+            access_token=access_token,
+        )
+
+    def list_user_bots(self, access_token: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/user-bots", access_token=access_token)
+
+    def start_user_bot(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/user-bots/{instance_id}/start",
+            access_token=access_token,
+        )
+
+    def pause_user_bot(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/user-bots/{instance_id}/pause",
+            access_token=access_token,
+        )
+
+    def stop_user_bot(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/user-bots/{instance_id}/stop",
+            access_token=access_token,
+        )
+
+    def list_user_bot_decisions(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/user-bots/{instance_id}/decisions",
+            access_token=access_token,
+        )
+
+    def list_user_bot_orders(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/user-bots/{instance_id}/orders",
+            access_token=access_token,
+        )
+
+    def list_user_bot_trades(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/user-bots/{instance_id}/trades",
+            access_token=access_token,
+        )
+
+    def get_user_bot_position(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/user-bots/{instance_id}/position",
+            access_token=access_token,
+        )
+
+    def get_user_bot_performance(self, access_token: str, *, instance_id: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/user-bots/{instance_id}/performance",
+            access_token=access_token,
+        )
+
+    def get_user_bot_performance_summary(
+        self,
+        access_token: str,
+        *,
+        period_days: int = 30,
+        bot_id: str | None = None,
+        model_name: str | None = None,
+    ) -> ApiResponse:
+        query_params: dict[str, str] = {"period_days": str(period_days)}
+        if bot_id:
+            query_params["bot_id"] = bot_id
+        if model_name:
+            query_params["model_name"] = model_name
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/user-bots/performance-summary",
+            query_params=query_params,
+            access_token=access_token,
+        )
+
+    def list_users(
+        self,
+        access_token: str,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        search: str | None = None,
+        is_active: bool | None = None,
+        is_admin: bool | None = None,
+    ) -> ApiResponse:
+        query_params: dict[str, str] = {"skip": str(skip), "limit": str(limit)}
+        if search:
+            query_params["search"] = search
+        if is_active is not None:
+            query_params["is_active"] = str(is_active).lower()
+        if is_admin is not None:
+            query_params["is_admin"] = str(is_admin).lower()
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/users/",
+            query_params=query_params,
+            access_token=access_token,
+        )
+
+    def get_user_by_id(self, access_token: str, *, user_id: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/users/{user_id}", access_token=access_token)
+
+    def activate_user(self, access_token: str, *, user_id: str) -> ApiResponse:
+        return self._request(
+            "POST", f"{API_PREFIX}/users/{user_id}/activate", access_token=access_token
+        )
+
+    def deactivate_user(self, access_token: str, *, user_id: str) -> ApiResponse:
+        return self._request(
+            "POST", f"{API_PREFIX}/users/{user_id}/deactivate", access_token=access_token
+        )
+
+    def make_user_admin(self, access_token: str, *, user_id: str) -> ApiResponse:
+        return self._request(
+            "POST", f"{API_PREFIX}/users/{user_id}/make-admin", access_token=access_token
+        )
+
+    def remove_user_admin(self, access_token: str, *, user_id: str) -> ApiResponse:
+        return self._request(
+            "POST", f"{API_PREFIX}/users/{user_id}/remove-admin", access_token=access_token
+        )
+
     def _request(
         self,
         method: str,

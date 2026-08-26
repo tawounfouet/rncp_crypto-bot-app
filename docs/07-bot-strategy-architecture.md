@@ -268,6 +268,75 @@ complète du parcours Phase 5 : bot créé, configuré (modèle + paramètres de
 signal `HOLD` retourné par le modèle (aucun ordre soumis, comportement normal, pas un bug :
 `execute_active_deployments` ne soumet un ordre que si le signal n'est pas HOLD).
 
+## 4.7. Mise à jour 2026-08-26 — remplacement du flux `strategy/` par le module `bots/` (import `dev_ben` + adaptation multi-exchange)
+
+Merge de `dev_ben` (module `backend/src/bots/` : catalogue de bots pré-configurés
+verrouillés + panel admin de gestion des utilisateurs), avec adaptation du moteur
+d'exécution des bots : la version d'origine était câblée de bout en bout sur un
+"Binance Testnet lab" isolé (credentials dédiées, appels REST signés maison vers
+`testnet.binance.vision`) — hors de l'architecture multi-exchange déjà en place
+(`market/clients/`, issue #13). Adaptée pour router via cette couche existante :
+
+- `market/clients/base.py`/`ccxt_client.py` : `place_order()` accepte maintenant un
+  `quote_quantity` (achat MARKET par montant en devise de cotation, ex. "dépenser 100
+  USDC de BTC" — ccxt `create_market_buy_order_with_cost`), en plus de `quantity` (actif
+  de base). Nouveau `get_open_orders()`.
+- `bots/execution.py` (nouveau) : passerelle `MultiExchangeBotGateway`, même interface
+  que l'ancien service Testnet (klines/ticker/symbol_info/open_orders/balances/place_order)
+  mais backée par `market.clients.factory.from_user_settings` (exécution réelle, respecte
+  le mode actif live/sandbox de l'utilisateur) et `utils.connectors.exchanges.registry`
+  (données de marché publiques). Le gate de credentials avant démarrage d'un bot utilise
+  désormais le système multi-credential existant (`UserSettings.has_credentials_for_exchange`)
+  au lieu d'un modèle `UserExchangeCredential` dédié au Testnet lab (abandonné à cette
+  occasion, cf. non-scope ci-dessous). Le concept de credentials "vérifiées"
+  (`permissions_checked`) n'existe plus : avoir des clés configurées suffit désormais,
+  comme pour le reste de l'application.
+- Réponse de `place_order()` reconstituée en un seul "fill" synthétique (`executedQty`/
+  `cummulativeQuoteQty`) car `OrderResult` (contrat multi-exchange) ne porte pas le détail
+  des fills/commission individuels que renvoyait l'API Binance brute — simplification
+  assumée, pas encore vérifiée en conditions réelles (cf. §6 tests).
+
+**Hors scope de cet import** (fichiers présents dans le code, mais non branchés dans
+`main.py`/`navigation/rules.py`) : le "Binance Testnet lab" lui-même
+(`market/binance_testnet_service.py`, `binance_testnet_router.py`,
+`frontend/src/pages/09_Binance_Testnet_Lab.py`, service frontend associé) — feature
+distincte de `dev_ben`, indépendante du catalogue de bots, jamais activée.
+
+### Conséquence directe : deux systèmes d'exécution de bots coexistent maintenant
+
+Ce document (§4.2 à §4.6) décrit un premier système, basé sur `StrategyDeployment` /
+`StrategyService.execute_active_deployments()`, déclenché par le DAG Airflow
+`orchestration/dags/bot_execution.py` (horaire). Il n'a **pas été supprimé** par ce merge
+et reste fonctionnel tel quel côté backend (`strategy/`), mais n'est plus atteignable
+depuis le frontend : `06_Parametrage_Bot_Spot.py`/`05_Controle_Bot_Spot.py` et les
+services associés (`bot_config_service.py`, `bot_control_service.py`) ont été
+**entièrement remplacés** par le nouveau flux `bots/` (catalogue verrouillé, plus de
+formulaire de paramétrage libre — cf. §2, la décision "l'utilisateur ne paramètre pas le
+bot après sélection" est donc désormais appliquée strictement).
+
+Le second système (`bots/worker.py`, tâche asyncio interne démarrée par `main.py` au
+lancement de l'API si `ENABLE_BACKGROUND_TASKS`, toutes les `BOT_WORKER_INTERVAL_SECONDS`
+= 60s par défaut) exécute les `UserBotInstance` actifs — mécanisme séparé, pas orchestré
+par Airflow.
+
+**Point ouvert, pas tranché ici** : les deux boucles d'exécution tournent en parallèle
+sans lien entre elles. `strategy/` (backend) et son DAG Airflow sont-ils à décommissionner
+maintenant que plus aucune page ne crée de `StrategyDeployment`, ou gardés en dormant pour
+un usage futur (même logique que l'archivage de `strategy/engine/`, §4.5) ? À trancher
+avant la soutenance pour éviter la confusion entre les deux mécanismes.
+
+### 6. Tests — trous critiques identifiés à cette occasion
+
+- `bots/worker.py` : **0% de couverture** — c'est pourtant le code qui exécute réellement
+  les bots en continu en production (boucle asyncio démarrée au boot de l'API).
+- `bots/execution.py` (l'adaptation multi-exchange ci-dessus) : 47% — la gestion du
+  `quote_quantity` et le repli synthétique des fills ne sont pas exercés par les tests
+  d'intégration existants (`test_bot_service.py` utilise un fake gateway, pas le vrai
+  `MultiExchangeBotGateway`).
+- `bots/ml_client.py` : 38% — l'appel HTTP réel vers `crypto-bot-ml-api` peu couvert.
+- Frontend : `05_Controle_Bot_Spot.py` (48%), `admin_service.py` (51%),
+  `bot_config_service.py` (58%).
+
 ## 5. Points ouverts à trancher avant de coder
 
 - Supprimer ou geler `backend/src/strategy/engine/` (règles fixes) — vérifier les tests qui en

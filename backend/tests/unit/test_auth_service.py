@@ -69,6 +69,20 @@ class TestAuthServiceTokens:
         assert len(token) > 0
         assert token.count(".") == 2
 
+    def test_refresh_tokens_are_unique(self):
+        """Deux refresh tokens consecutifs ne doivent pas etre identiques."""
+        from src.auth.service import AuthService
+
+        auth = AuthService()
+        data = {"sub": "user-123"}
+
+        first_token = auth.create_refresh_token(data)
+        second_token = auth.create_refresh_token(data)
+
+        assert first_token != second_token
+        assert auth.verify_token(first_token, "refresh")["jti"]
+        assert auth.verify_token(second_token, "refresh")["jti"]
+
     def test_verify_token_valid_access_token(self):
         """verify_token decode un token valide."""
         from auth.service import AuthService

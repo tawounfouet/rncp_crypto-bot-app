@@ -9,6 +9,7 @@ from schemas.common import UserRole, UserStatus
 
 
 class AdminUserRow(BaseModel):
+    id: str = ""
     email: str
     role: UserRole
     status: UserStatus
