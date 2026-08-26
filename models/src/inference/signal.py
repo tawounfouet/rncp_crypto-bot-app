@@ -6,11 +6,13 @@ import json
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from numbers import Integral
 from pathlib import Path
 
 import pandas as pd
 
 from src.config.dependencies import require_dependency
+from utils.trading.signals import CLASS_ID_TO_SIGNAL
 
 
 @dataclass(frozen=True)
@@ -47,15 +49,23 @@ class SignalPrediction:
 
 SIGNAL_VALUES = {"SELL": -1, "HOLD": 0, "BUY": 1}
 
+# Modeles servis par l'API d'inference (meme layout joblib que la baseline RF).
+INFERENCE_MODELS = ("random_forest", "mlp", "xgboost")
 
-def predict_random_forest_signal(
+
+def predict_model_signal(
+    model_name: str,
     artifact_dir: str | Path,
     features: pd.DataFrame,
     symbol: str,
     interval: str,
 ) -> SignalPrediction:
-    """Predict latest signal from a Random Forest artifact directory."""
-    require_dependency("joblib", "Run `pip install -r requirements.txt` before Random Forest inference.")
+    """Predict latest signal from a joblib model artifact directory."""
+    if model_name not in INFERENCE_MODELS:
+        raise ValueError(f"Unsupported inference model: {model_name}")
+    require_dependency("joblib", "Run `pip install -r requirements.txt` before model inference.")
+    if model_name == "xgboost":
+        require_dependency("xgboost", "Run `pip install -r requirements.txt` before XGBoost inference.")
     import joblib
 
     start = time.perf_counter()
@@ -68,7 +78,13 @@ def predict_random_forest_signal(
     x_latest = scaler.transform(latest[feature_columns])
     probabilities_array = model.predict_proba(x_latest)[0]
     classes = list(model.classes_)
-    probabilities = {str(label): float(prob) for label, prob in zip(classes, probabilities_array, strict=True)}
+    probabilities = {}
+    for raw_label, prob in zip(classes, probabilities_array, strict=True):
+        if isinstance(raw_label, Integral):
+            # Classes entieres (ex: XGBoost entraîne sur 0..N-1) -> label canonique.
+            probabilities[CLASS_ID_TO_SIGNAL.get(int(raw_label), str(raw_label))] = float(prob)
+        else:
+            probabilities[str(raw_label)] = float(prob)
     signal = max(probabilities, key=probabilities.get)
     latency_ms = (time.perf_counter() - start) * 1000
     timestamp = latest["open_time"].iloc[0]
@@ -79,7 +95,7 @@ def predict_random_forest_signal(
     return SignalPrediction(
         symbol=symbol.upper(),
         interval=interval,
-        model_name="random_forest",
+        model_name=model_name,
         model_version=artifact_path.parent.name if artifact_path.name == "best" else artifact_path.name,
         signal=signal,
         signal_value=SIGNAL_VALUES.get(signal, 0),
@@ -90,3 +106,33 @@ def predict_random_forest_signal(
         latency_ms=latency_ms,
         warnings=[],
     )
+
+
+def predict_random_forest_signal(
+    artifact_dir: str | Path,
+    features: pd.DataFrame,
+    symbol: str,
+    interval: str,
+) -> SignalPrediction:
+    """Predict latest signal from a Random Forest artifact directory."""
+    return predict_model_signal("random_forest", artifact_dir, features, symbol=symbol, interval=interval)
+
+
+def predict_mlp_signal(
+    artifact_dir: str | Path,
+    features: pd.DataFrame,
+    symbol: str,
+    interval: str,
+) -> SignalPrediction:
+    """Predict latest signal from an MLP artifact directory."""
+    return predict_model_signal("mlp", artifact_dir, features, symbol=symbol, interval=interval)
+
+
+def predict_xgboost_signal(
+    artifact_dir: str | Path,
+    features: pd.DataFrame,
+    symbol: str,
+    interval: str,
+) -> SignalPrediction:
+    """Predict latest signal from an XGBoost artifact directory."""
+    return predict_model_signal("xgboost", artifact_dir, features, symbol=symbol, interval=interval)

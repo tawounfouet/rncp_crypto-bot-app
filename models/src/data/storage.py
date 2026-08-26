@@ -55,7 +55,7 @@ def read_raw_ohlcv_from_minio(
 
     Args:
         exchange: Exchange name (e.g. ``binance``, ``kraken``)
-        symbol: Trading pair (e.g. ``BTCUSDT``)
+        symbol: Trading pair (e.g. ``BTCUSDC``)
         interval: Kline interval (e.g. ``1h``, ``4h``)
         bucket: MinIO bucket (defaults to env ``MINIO_BUCKET`` or ``crypto-bot-data``)
         minio_client: Reusable client instance (created on demand if ``None``)

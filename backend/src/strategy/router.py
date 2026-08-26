@@ -12,6 +12,9 @@ from shared.core.exceptions import BusinessLogicError, NotFoundError, Validation
 from shared.schemas.common import BaseResponse
 
 from strategy.schemas import (
+    BacktestCreate,
+    BacktestResponse,
+    ModelInfo,
     StrategyCreate,
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
@@ -58,6 +61,35 @@ async def get_available_strategies(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get available strategies: {e!s}",
+        ) from None
+
+
+@router.get("/available-models", response_model=DataResponse[list[ModelInfo]])
+def get_available_models(
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """
+    Get all available-models for the current user.
+
+    Args:
+        current_user: Current authenticated user
+
+    Returns:
+        List of available models
+    """
+    try:
+        models = strategy_service.get_available_models()
+
+        return DataResponse(
+            success=True,
+            message=f"Retrieved {len(models)} deployments",
+            data=models,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to get available models: {e!s}",
         ) from None
 
 
@@ -337,6 +369,84 @@ async def stop_deployment(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to stop deployment: {e!s}",
+        ) from None
+
+
+@router.post("/backtests", response_model=DataResponse[BacktestResponse], status_code=201)
+async def create_backtest(
+    backtest_data: BacktestCreate,
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """Run a backtest for a strategy using stored OHLCV data (market_data table)."""
+    try:
+        result = await strategy_service.run_backtest(current_user.id, backtest_data)
+        return DataResponse(success=True, message="Backtest terminé", data=result)
+    except Exception as e:
+        from shared.core.exceptions import BusinessLogicError, NotFoundError
+
+        if isinstance(e, NotFoundError):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+        if isinstance(e, BusinessLogicError):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Backtest failed: {e!s}",
+        ) from None
+
+
+@router.get("/backtests", response_model=DataResponse[list[BacktestResponse]])
+async def list_backtests(
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """List all backtest results for the current user."""
+    try:
+        results = strategy_service.get_user_backtests(current_user.id)
+        return DataResponse(success=True, message=f"{len(results)} backtests", data=results)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list backtests: {e!s}",
+        ) from None
+
+
+@router.get("/backtests/{backtest_id}", response_model=DataResponse[BacktestResponse])
+async def get_backtest(
+    backtest_id: str,
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """Get a specific backtest result with full trade list."""
+    try:
+        result = strategy_service.get_backtest(current_user.id, backtest_id)
+        return DataResponse(success=True, message="Backtest récupéré", data=result)
+    except Exception as e:
+        from shared.core.exceptions import NotFoundError
+
+        if isinstance(e, NotFoundError):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get backtest: {e!s}",
+        ) from None
+
+
+@router.post("/deployments/execute-active", response_model=DataResponse[list[dict[str, Any]]])
+async def execute_active_deployments(strategy_service: StrategyService = Depends(get_strategy_service)):
+    """
+    Declenche l'execution de tous les deployments actifs (tous utilisateurs).
+
+    Appele par Airflow (bot_execution.py), pas par un utilisateur final -- pas
+    d'authentification, meme principe que POST /inference/predict-live.
+    """
+    try:
+        results = await strategy_service.execute_active_deployments()
+        return DataResponse(success=True, message=f"Executed {len(results)} deployments", data=results)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute active deployments: {e!s}",
         ) from None
 
 

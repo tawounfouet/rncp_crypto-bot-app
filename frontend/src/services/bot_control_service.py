@@ -11,6 +11,7 @@ from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token
 from utils.constants import ACTION_START, ACTION_STOP
+from utils.dates import parse_dt_or_now
 
 _DEPLOY_STATUS_MAP: dict[str, BotRuntimeStatus] = {
     "active": BotRuntimeStatus.RUNNING,
@@ -18,17 +19,6 @@ _DEPLOY_STATUS_MAP: dict[str, BotRuntimeStatus] = {
     "stopped": BotRuntimeStatus.STOPPED,
     "error": BotRuntimeStatus.ERROR,
 }
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
 
 
 class BotControlService:
@@ -91,11 +81,11 @@ class BotControlService:
                 status = _DEPLOY_STATUS_MAP.get(
                     deployment.get("status", "stopped"), BotRuntimeStatus.STOPPED
                 )
-                heartbeat = _parse_dt(deployment.get("updated_at"))
+                heartbeat = parse_dt_or_now(deployment.get("updated_at"))
             else:
                 # Cherche le dernier deployment (pas forcement actif)
                 status = BotRuntimeStatus.STOPPED
-                heartbeat = _parse_dt(s.get("updated_at"))
+                heartbeat = parse_dt_or_now(s.get("updated_at"))
 
             bots.append(
                 BotInfo(
@@ -111,6 +101,42 @@ class BotControlService:
             )
 
         return sorted(bots, key=lambda b: b.name)
+
+    def create_bot(
+        self,
+        name: str,
+        strategy_type: str,
+        parameters: dict,
+        description: str | None = None,
+    ) -> BotActionResult:
+        token = self._token()
+        response = self.client.create_strategy(
+            token,
+            name=name,
+            strategy_type=strategy_type,
+            parameters=parameters,
+            description=description,
+        )
+        if not response.success:
+            msg = (
+                response.error
+                or (response.data.get("detail") if isinstance(response.data, dict) else None)
+                or f"Erreur backend ({response.status_code})."
+            )
+            return BotActionResult(success=False, message=msg)
+        return BotActionResult(success=True, message=f"Bot '{name}' créé.")
+
+    def delete_bot(self, bot_id: str) -> BotActionResult:
+        token = self._token()
+        response = self.client.delete_strategy(token, bot_id)
+        if not response.success and response.status_code != 204:
+            msg = (
+                response.error
+                or (response.data.get("detail") if isinstance(response.data, dict) else None)
+                or f"Erreur backend ({response.status_code})."
+            )
+            return BotActionResult(success=False, message=msg)
+        return BotActionResult(success=True, message="Bot supprimé.")
 
     def apply_action(self, bot_id: str, action: str) -> BotActionResult:
         token = self._token()
@@ -133,15 +159,44 @@ class BotControlService:
         if action == ACTION_START:
             return BotActionResult(
                 success=False,
-                message=(
-                    "Le demarrage d'un deployment necessite de renseigner "
-                    "exchange, symbole, timeframe et capital. "
-                    "Utilisez l'API ou creez un deployment depuis le backend."
-                ),
+                message="Utilisez start_bot() en passant les parametres de deployment.",
             )
 
         # ACTION_PAUSE - pas de endpoint backend dedie
         return BotActionResult(
             success=False,
             message="La mise en pause n'est pas supportee par l'API backend.",
+        )
+
+    def start_bot(
+        self,
+        bot_id: str,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        amount: float,
+        is_paper: bool = True,
+    ) -> BotActionResult:
+        """Cree un nouveau deployment pour le bot donne."""
+        token = self._token()
+        response = self.client.deploy_strategy(
+            token,
+            bot_id,
+            exchange=exchange,
+            symbol=symbol,
+            timeframe=timeframe,
+            amount=amount,
+            is_paper=is_paper,
+        )
+        if not response.success:
+            msg = (
+                response.error
+                or (response.data.get("detail") if isinstance(response.data, dict) else None)
+                or f"Erreur backend ({response.status_code})."
+            )
+            return BotActionResult(success=False, message=msg)
+        mode = "Paper" if is_paper else "Live"
+        return BotActionResult(
+            success=True,
+            message=f"Bot deploye en mode {mode} — {symbol} {timeframe}, capital {amount} USDC.",
         )

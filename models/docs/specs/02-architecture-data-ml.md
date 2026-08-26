@@ -1,5 +1,8 @@
 # Architecture data et ML
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Vue logique
 
 ```text
@@ -86,7 +89,7 @@ reports/
 
 Le MVP utilise `config.yaml` comme source de vérité pour les paramètres non secrets :
 
-- paires supportées : `BTCUSDT`, `BTCETH`
+- paires supportées : `BTCUSDC`, `BTCETH`
 - mapping source exchange : `BTCETH` est collecté depuis `ETHBTC` puis inversé pour conserver le vocabulaire métier `BTCETH`
 - intervalle principal : `1h`
 - seuils de labellisation `BUY` / `SELL` / `HOLD`
@@ -131,16 +134,16 @@ Convention :
 Exemples attendus :
 
 ```text
-data/raw/BTCUSDT/1h.parquet
-data/raw/BTCUSDT/1h.parquet.meta.json
-data/raw/BTCUSDT/1h.csv
-data/raw/BTCUSDT/1h.csv.meta.json
-data/raw/BTCUSDT/1h.jsonl
-data/raw/BTCUSDT/1h.jsonl.meta.json
-data/processed/BTCUSDT/1h_features.parquet
-data/processed/BTCUSDT/1h_features.parquet.meta.json
-data/processed/BTCUSDT/1h_features.csv
-data/processed/BTCUSDT/1h_features.jsonl
+data/raw/BTCUSDC/1h.parquet
+data/raw/BTCUSDC/1h.parquet.meta.json
+data/raw/BTCUSDC/1h.csv
+data/raw/BTCUSDC/1h.csv.meta.json
+data/raw/BTCUSDC/1h.jsonl
+data/raw/BTCUSDC/1h.jsonl.meta.json
+data/processed/BTCUSDC/1h_features.parquet
+data/processed/BTCUSDC/1h_features.parquet.meta.json
+data/processed/BTCUSDC/1h_features.csv
+data/processed/BTCUSDC/1h_features.jsonl
 ```
 
 ## MLOps MVP
@@ -183,7 +186,7 @@ Colonnes minimales :
 
 | Colonne | Type | Description |
 |---|---|---|
-| `symbol` | string | `BTCUSDT` ou `BTCETH` |
+| `symbol` | string | `BTCUSDC` ou `BTCETH` |
 | `interval` | string | `1h` par défaut |
 | `timestamp` | datetime UTC | début de bougie |
 | `open` | float | prix ouverture |
@@ -290,7 +293,7 @@ Pour LSTM, `model.pt` doit contenir le `state_dict` et la configuration minimale
 
 Le backend `app/backend` possède déjà un domaine `market` et un moteur `strategy`. Le MVP models-training doit rester indépendant, puis exposer des contrats compatibles :
 
-- même vocabulaire symbole : `BTCUSDT`, `BTCETH`
+- même vocabulaire symbole : `BTCUSDC`, `BTCETH`
 - OHLCV compatible avec `MarketData.to_dict()`
 - signal numérique compatible stratégie : `BUY=1`, `SELL=-1`, `HOLD=0`
 - endpoint API consommable par le backend ou Streamlit

@@ -2,13 +2,15 @@
 title: Construire le MVP models-training du CryptoBot
 description: Guide pour implémenter la collecte BTC, le preprocessing, Random Forest, LSTM et l'API de signal.
 nav_title: Guide MVP
+status: référence
+updated: 2026-06-10
 ---
 
 Ce guide décrit l'ordre d'implémentation recommandé pour obtenir un MVP démontrable. L'objectif est de faire fonctionner une chaîne complète avant d'ajouter de l'infrastructure.
 
 ## Exemple
 
-Nous allons construire un pipeline qui collecte `BTCUSDT` et `BTCETH`, fabrique des features, entraîne deux modèles, puis expose le dernier signal via API.
+Nous allons construire un pipeline qui collecte `BTCUSDC` et `BTCETH`, fabrique des features, entraîne deux modèles, puis expose le dernier signal via API.
 
 Nous commençons par la donnée brute, puis nous ajoutons les features et labels, puis nous branchons les modèles et l'API.
 
@@ -60,7 +62,7 @@ La config doit être chargée avant les scripts métier :
 from src.config.config_loader import load_config
 
 config = load_config("config.yaml")
-assert config.data.symbols == ["BTCUSDT", "BTCETH"]
+assert config.data.symbols == ["BTCUSDC", "BTCETH"]
 ```
 
 Convention : `config.yaml` est le fichier de configuration déclaratif à la racine. `src/config/` contient le code de chargement, validation, exceptions et dépendances.
@@ -89,7 +91,7 @@ Ajouter ensuite une validation :
 - `csv` pour ouverture manuelle
 - `jsonl` pour inspection ligne à ligne et compatibilité API/livrables
 
-Écrire aussi un sidecar `*.meta.json` pour chaque fichier généré, par exemple `data/raw/BTCUSDT/1h.csv.meta.json`, avec `layer`, `dataset`, `source`, `symbol`, `interval`, `row_count`, `columns`, `dtypes`, `file_size_bytes` et `time_range`.
+Écrire aussi un sidecar `*.meta.json` pour chaque fichier généré, par exemple `data/raw/BTCUSDC/1h.csv.meta.json`, avec `layer`, `dataset`, `source`, `symbol`, `interval`, `row_count`, `columns`, `dtypes`, `file_size_bytes` et `time_range`.
 
 Friction : l'appel réseau peut être lent ou indisponible, ce qui rend les tests instables.
 
@@ -217,7 +219,7 @@ Endpoints MVP :
 ```text
 GET /health
 GET /models
-GET /signals/latest?symbol=BTCUSDT&model=random_forest
+GET /signals/latest?symbol=BTCUSDC&model=random_forest
 ```
 
 Friction : si `/signals/latest` collecte les données depuis Binance à chaque appel, la latence dépend du réseau.
@@ -228,7 +230,7 @@ Preuve observable :
 
 ```bash
 uvicorn src.api.main:app --reload --port 8010
-curl "http://localhost:8010/signals/latest?symbol=BTCUSDT&model=random_forest"
+curl "http://localhost:8010/signals/latest?symbol=BTCUSDC&model=random_forest"
 ```
 
 ### Step 8: Brancher la validation MVP

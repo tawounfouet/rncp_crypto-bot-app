@@ -29,7 +29,7 @@ MOCK_TRANSACTIONS = [
         "id": "tx1",
         "transaction_type": "TRADE",
         "asset": "BTC",
-        "quote_asset": "USDT",
+        "quote_asset": "USDC",
         "direction": "IN",
         "price": 45000.0,
         "amount": 0.1,
@@ -40,7 +40,7 @@ MOCK_TRANSACTIONS = [
         "id": "tx2",
         "transaction_type": "TRADE",
         "asset": "ETH",
-        "quote_asset": "USDT",
+        "quote_asset": "USDC",
         "direction": "OUT",
         "price": 2500.0,
         "amount": 1.0,
@@ -62,7 +62,7 @@ def test_performance_positive_pnl(store) -> None:
     client.list_transactions.return_value = _ok(MOCK_TRANSACTIONS)
     service = PerformanceService(store, client=client)
     snapshot = service.get_snapshot(bot_id="strat_btc", period_days=30)
-    assert snapshot.metrics.pnl_realized_usdt == pytest.approx(1250.75)
+    assert snapshot.metrics.pnl_realized_usdc == pytest.approx(1250.75)
     assert snapshot.metrics.win_rate_pct == pytest.approx(65.0)
 
 
@@ -82,6 +82,6 @@ def test_performance_backend_failure_returns_zero_metrics(store) -> None:
     client.list_transactions.return_value = _err()
     service = PerformanceService(store, client=client)
     snapshot = service.get_snapshot(bot_id="strat_btc", period_days=30)
-    assert snapshot.metrics.pnl_realized_usdt == 0.0
+    assert snapshot.metrics.pnl_realized_usdc == 0.0
     assert snapshot.metrics.win_rate_pct == 0.0
     assert snapshot.trade_journal == []

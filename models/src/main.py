@@ -8,6 +8,7 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
+
     env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(dotenv_path=env_path)
 except ImportError:
@@ -17,7 +18,9 @@ from src.config.config_loader import load_config
 from src.features.build import build_symbol_features
 from src.training.train_baselines import train_from_processed_dataset as train_baselines_from_processed_dataset
 from src.training.train_lstm import train_from_processed_dataset as train_lstm_from_processed_dataset
+from src.training.train_mlp import train_from_processed_dataset as train_mlp_from_processed_dataset
 from src.training.train_random_forest import train_from_processed_dataset
+from src.training.train_xgboost import train_from_processed_dataset as train_xgboost_from_processed_dataset
 from src.utils.logger import configure_logging, get_logger
 from src.validation.mvp_check import check_mvp
 
@@ -47,6 +50,16 @@ def train_rf_command(args: argparse.Namespace) -> None:
 def train_lstm_command(args: argparse.Namespace) -> None:
     artifact_dir = train_lstm_from_processed_dataset(args.dataset, args.config)
     print(f"lstm artifacts: {artifact_dir}")
+
+
+def train_mlp_command(args: argparse.Namespace) -> None:
+    artifact_dir = train_mlp_from_processed_dataset(args.dataset, args.config)
+    print(f"mlp artifacts: {artifact_dir}")
+
+
+def train_xgboost_command(args: argparse.Namespace) -> None:
+    artifact_dir = train_xgboost_from_processed_dataset(args.dataset, args.config)
+    print(f"xgboost artifacts: {artifact_dir}")
 
 
 def train_baselines_command(args: argparse.Namespace) -> None:
@@ -91,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_rf_parser = subparsers.add_parser("train-rf", help="Train Random Forest baseline")
     train_rf_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_rf_parser.set_defaults(func=train_rf_command)
@@ -99,15 +112,33 @@ def build_parser() -> argparse.ArgumentParser:
     train_lstm_parser = subparsers.add_parser("train-lstm", help="Train LSTM classifier")
     train_lstm_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_lstm_parser.set_defaults(func=train_lstm_command)
 
-    train_baselines_parser = subparsers.add_parser("train-baselines", help="Evaluate AlwaysHold and UniformRandom baselines")
+    train_mlp_parser = subparsers.add_parser("train-mlp", help="Train MLP classifier")
+    train_mlp_parser.add_argument(
+        "--dataset",
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
+        help="Processed dataset path",
+    )
+    train_mlp_parser.set_defaults(func=train_mlp_command)
+
+    train_xgboost_parser = subparsers.add_parser("train-xgboost", help="Train XGBoost classifier")
+    train_xgboost_parser.add_argument(
+        "--dataset",
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
+        help="Processed dataset path",
+    )
+    train_xgboost_parser.set_defaults(func=train_xgboost_command)
+
+    train_baselines_parser = subparsers.add_parser(
+        "train-baselines", help="Evaluate AlwaysHold and UniformRandom baselines"
+    )
     train_baselines_parser.add_argument(
         "--dataset",
-        default=str(Path("data/processed/BTCUSDT/1h_features.parquet")),
+        default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
     train_baselines_parser.set_defaults(func=train_baselines_command)

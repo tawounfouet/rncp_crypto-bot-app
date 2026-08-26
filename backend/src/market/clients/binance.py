@@ -37,24 +37,33 @@ class ClientBinance:
             api_secret=settings.get_api_secret("binance"),
         )
 
-    def get_price(self, symbol: str = "BTCUSDT") -> dict | None:
+    def _call(self, func, *args, action: str, **kwargs):
+        """Exécute un appel au client Binance en centralisant le try/except à 3 niveaux."""
+        try:
+            return func(*args, **kwargs)
+        except BinanceAPIException as e:
+            logger.error(f"Erreur API Binance lors de {action}: {e}")
+            return None
+        except BinanceRequestException as e:
+            logger.error(f"Erreur de requête Binance lors de {action}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Erreur inattendue lors de {action}: {e}")
+            return None
+
+    def get_price(self, symbol: str = "BTCUSDC") -> dict | None:
         """
         Récupère le prix actuel d'un symbole
 
         Args:
-            symbol (str): Paire de trading (ex: BTCUSDT)
+            symbol (str): Paire de trading (ex: BTCUSDC)
 
         Returns:
             dict: Prix du symbole ou None en cas d'erreur
         """
-        try:
-            return self.client.get_symbol_ticker(symbol=symbol)
-        except BinanceAPIException as e:
-            logger.error(f"Erreur API Binance: {e} (symbol={symbol})")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e} (symbol={symbol})")
-            return None
+        return self._call(
+            self.client.get_symbol_ticker, symbol=symbol, action=f"récupération du prix (symbol={symbol})"
+        )
 
     def get_historical_klines(self, symbol: str, interval: str, start_str: str) -> list | None:
         """
@@ -68,11 +77,13 @@ class ClientBinance:
         Returns:
             list: Liste des klines ou None en cas d'erreur
         """
-        try:
-            return self.client.get_historical_klines(symbol, interval, start_str)
-        except Exception as e:
-            logger.error(f"Erreur récupération historique: {e} (symbol={symbol}, interval={interval})")
-            return None
+        return self._call(
+            self.client.get_historical_klines,
+            symbol,
+            interval,
+            start_str,
+            action=f"récupération historique (symbol={symbol}, interval={interval})",
+        )
 
     def get_account_balances(self) -> dict[str, float] | None:
         """
@@ -81,8 +92,10 @@ class ClientBinance:
         Returns:
             dict: Dictionnaire {asset: montant} pour les soldes > 0 ou None en cas d'erreur
         """
+        account_info = self._call(self.client.get_account, action="récupération portefeuille")
+        if account_info is None:
+            return None
         try:
-            account_info = self.client.get_account()
             return {b["asset"]: float(b["free"]) for b in account_info["balances"] if float(b["free"]) > 0}
         except Exception as e:
             logger.error(f"Erreur récupération portefeuille: {e}")
@@ -109,24 +122,24 @@ class ClientBinance:
         Returns:
             dict: Réponse de l'API ou None en cas d'erreur
         """
-        try:
-            params = {
-                "symbol": symbol,
-                "side": side,
-                "type": order_type,
-                "quantity": quantity,
-            }
+        params = {
+            "symbol": symbol,
+            "side": side,
+            "type": order_type,
+            "quantity": quantity,
+        }
 
-            if order_type == Client.ORDER_TYPE_LIMIT:
-                if not price:
-                    logger.error(f"Prix requis pour les ordres limites (symbol={symbol}, side={side})")
-                    return None
-                params.update({"timeInForce": Client.TIME_IN_FORCE_GTC, "price": str(price)})
+        if order_type == Client.ORDER_TYPE_LIMIT:
+            if not price:
+                logger.error(f"Prix requis pour les ordres limites (symbol={symbol}, side={side})")
+                return None
+            params.update({"timeInForce": Client.TIME_IN_FORCE_GTC, "price": str(price)})
 
-            return self.client.create_order(**params)
-        except Exception as e:
-            logger.error(f"Erreur création d'ordre: {e} (symbol={symbol}, side={side}, type={order_type})")
-            return None
+        return self._call(
+            self.client.create_order,
+            **params,
+            action=f"création d'ordre (symbol={symbol}, side={side}, type={order_type})",
+        )
 
     def cancel_order(self, symbol: str, order_id: int) -> dict | None:
         """
@@ -139,17 +152,12 @@ class ClientBinance:
         Returns:
             dict: Réponse de l'API ou None en cas d'erreur
         """
-        try:
-            return self.client.cancel_order(symbol=symbol, orderId=order_id)
-        except BinanceAPIException as e:
-            logger.error(f"Erreur annulation d'ordre: {e} (symbol={symbol}, order_id={order_id})")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e} (symbol={symbol}, order_id={order_id})")
-            return None
-        except Exception as e:
-            logger.error(f"Erreur inconnue: {e} (symbol={symbol}, order_id={order_id})")
-            return None
+        return self._call(
+            self.client.cancel_order,
+            symbol=symbol,
+            orderId=order_id,
+            action=f"annulation d'ordre (symbol={symbol}, order_id={order_id})",
+        )
 
     def get_open_orders(self, symbol: str) -> list[dict] | None:
         """
@@ -161,17 +169,11 @@ class ClientBinance:
         Returns:
             list: Liste des ordres ouverts ou None en cas d'erreur
         """
-        try:
-            return self.client.get_open_orders(symbol=symbol)
-        except BinanceAPIException as e:
-            logger.error(f"Erreur récupération des ordres ouverts: {e} (symbol={symbol})")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e} (symbol={symbol})")
-            return None
-        except Exception as e:
-            logger.error(f"Erreur inconnue: {e} (symbol={symbol})")
-            return None
+        return self._call(
+            self.client.get_open_orders,
+            symbol=symbol,
+            action=f"récupération des ordres ouverts (symbol={symbol})",
+        )
 
     def get_account_info(self) -> dict | None:
         """
@@ -180,17 +182,7 @@ class ClientBinance:
         Returns:
             dict: Informations du compte ou None en cas d'erreur
         """
-        try:
-            return self.client.get_account()
-        except BinanceAPIException as e:
-            logger.error(f"Erreur récupération des informations du compte: {e}")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Erreur inconnue: {e}")
-            return None
+        return self._call(self.client.get_account, action="récupération des informations du compte")
 
     def get_asset_balance(self, asset: str) -> dict | None:
         """
@@ -202,17 +194,11 @@ class ClientBinance:
         Returns:
             dict: Solde de l'actif ou None en cas d'erreur
         """
-        try:
-            return self.client.get_asset_balance(asset=asset)
-        except BinanceAPIException as e:
-            logger.error(f"Erreur récupération du solde de l'actif: {e} (asset={asset})")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e} (asset={asset})")
-            return None
-        except Exception as e:
-            logger.error(f"Erreur inconnue: {e} (asset={asset})")
-            return None
+        return self._call(
+            self.client.get_asset_balance,
+            asset=asset,
+            action=f"récupération du solde de l'actif (asset={asset})",
+        )
 
     def get_exchange_info(self) -> dict | None:
         """
@@ -221,17 +207,7 @@ class ClientBinance:
         Returns:
             dict: Informations de l'échange ou None en cas d'erreur
         """
-        try:
-            return self.client.get_exchange_info()
-        except BinanceAPIException as e:
-            logger.error(f"Erreur récupération des informations d'échange: {e}")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Erreur inconnue: {e}")
-            return None
+        return self._call(self.client.get_exchange_info, action="récupération des informations d'échange")
 
     def get_server_time(self) -> dict | None:
         """
@@ -240,17 +216,7 @@ class ClientBinance:
         Returns:
             dict: Heure du serveur ou None en cas d'erreur
         """
-        try:
-            return self.client.get_server_time()
-        except BinanceAPIException as e:
-            logger.error(f"Erreur récupération de l'heure du serveur: {e}")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Erreur inconnue: {e}")
-            return None
+        return self._call(self.client.get_server_time, action="récupération de l'heure du serveur")
 
     def get_symbol_info(self, symbol: str) -> dict | None:
         """
@@ -262,17 +228,11 @@ class ClientBinance:
         Returns:
             dict: Informations du symbole ou None en cas d'erreur
         """
-        try:
-            return self.client.get_symbol_info(symbol)
-        except BinanceAPIException as e:
-            logger.error(f"Erreur récupération des informations du symbole: {e} (symbol={symbol})")
-            return None
-        except BinanceRequestException as e:
-            logger.error(f"Erreur de requête: {e} (symbol={symbol})")
-            return None
-        except Exception as e:
-            logger.error(f"Erreur inconnue: {e} (symbol={symbol})")
-            return None
+        return self._call(
+            self.client.get_symbol_info,
+            symbol,
+            action=f"récupération des informations du symbole (symbol={symbol})",
+        )
 
     # --- Nouvelles méthodes avancées ---
 
@@ -295,29 +255,29 @@ class ClientBinance:
         Returns:
             dict: Réponse de l'API ou None en cas d'erreur
         """
-        try:
-            params = {
-                "symbol": symbol,
-                "side": Client.SIDE_SELL,
-                "quantity": quantity,
-                "stopPrice": str(stop_price),
-            }
+        params = {
+            "symbol": symbol,
+            "side": Client.SIDE_SELL,
+            "quantity": quantity,
+            "stopPrice": str(stop_price),
+        }
 
-            if limit_price:
-                params.update(
-                    {
-                        "type": Client.ORDER_TYPE_STOP_LOSS_LIMIT,
-                        "timeInForce": Client.TIME_IN_FORCE_GTC,
-                        "price": str(limit_price),
-                    }
-                )
-            else:
-                params.update({"type": Client.ORDER_TYPE_STOP_LOSS})
+        if limit_price:
+            params.update(
+                {
+                    "type": Client.ORDER_TYPE_STOP_LOSS_LIMIT,
+                    "timeInForce": Client.TIME_IN_FORCE_GTC,
+                    "price": str(limit_price),
+                }
+            )
+        else:
+            params.update({"type": Client.ORDER_TYPE_STOP_LOSS})
 
-            return self.client.create_order(**params)
-        except Exception as e:
-            logger.error(f"Erreur création d'ordre stop-loss: {e} (symbol={symbol}, stop_price={stop_price})")
-            return None
+        return self._call(
+            self.client.create_order,
+            **params,
+            action=f"création d'ordre stop-loss (symbol={symbol}, stop_price={stop_price})",
+        )
 
     def place_take_profit_order(
         self,
@@ -338,29 +298,29 @@ class ClientBinance:
         Returns:
             dict: Réponse de l'API ou None en cas d'erreur
         """
-        try:
-            params = {
-                "symbol": symbol,
-                "side": Client.SIDE_SELL,
-                "quantity": quantity,
-                "stopPrice": str(stop_price),
-            }
+        params = {
+            "symbol": symbol,
+            "side": Client.SIDE_SELL,
+            "quantity": quantity,
+            "stopPrice": str(stop_price),
+        }
 
-            if limit_price:
-                params.update(
-                    {
-                        "type": Client.ORDER_TYPE_TAKE_PROFIT_LIMIT,
-                        "timeInForce": Client.TIME_IN_FORCE_GTC,
-                        "price": str(limit_price),
-                    }
-                )
-            else:
-                params.update({"type": Client.ORDER_TYPE_TAKE_PROFIT})
+        if limit_price:
+            params.update(
+                {
+                    "type": Client.ORDER_TYPE_TAKE_PROFIT_LIMIT,
+                    "timeInForce": Client.TIME_IN_FORCE_GTC,
+                    "price": str(limit_price),
+                }
+            )
+        else:
+            params.update({"type": Client.ORDER_TYPE_TAKE_PROFIT})
 
-            return self.client.create_order(**params)
-        except Exception as e:
-            logger.error(f"Erreur création d'ordre take-profit: {e} (symbol={symbol}, stop_price={stop_price})")
-            return None
+        return self._call(
+            self.client.create_order,
+            **params,
+            action=f"création d'ordre take-profit (symbol={symbol}, stop_price={stop_price})",
+        )
 
     def place_oco_order(
         self,
@@ -385,22 +345,17 @@ class ClientBinance:
         Returns:
             dict: Réponse de l'API ou None en cas d'erreur
         """
-        try:
-            return self.client.create_oco_order(
-                symbol=symbol,
-                side=side,
-                quantity=quantity,
-                price=str(price),
-                stopPrice=str(stop_price),
-                stopLimitPrice=str(stop_limit_price),
-                stopLimitTimeInForce=Client.TIME_IN_FORCE_GTC,
-            )
-        except Exception as e:
-            logger.error(
-                f"Erreur création d'ordre OCO: {e} "
-                f"(symbol={symbol}, side={side}, price={price}, stop_price={stop_price})"
-            )
-            return None
+        return self._call(
+            self.client.create_oco_order,
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            price=str(price),
+            stopPrice=str(stop_price),
+            stopLimitPrice=str(stop_limit_price),
+            stopLimitTimeInForce=Client.TIME_IN_FORCE_GTC,
+            action=f"création d'ordre OCO (symbol={symbol}, side={side}, price={price}, stop_price={stop_price})",
+        )
 
     def get_order_book(self, symbol: str, limit: int = 100) -> dict | None:
         """
@@ -413,11 +368,12 @@ class ClientBinance:
         Returns:
             dict: Carnet d'ordres ou None en cas d'erreur
         """
-        try:
-            return self.client.get_order_book(symbol=symbol, limit=limit)
-        except Exception as e:
-            logger.error(f"Erreur récupération du carnet d'ordres: {e} (symbol={symbol}, limit={limit})")
-            return None
+        return self._call(
+            self.client.get_order_book,
+            symbol=symbol,
+            limit=limit,
+            action=f"récupération du carnet d'ordres (symbol={symbol}, limit={limit})",
+        )
 
     def get_recent_trades(self, symbol: str, limit: int = 500) -> list[dict] | None:
         """
@@ -430,11 +386,12 @@ class ClientBinance:
         Returns:
             list: Liste des trades récents ou None en cas d'erreur
         """
-        try:
-            return self.client.get_recent_trades(symbol=symbol, limit=limit)
-        except Exception as e:
-            logger.error(f"Erreur récupération des trades récents: {e} (symbol={symbol}, limit={limit})")
-            return None
+        return self._call(
+            self.client.get_recent_trades,
+            symbol=symbol,
+            limit=limit,
+            action=f"récupération des trades récents (symbol={symbol}, limit={limit})",
+        )
 
     def get_historical_trades(self, symbol: str, limit: int = 500, from_id: int | None = None) -> list[dict] | None:
         """
@@ -448,14 +405,14 @@ class ClientBinance:
         Returns:
             list: Liste des trades historiques ou None en cas d'erreur
         """
-        try:
-            params = {"symbol": symbol, "limit": limit}
-            if from_id:
-                params["fromId"] = from_id
-            return self.client.get_historical_trades(**params)
-        except Exception as e:
-            logger.error(f"Erreur récupération des trades historiques: {e} (symbol={symbol}, limit={limit})")
-            return None
+        params = {"symbol": symbol, "limit": limit}
+        if from_id:
+            params["fromId"] = from_id
+        return self._call(
+            self.client.get_historical_trades,
+            **params,
+            action=f"récupération des trades historiques (symbol={symbol}, limit={limit})",
+        )
 
     def get_aggregate_trades(self, symbol: str, limit: int = 500) -> list[dict] | None:
         """
@@ -468,11 +425,12 @@ class ClientBinance:
         Returns:
             list: Liste des trades agrégés ou None en cas d'erreur
         """
-        try:
-            return self.client.get_aggregate_trades(symbol=symbol, limit=limit)
-        except Exception as e:
-            logger.error(f"Erreur récupération des trades agrégés: {e} (symbol={symbol}, limit={limit})")
-            return None
+        return self._call(
+            self.client.get_aggregate_trades,
+            symbol=symbol,
+            limit=limit,
+            action=f"récupération des trades agrégés (symbol={symbol}, limit={limit})",
+        )
 
     def get_all_tickers(self) -> list[dict] | None:
         """
@@ -481,11 +439,7 @@ class ClientBinance:
         Returns:
             list: Liste des tickers ou None en cas d'erreur
         """
-        try:
-            return self.client.get_all_tickers()
-        except Exception as e:
-            logger.error(f"Erreur récupération de tous les tickers: {e}")
-            return None
+        return self._call(self.client.get_all_tickers, action="récupération de tous les tickers")
 
     def get_ticker_24h(self, symbol: str | None = None) -> dict | list[dict] | None:
         """
@@ -497,14 +451,10 @@ class ClientBinance:
         Returns:
             dict/list: Statistiques sur 24h ou None en cas d'erreur
         """
-        try:
-            if symbol:
-                return self.client.get_ticker(symbol=symbol)
-            else:
-                return self.client.get_ticker()
-        except Exception as e:
-            logger.error(f"Erreur récupération du ticker 24h: {e} (symbol={symbol if symbol else 'all'})")
-            return None
+        action = f"récupération du ticker 24h (symbol={symbol if symbol else 'all'})"
+        if symbol:
+            return self._call(self.client.get_ticker, symbol=symbol, action=action)
+        return self._call(self.client.get_ticker, action=action)
 
     # --- WebSocket API ---
 
@@ -613,18 +563,18 @@ if __name__ == "__main__":
                 print(f"{asset}: {amount}")
 
     # Prix actuel du BTC
-    btc_price = client.get_price("BTCUSDT")
+    btc_price = client.get_price("BTCUSDC")
     if btc_price:
-        print(f"\nPrix actuel du BTC: {btc_price['price']} USDT")
+        print(f"\nPrix actuel du BTC: {btc_price['price']} USDC")
 
     # Exemple de données de marché
-    order_book = client.get_order_book("BTCUSDT", limit=5)
+    order_book = client.get_order_book("BTCUSDC", limit=5)
     if order_book:
         print("\nCarnet d'ordres (5 premiers):")
         print("Achats:", order_book["bids"][:3])
         print("Ventes:", order_book["asks"][:3])
 
     # Statistiques sur 24h
-    stats_24h = client.get_ticker_24h("BTCUSDT")
+    stats_24h = client.get_ticker_24h("BTCUSDC")
     if stats_24h:
         print(f"\nStatistiques 24h - Volume BTC: {stats_24h['volume']} - Variation: {stats_24h['priceChangePercent']}%")

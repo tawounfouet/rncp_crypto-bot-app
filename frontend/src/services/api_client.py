@@ -50,6 +50,7 @@ class BackendApiClient(AuthApiClient):
         exchange: str | None = None,
         api_key: str | None = None,
         api_secret: str | None = None,
+        mode: str | None = None,
         theme: str | None = None,
         risk_profile: str | None = None,
     ) -> ApiResponse:
@@ -60,6 +61,8 @@ class BackendApiClient(AuthApiClient):
             payload["api_key"] = api_key
         if api_secret is not None:
             payload["api_secret"] = api_secret
+        if mode is not None:
+            payload["mode"] = mode
         if theme is not None:
             payload["theme"] = theme
         if risk_profile is not None:
@@ -101,10 +104,12 @@ class BackendApiClient(AuthApiClient):
 
     # ─── Trading ─────────────────────────────────────────────────────────────
 
-    def get_portfolio(self, access_token: str) -> ApiResponse:
+    def get_portfolio(self, access_token: str, *, exchange: str | None = None) -> ApiResponse:
+        params = {"exchange": exchange} if exchange else None
         return self._request(
             "GET",
             f"{API_PREFIX}/trading/portfolio",
+            query_params=params,
             access_token=access_token,
         )
 
@@ -154,6 +159,36 @@ class BackendApiClient(AuthApiClient):
         )
 
     # ─── Strategies ──────────────────────────────────────────────────────────
+    def create_strategy(
+        self,
+        access_token: str,
+        *,
+        name: str,
+        strategy_type: str,
+        parameters: dict,
+        description: str | None = None,
+        asset_class: str = "crypto",
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/",
+            json_body={
+                "name": name,
+                "strategy_type": strategy_type,
+                "parameters": parameters,
+                "description": description,
+                "asset_class": asset_class,
+                "is_public": False,
+            },
+            access_token=access_token,
+        )
+
+    def delete_strategy(self, access_token: str, strategy_id: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/strategies/{strategy_id}",
+            access_token=access_token,
+        )
 
     def list_strategies(self, access_token: str) -> ApiResponse:
         return self._request(
@@ -198,9 +233,176 @@ class BackendApiClient(AuthApiClient):
             access_token=access_token,
         )
 
+    def deploy_strategy(
+        self,
+        access_token: str,
+        strategy_id: str,
+        *,
+        exchange: str,
+        symbol: str,
+        timeframe: str,
+        amount: float,
+        is_paper: bool = True,
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/{strategy_id}/deploy",
+            json_body={
+                "strategy_id": strategy_id,
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "amount": str(amount),
+                "is_paper": is_paper,
+            },
+            access_token=access_token,
+        )
+
     def stop_deployment(self, access_token: str, deployment_id: str) -> ApiResponse:
         return self._request(
             "POST",
             f"{API_PREFIX}/strategies/deployments/{deployment_id}/stop",
             access_token=access_token,
         )
+
+    def get_available_models(self, access_token: str) -> ApiResponse:
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/strategies/available-models",
+            access_token=access_token,
+        )
+
+    # ─── API Credentials (multi-key) ────────────────────────────────────────
+
+    def list_api_credentials(self, access_token: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/users/me/api-keys", access_token=access_token)
+
+    def add_api_credential(
+        self,
+        access_token: str,
+        *,
+        label: str,
+        exchange: str,
+        api_key: str,
+        api_secret: str,
+    ) -> ApiResponse:
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/users/me/api-keys",
+            json_body={
+                "label": label,
+                "exchange": exchange,
+                "api_key": api_key,
+                "api_secret": api_secret,
+            },
+            access_token=access_token,
+        )
+
+    def set_primary_api_credential(self, access_token: str, key_id: str) -> ApiResponse:
+        return self._request(
+            "PUT",
+            f"{API_PREFIX}/users/me/api-keys/{key_id}/primary",
+            access_token=access_token,
+        )
+
+    def delete_api_credential(self, access_token: str, key_id: str) -> ApiResponse:
+        return self._request(
+            "DELETE",
+            f"{API_PREFIX}/users/me/api-keys/{key_id}",
+            access_token=access_token,
+        )
+
+    # ─── Backtesting ─────────────────────────────────────────────────────────
+
+    def run_backtest(
+        self,
+        access_token: str,
+        *,
+        strategy_id: str,
+        symbol: str,
+        timeframe: str,
+        start_date: str,
+        end_date: str,
+        initial_balance: float,
+        parameters: dict | None = None,
+    ) -> ApiResponse:
+        payload: dict[str, Any] = {
+            "strategy_id": strategy_id,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "start_date": start_date,
+            "end_date": end_date,
+            "initial_balance": str(initial_balance),
+        }
+        if parameters:
+            payload["parameters"] = parameters
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/backtests",
+            json_body=payload,
+            access_token=access_token,
+        )
+
+    def list_backtests(self, access_token: str) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/strategies/backtests", access_token=access_token)
+
+    def get_backtest(self, access_token: str, backtest_id: str) -> ApiResponse:
+        return self._request(
+            "GET", f"{API_PREFIX}/strategies/backtests/{backtest_id}", access_token=access_token
+        )
+
+    # ─── Market data ─────────────────────────────────────────────────────────
+
+    def get_market_coverage(self, access_token: str) -> ApiResponse:
+        """GET /market/data/coverage — résumé des données OHLCV stockées en base."""
+        return self._request(
+            "GET",
+            f"{API_PREFIX}/market/data/coverage",
+            access_token=access_token,
+        )
+
+    def insert_market_data(
+        self,
+        access_token: str,
+        *,
+        symbol: str,
+        interval: str,
+        start_time: str,
+        end_time: str,
+        limit: int = 1000,
+    ) -> ApiResponse:
+        """POST /market/data/insert — importe les klines en base (upsert)."""
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/market/data/insert",
+            json_body={
+                "symbol": symbol,
+                "interval": interval,
+                "start_time": start_time,
+                "end_time": end_time,
+                "limit": limit,
+            },
+            access_token=access_token,
+        )
+
+    # ─── Marché public (pas d'authentification) ────────────────────────────────
+
+    def get_public_exchanges(self) -> ApiResponse:
+        return self._request("GET", f"{API_PREFIX}/market/exchanges")
+
+    def get_public_prices(self, *, exchange: str, symbols: list[str] | None = None) -> ApiResponse:
+        params: dict[str, str] = {"exchange": exchange}
+        if symbols:
+            params["symbols"] = ",".join(symbols)
+        return self._request("GET", f"{API_PREFIX}/market/public/prices", query_params=params)
+
+    def get_public_klines(
+        self, *, exchange: str, symbol: str, interval: str = "1h", limit: int = 24
+    ) -> ApiResponse:
+        params: dict[str, str] = {
+            "exchange": exchange,
+            "symbols": symbol,
+            "interval": interval,
+            "limit": str(limit),
+        }
+        return self._request("GET", f"{API_PREFIX}/market/public/klines", query_params=params)

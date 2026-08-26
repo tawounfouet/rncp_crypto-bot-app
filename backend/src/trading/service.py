@@ -112,10 +112,43 @@ class TradingService:
             self.db.commit()
             self.db.refresh(order)
 
-            # TODO: Submit order to exchange (Binance API integration)
-            # exchange_response = await self._submit_to_exchange(order)
-            # order.update_from_exchange_response(exchange_response)
-            # self.db.commit()
+            from auth.models import UserSettings
+            from market.clients.factory import from_user_settings
+
+            settings = self.db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+
+            if not settings or not (settings.api_keys and deployment.exchange in settings.api_keys):
+                order.status = "REJECTED"
+                self.db.commit()
+                logger.warning(f"Clés API {deployment.exchange} non configurées")
+                return OrderResponse.model_validate(order)
+            try:
+                client = from_user_settings(settings, deployment.exchange)
+            except ValueError as e:
+                order.status = "REJECTED"
+                self.db.commit()
+                logger.warning(f"Value Error {e!s}")
+                return OrderResponse.model_validate(order)
+
+            try:
+                order_result = client.place_order(
+                    order.symbol, order.side, order.order_type, order.quantity, order.price
+                )
+
+                order.exchange_order_id = order_result.order_id
+                order.status = order_result.status
+                order.executed_quantity = 0
+
+                if order_result.status == "FILLED":
+                    order.executed_quantity = order_result.quantity
+
+            except Exception as e:
+                order.status = "REJECTED"
+                self.db.commit()
+                logger.warning(f"Exception {e!s}")
+                return OrderResponse.model_validate(order)
+
+            self.db.commit()
 
             logger.info(f"Created order {order.id} for user {user_id}: {order.side} {order.quantity} {order.symbol}")
 
@@ -241,10 +274,24 @@ class TradingService:
             if not order.is_open:
                 raise BusinessLogicError(message=f"Order {order_id} cannot be cancelled (status: {order.status})")
 
-            # TODO: Cancel on exchange
-            # await self._cancel_on_exchange(order)
+            from auth.models import UserSettings
+            from market.clients.factory import from_user_settings
 
-            order.status = OrderStatusEnum.CANCELED.value
+            settings = self.db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
+
+            if not settings or not (settings.api_keys and order.exchange in settings.api_keys):
+                raise BusinessLogicError(f"Bad settings {settings}")
+            try:
+                client = from_user_settings(settings, order.exchange)
+            except ValueError as e:
+                raise BusinessLogicError(f"ValueError {e!s}") from None
+
+            try:
+                result = client.cancel_order(order.symbol, order.exchange_order_id)
+            except Exception as e:
+                raise BusinessLogicError(f"Cancel order error {e!s}") from None
+
+            order.status = result.status
             self.db.commit()
 
             logger.info(f"Cancelled order {order_id} for user {user_id}")
@@ -460,7 +507,7 @@ class TradingService:
 
         # Retrieve stored API credentials
         settings = self.db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
-        if not settings or not (settings.api_keys and target_exchange in settings.api_keys):
+        if not settings or not settings.has_credentials_for_exchange(target_exchange):
             return PortfolioResponse(
                 success=False,
                 message=f"Clés API {target_exchange} non configurées",

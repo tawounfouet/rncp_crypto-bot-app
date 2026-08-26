@@ -1,5 +1,8 @@
 # Cadrage MVP — CryptoBot Models Training
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 Date : 2026-06-01
 
 ## Hypothèse à valider
@@ -14,7 +17,7 @@ L'hypothèse n'est pas encore : "le bot gagne durablement de l'argent". L'hypoth
 
 | Domaine | Inclus MVP | Exclu MVP |
 |---|---|---|
-| Données | `BTCUSDT`, `BTCETH`, OHLCV, intervalle principal `1h` | Multi-exchange, carnets d'ordres, sentiment, news |
+| Données | `BTCUSDC`, `BTCETH`, OHLCV, intervalle principal `1h` | Multi-exchange, carnets d'ordres, sentiment, news |
 | Modèles | Random Forest baseline, LSTM séquentiel | Reinforcement learning, Transformers, ensembles avancés |
 | Signal | `BUY`, `SELL`, `HOLD`, score de confiance simple | Exécution d'ordres, sizing de position, arbitrage |
 | API | Healthcheck, dernier signal, prédiction ponctuelle | Streaming temps réel, WebSocket, backtesting complet via API |
@@ -73,7 +76,7 @@ La règle de labellisation doit rester simple, documentée et versionnée. Le se
 
 Le MVP est terminé quand l'équipe peut montrer :
 
-- un script de collecte qui produit un dataset pour `BTCUSDT` et `BTCETH`
+- un script de collecte qui produit un dataset pour `BTCUSDC` et `BTCETH`
 - un pipeline de features sans fuite de données entre train et test
 - un Random Forest et un LSTM entraînés sur un split temporel
 - une comparaison métrique des deux modèles

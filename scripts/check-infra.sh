@@ -291,12 +291,12 @@ if [ -f scripts/generate-requirements.py ]; then
     python3 scripts/generate-requirements.py > /dev/null 2>&1
 
     # Verifier s'il y a un diff git sur les fichiers generes
-    if git diff --exit-code -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt > /dev/null 2>&1; then
+    if git diff --exit-code -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt models/requirements.txt frontend/requirements.txt > /dev/null 2>&1; then
         pass "Fichiers requirements.txt synchronises avec les templates"
     else
         fail "Fichiers requirements.txt desynchronises ! Lancez 'python3 scripts/generate-requirements.py' et commitez les modifications."
         # Afficher le diff pour aider le developpeur
-        git diff -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt
+        git diff -- backend/requirements.txt jobs/requirements.txt orchestration/requirements.txt models/requirements.txt frontend/requirements.txt
     fi
 else
     fail "scripts/generate-requirements.py introuvable"

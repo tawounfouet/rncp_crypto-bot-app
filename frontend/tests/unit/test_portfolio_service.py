@@ -21,7 +21,7 @@ def _err(code: int = 400) -> ApiResponse:
 MOCK_PORTFOLIO = {
     "total_usd_value": 15000.0,
     "balances": [
-        {"asset": "USDT", "available": 5000.0, "locked": 0.0, "usd_value": 5000.0},
+        {"asset": "USDC", "available": 5000.0, "locked": 0.0, "usd_value": 5000.0},
         {"asset": "BTC", "available": 0.1, "locked": 0.0, "usd_value": 4500.0},
         {"asset": "ETH", "available": 2.0, "locked": 0.0, "usd_value": 5000.0},
     ],
@@ -30,7 +30,7 @@ MOCK_PORTFOLIO = {
 MOCK_ORDERS = [
     {
         "id": "ord_101",
-        "symbol": "BTCUSDT",
+        "symbol": "BTCUSDC",
         "side": "BUY",
         "price": 44000.0,
         "quantity": 0.05,
@@ -44,7 +44,7 @@ MOCK_TRANSACTIONS = [
         "id": "tx1",
         "transaction_type": "TRADE",
         "asset": "BTC",
-        "quote_asset": "USDT",
+        "quote_asset": "USDC",
         "direction": "IN",
         "price": 45000.0,
         "amount": 0.1,
@@ -75,7 +75,7 @@ def test_get_snapshot_rich(store) -> None:
     service = PortfolioService(store, client=client)
     snapshot = service.get_snapshot()
     assert snapshot.asset_count == 3
-    assert snapshot.total_value_usdt == pytest.approx(15000.0)
+    assert snapshot.total_value_usdc == pytest.approx(15000.0)
     assert snapshot.open_order_count == 1
 
 
@@ -87,7 +87,7 @@ def test_get_snapshot_empty_portfolio(store) -> None:
     service = PortfolioService(store, client=client)
     snapshot = service.get_snapshot()
     assert snapshot.asset_count == 0
-    assert snapshot.total_value_usdt == 0.0
+    assert snapshot.total_value_usdc == 0.0
 
 
 def test_cancel_order(store) -> None:

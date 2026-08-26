@@ -2,38 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from mocks.db import MockStore
 from schemas.bot import BotConfig, BotConfigUpdate
 from services.api_client import BackendApiClient
 from services.base import ServiceError
 from state.session import get_access_token
-
-
-def _parse_dt(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-    return datetime.now(UTC)
-
-
-def _float(value: object, default: float = 0.0) -> float:
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-
-
-def _int(value: object, default: int = 0) -> int:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
+from utils.dates import parse_dt_or_now
+from utils.numeric import to_float as _float
+from utils.numeric import to_int as _int
 
 
 def _extract_strategy(response_data: object) -> dict | None:
@@ -72,7 +48,7 @@ class BotConfigService:
 
         params: dict = strategy.get("parameters") or {}
         symbol: str = params.get("symbol") or ""
-        if len(symbol) > 4 and symbol.endswith("USDT"):
+        if len(symbol) > 4 and symbol.endswith("USDC"):
             base_asset = symbol[:-4]
         else:
             base_asset = params.get("base_asset") or "BTC"
@@ -80,11 +56,11 @@ class BotConfigService:
         return BotConfig(
             bot_id=strategy.get("id", bot_id),
             version=_int(params.get("version"), 1),
-            updated_at=_parse_dt(strategy.get("updated_at")),
+            updated_at=parse_dt_or_now(strategy.get("updated_at")),
             strategy=strategy.get("strategy_type") or "custom",
             base_asset=base_asset,
-            quote_asset=params.get("quote_asset") or "USDT",
-            budget_usdt=_float(params.get("budget_usdt"), 1000.0),
+            quote_asset=params.get("quote_asset") or "USDC",
+            budget_usdc=_float(params.get("budget_usdc"), 1000.0),
             max_open_positions=_int(params.get("max_open_positions"), 3),
             risk_per_trade_pct=_float(params.get("risk_per_trade_pct"), 1.0),
             take_profit_pct=_float(params.get("take_profit_pct"), 3.0),
@@ -95,7 +71,7 @@ class BotConfigService:
 
     def validate(self, update: BotConfigUpdate) -> list[str]:
         errors: list[str] = []
-        if update.budget_usdt <= 0:
+        if update.budget_usdc <= 0:
             errors.append("Le budget doit etre strictement positif.")
         if update.max_open_positions < 1:
             errors.append("Le nombre max de positions doit etre >= 1.")
@@ -128,7 +104,7 @@ class BotConfigService:
 
         new_params = {
             **current_params,
-            "budget_usdt": update.budget_usdt,
+            "budget_usdc": update.budget_usdc,
             "max_open_positions": update.max_open_positions,
             "risk_per_trade_pct": update.risk_per_trade_pct,
             "take_profit_pct": update.take_profit_pct,
@@ -137,7 +113,7 @@ class BotConfigService:
             "version": current_version + 1,
         }
 
-        payload = {"parameters": new_params}
+        payload = {"parameters": new_params, "strategy_type": update.strategy}
         response = self.client.update_strategy(token, bot_id, payload)
         if not response.success:
             if response.error:
@@ -155,7 +131,7 @@ class BotConfigService:
 
         updated_params: dict = updated_strategy.get("parameters") or new_params
         symbol = updated_params.get("symbol") or ""
-        if len(symbol) > 4 and symbol.endswith("USDT"):
+        if len(symbol) > 4 and symbol.endswith("USDC"):
             base_asset = symbol[:-4]
         else:
             base_asset = updated_params.get("base_asset") or "BTC"
@@ -163,11 +139,11 @@ class BotConfigService:
         new_config = BotConfig(
             bot_id=bot_id,
             version=_int(updated_params.get("version"), current_version + 1),
-            updated_at=_parse_dt(updated_strategy.get("updated_at")),
+            updated_at=parse_dt_or_now(updated_strategy.get("updated_at")),
             strategy=updated_strategy.get("strategy_type") or update.strategy,
             base_asset=base_asset,
-            quote_asset=updated_params.get("quote_asset") or "USDT",
-            budget_usdt=_float(updated_params.get("budget_usdt"), update.budget_usdt),
+            quote_asset=updated_params.get("quote_asset") or "USDC",
+            budget_usdc=_float(updated_params.get("budget_usdc"), update.budget_usdc),
             max_open_positions=_int(
                 updated_params.get("max_open_positions"), update.max_open_positions
             ),
@@ -179,3 +155,35 @@ class BotConfigService:
             cooldown_seconds=_int(updated_params.get("cooldown_seconds"), update.cooldown_seconds),
         )
         return True, "Configuration sauvegardee.", new_config
+
+    def create_bot(self, name, strategy_type):
+        token = self._token()
+        parameters = {
+            "symbol": "BTCUSDC",
+            "quote_asset": "USDC",
+            "budget_usdc": 1000.0,
+            "max_open_positions": 3,
+            "risk_per_trade_pct": 1.0,
+            "take_profit_pct": 3.0,
+            "stop_loss_pct": 2.0,
+            "cooldown_seconds": 300,
+            "version": 1,
+        }
+        response = self.client.create_strategy(
+            token,
+            name=name,
+            strategy_type=strategy_type,
+            parameters=parameters,
+        )
+        if not response.success:
+            raise ServiceError("Impossible de créer une stratégie.")
+
+    def get_available_models(self) -> list[dict]:
+        token = self._token()
+        response = self.client.get_available_models(token)
+        if not response.success:
+            raise ServiceError("Impossible de charger les modeles disponibles.")
+        data = response.data
+        if isinstance(data, dict):
+            return data.get("data") or []
+        return data if isinstance(data, list) else []

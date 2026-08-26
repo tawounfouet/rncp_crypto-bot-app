@@ -30,7 +30,7 @@ def _portfolio_balances_rich() -> list[BalanceRow]:
         ("DOT", 140.0, 0.0, 840.0),
         ("ATOM", 100.0, 0.0, 780.0),
     ]
-    return [BalanceRow(asset=a, free=f, locked=lk, value_usdt=v) for a, f, lk, v in rows]
+    return [BalanceRow(asset=a, free=f, locked=lk, value_usdc=v) for a, f, lk, v in rows]
 
 
 def _portfolio_balances_normal() -> list[BalanceRow]:
@@ -38,17 +38,17 @@ def _portfolio_balances_normal() -> list[BalanceRow]:
         ("BTC", 0.041, 0.0, 2870.0),
         ("ETH", 0.95, 0.05, 3090.0),
         ("SOL", 26.0, 0.0, 1920.0),
-        ("USDT", 2450.0, 0.0, 2450.0),
+        ("USDC", 2450.0, 0.0, 2450.0),
         ("LINK", 55.0, 0.0, 290.0),
     ]
-    return [BalanceRow(asset=a, free=f, locked=lk, value_usdt=v) for a, f, lk, v in rows]
+    return [BalanceRow(asset=a, free=f, locked=lk, value_usdc=v) for a, f, lk, v in rows]
 
 
 def _orders(now: datetime) -> list[OpenOrder]:
     data = [
-        ("ord_101", "BTCUSDT", "BUY", 67120.0, 0.012),
-        ("ord_102", "ETHUSDT", "SELL", 3320.0, 0.350),
-        ("ord_103", "SOLUSDT", "BUY", 146.5, 12.0),
+        ("ord_101", "BTCUSDC", "BUY", 67120.0, 0.012),
+        ("ord_102", "ETHUSDC", "SELL", 3320.0, 0.350),
+        ("ord_103", "SOLUSDC", "BUY", 146.5, 12.0),
     ]
     items: list[OpenOrder] = []
     for idx, (oid, symbol, side, price, amount) in enumerate(data):
@@ -68,11 +68,11 @@ def _orders(now: datetime) -> list[OpenOrder]:
 
 def _trades(now: datetime) -> list[SpotTrade]:
     data = [
-        ("trd_301", "BTCUSDT", "SELL", 67350.0, 0.01, 22.3, 0.67),
-        ("trd_302", "ETHUSDT", "BUY", 3270.0, 0.45, -10.2, 0.44),
-        ("trd_303", "SOLUSDT", "SELL", 149.9, 10.0, 31.8, 0.73),
-        ("trd_304", "ADAUSDT", "BUY", 0.57, 900.0, -8.1, 0.51),
-        ("trd_305", "BNBUSDT", "SELL", 345.0, 1.8, 11.6, 0.45),
+        ("trd_301", "BTCUSDC", "SELL", 67350.0, 0.01, 22.3, 0.67),
+        ("trd_302", "ETHUSDC", "BUY", 3270.0, 0.45, -10.2, 0.44),
+        ("trd_303", "SOLUSDC", "SELL", 149.9, 10.0, 31.8, 0.73),
+        ("trd_304", "ADAUSDC", "BUY", 0.57, 900.0, -8.1, 0.51),
+        ("trd_305", "BNBUSDC", "SELL", 345.0, 1.8, 11.6, 0.45),
     ]
     out: list[SpotTrade] = []
     for idx, (tid, symbol, side, price, qty, pnl, fee) in enumerate(data):
@@ -84,7 +84,7 @@ def _trades(now: datetime) -> list[SpotTrade]:
                 price=price,
                 quantity=qty,
                 pnl_realized=pnl,
-                fee_usdt=fee,
+                fee_usdc=fee,
                 executed_at=now - timedelta(hours=idx + 2),
             )
         )
@@ -114,8 +114,8 @@ def build_portfolio_snapshot(
         trades = _trades(current)
         note = None
 
-    total = sum(row.value_usdt for row in balances)
-    free_cash = next((row.free for row in balances if row.asset == "USDT"), 0.0)
+    total = sum(row.value_usdc for row in balances)
+    free_cash = next((row.free for row in balances if row.asset in ("USDC",)), 0.0)
     active_exchange = exchange_configured and scenario != MockScenario.EXCHANGE_NOT_CONFIGURED
 
     return PortfolioSnapshot(
@@ -131,8 +131,8 @@ def build_portfolio_snapshot(
                 else f"Connexion {exchange.capitalize()} mock active"
             ),
         ),
-        total_value_usdt=total,
-        free_cash_usdt=free_cash,
+        total_value_usdc=total,
+        free_cash_usdc=free_cash,
         asset_count=len(balances),
         open_order_count=len(orders),
         balances=balances,
@@ -172,15 +172,15 @@ def build_performance_snapshot(
         else:
             drift = rng.uniform(-35.0, 55.0)
         value = max(1000.0, value + drift)
-        equity_curve.append(EquityPoint(timestamp=day, equity_usdt=round(value, 2)))
+        equity_curve.append(EquityPoint(timestamp=day, equity_usdc=round(value, 2)))
 
-    pnl = equity_curve[-1].equity_usdt - equity_curve[0].equity_usdt
-    roi_pct = (pnl / equity_curve[0].equity_usdt) * 100
-    max_value = equity_curve[0].equity_usdt
+    pnl = equity_curve[-1].equity_usdc - equity_curve[0].equity_usdc
+    roi_pct = (pnl / equity_curve[0].equity_usdc) * 100
+    max_value = equity_curve[0].equity_usdc
     drawdowns: list[float] = []
     for point in equity_curve:
-        max_value = max(max_value, point.equity_usdt)
-        dd = ((point.equity_usdt - max_value) / max_value) * 100
+        max_value = max(max_value, point.equity_usdc)
+        dd = ((point.equity_usdc - max_value) / max_value) * 100
         drawdowns.append(dd)
     max_drawdown = min(drawdowns)
 
@@ -204,12 +204,12 @@ def build_performance_snapshot(
             TradeJournalEntry(
                 id=f"pj_{idx + 1:03d}",
                 bot_id=bot_id,
-                symbol=["BTCUSDT", "ETHUSDT", "SOLUSDT"][idx % 3],
+                symbol=["BTCUSDC", "ETHUSDC", "SOLUSDC"][idx % 3],
                 side="LONG" if idx % 2 == 0 else "SHORT",
                 entry_price=round(entry, 2),
                 exit_price=round(exit_price, 2),
-                pnl_usdt=round(pnl_trade, 2),
-                fee_usdt=round(rng.uniform(0.4, 3.5), 2),
+                pnl_usdc=round(pnl_trade, 2),
+                fee_usdc=round(rng.uniform(0.4, 3.5), 2),
                 duration_min=int(rng.uniform(35, 420)),
                 closed_at=closed_at,
             )
@@ -219,11 +219,11 @@ def build_performance_snapshot(
         bot_id=bot_id,
         period_days=period_days,
         metrics=PerformanceMetrics(
-            pnl_realized_usdt=round(pnl, 2),
+            pnl_realized_usdc=round(pnl, 2),
             roi_pct=round(roi_pct, 2),
             max_drawdown_pct=round(abs(max_drawdown), 2),
             win_rate_pct=win_rate,
-            fees_usdt=fees,
+            fees_usdc=fees,
         ),
         equity_curve=equity_curve,
         trade_journal=journal,

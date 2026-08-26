@@ -37,6 +37,37 @@ def main() -> None:
     except ServiceError as exc:
         show_feedback("error", str(exc))
         return
+
+    try:
+        available_models = [m for m in config_service.get_available_models() if m["available"]]
+    except ServiceError as exc:
+        show_feedback("error", str(exc))
+        return
+
+    with st.expander("Creer un bot", expanded=not bots):
+        if not available_models:
+            show_feedback("error", "Aucun modele ML disponible cote serveur pour le moment.")
+        else:
+            with st.form("create_bot_form"):
+                bot_name = st.text_input("Nom du bot")
+                model_name = st.selectbox(
+                    "Modele",
+                    options=[m["name"] for m in available_models],
+                )
+                create_clicked = compat_form_submit_button("Creer le bot", type="primary")
+
+            if create_clicked:
+                if not bot_name:
+                    show_feedback("error", "Le nom du bot est obligatoire.")
+                else:
+                    try:
+                        config_service.create_bot(name=bot_name, strategy_type=f"ml_{model_name}")
+                    except ServiceError as exc:
+                        show_feedback("error", str(exc))
+                    else:
+                        show_feedback("success", "Bot cree.")
+                        st.rerun()
+
     if not bots:
         show_feedback("warning", "Aucun bot disponible pour parametrage.")
         return
@@ -46,10 +77,9 @@ def main() -> None:
             "Bots Spot disponibles",
             "Le paramétrage détaillé sera disponible après configuration de l'exchange.",
         )
-        st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-        for bot in bots:
-            st.markdown(f"- **{bot.name}**")
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            for bot in bots:
+                st.markdown(f"- **{bot.name}**")
         return
 
     bot_id = st.selectbox(
@@ -74,86 +104,73 @@ def main() -> None:
     with info_col3:
         st.metric("Date modif", format_datetime(config.updated_at))
 
-    st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
-    with st.form("bot_config_form", clear_on_submit=False):
-        strategy = st.selectbox(
-            "Strategie",
-            options=["Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"],
-            index=max(
-                0,
-                (
-                    ["Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"].index(
-                        config.strategy
-                    )
-                    if config.strategy
-                    in {"Mean Reversion", "Breakout", "Trend Following", "Grid Adaptive"}
-                    else 0
-                ),
-            ),
-            disabled=gate.actions_disabled,
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            budget_usdt = st.number_input(
-                "Budget USDT",
-                min_value=0.0,
-                value=float(config.budget_usdt),
-                step=100.0,
+    with st.container(border=True):
+        with st.form("bot_config_form", clear_on_submit=False):
+            strategy = st.selectbox(
+                "Strategie",
+                options=[m["name"] for m in available_models],
                 disabled=gate.actions_disabled,
             )
-            max_open_positions = st.number_input(
-                "Max positions ouvertes",
-                min_value=1,
-                value=int(config.max_open_positions),
-                step=1,
+            c1, c2 = st.columns(2)
+            with c1:
+                budget_usdc = st.number_input(
+                    "Budget USDC",
+                    min_value=0.0,
+                    value=float(config.budget_usdc),
+                    step=100.0,
+                    disabled=gate.actions_disabled,
+                )
+                max_open_positions = st.number_input(
+                    "Max positions ouvertes",
+                    min_value=1,
+                    value=int(config.max_open_positions),
+                    step=1,
+                    disabled=gate.actions_disabled,
+                )
+                risk_per_trade = st.number_input(
+                    "Risque / trade (%)",
+                    min_value=0.1,
+                    max_value=10.0,
+                    value=float(config.risk_per_trade_pct),
+                    step=0.1,
+                    disabled=gate.actions_disabled,
+                )
+            with c2:
+                take_profit = st.number_input(
+                    "Take profit (%)",
+                    min_value=0.1,
+                    value=float(config.take_profit_pct),
+                    step=0.1,
+                    disabled=gate.actions_disabled,
+                )
+                stop_loss = st.number_input(
+                    "Stop loss (%)",
+                    min_value=0.1,
+                    value=float(config.stop_loss_pct),
+                    step=0.1,
+                    disabled=gate.actions_disabled,
+                )
+                cooldown = st.number_input(
+                    "Cooldown (secondes)",
+                    min_value=0,
+                    value=int(config.cooldown_seconds),
+                    step=10,
+                    disabled=gate.actions_disabled,
+                )
+            validate_clicked = compat_form_submit_button(
+                "Valider",
+                width="stretch",
                 disabled=gate.actions_disabled,
             )
-            risk_per_trade = st.number_input(
-                "Risque / trade (%)",
-                min_value=0.1,
-                max_value=10.0,
-                value=float(config.risk_per_trade_pct),
-                step=0.1,
+            save_clicked = compat_form_submit_button(
+                "Sauvegarder",
+                type="primary",
+                width="stretch",
                 disabled=gate.actions_disabled,
             )
-        with c2:
-            take_profit = st.number_input(
-                "Take profit (%)",
-                min_value=0.1,
-                value=float(config.take_profit_pct),
-                step=0.1,
-                disabled=gate.actions_disabled,
-            )
-            stop_loss = st.number_input(
-                "Stop loss (%)",
-                min_value=0.1,
-                value=float(config.stop_loss_pct),
-                step=0.1,
-                disabled=gate.actions_disabled,
-            )
-            cooldown = st.number_input(
-                "Cooldown (secondes)",
-                min_value=0,
-                value=int(config.cooldown_seconds),
-                step=10,
-                disabled=gate.actions_disabled,
-            )
-        validate_clicked = compat_form_submit_button(
-            "Valider",
-            width="stretch",
-            disabled=gate.actions_disabled,
-        )
-        save_clicked = compat_form_submit_button(
-            "Sauvegarder",
-            type="primary",
-            width="stretch",
-            disabled=gate.actions_disabled,
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
-
     update = BotConfigUpdate(
-        strategy=strategy,
-        budget_usdt=float(budget_usdt),
+        strategy=f"ml_{strategy}",
+        budget_usdc=float(budget_usdc),
         max_open_positions=int(max_open_positions),
         risk_per_trade_pct=float(risk_per_trade),
         take_profit_pct=float(take_profit),

@@ -1,26 +1,16 @@
 # Configuration principale du MVP models-training CryptoBot v2.
-# Les secrets ne doivent pas être stockés ici. Utiliser les variables
-# d'environnement référencées dans la section exchange.
+# Les secrets ne doivent pas être stockés ici.
 
 project:
   name: "dst-crypto-bot-models-training"
   version: "0.1.0"
-  description: "MVP ML pour signaux BUY/SELL/HOLD sur BTCUSDT et BTCETH"
+  description: "MVP ML pour signaux BUY/SELL/HOLD sur BTCUSDC et BTCETH"
   timezone: "UTC"
   random_state: 42
 
-exchange:
-  name: "binance"
-  testnet: true
-  base_url: "https://api.binance.com"
-  api_key_env: "BINANCE_API_KEY"
-  api_secret_env: "BINANCE_API_SECRET"
-  request_timeout_seconds: 20
-  rate_limit_sleep_seconds: 0.25
-
 data:
   symbols:
-    - "BTCUSDT"
+    - "BTCUSDC"
     - "BTCETH"
   symbol_mappings:
     BTCETH:
@@ -139,6 +129,28 @@ models:
     dropout: 0.2
     bidirectional: false
     output_size: 3
+  mlp:
+    enabled: true
+    hidden_layer_sizes: [128, 64]
+    activation: "relu"
+    solver: "adam"
+    alpha: 0.0001
+    learning_rate_init: 0.001
+    batch_size: 32
+    max_iter: 1000
+    early_stopping: true
+    random_state: 42
+  xgboost:
+    enabled: true
+    n_estimators: 300
+    max_depth: 8
+    learning_rate: 0.1
+    subsample: 0.9
+    colsample_bytree: 0.9
+    min_child_weight: 1
+    reg_lambda: 1.0
+    n_jobs: -1
+    random_state: 42
 
 training:
   batch_size: 32

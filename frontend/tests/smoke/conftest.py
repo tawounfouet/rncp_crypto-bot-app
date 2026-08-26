@@ -17,7 +17,7 @@ _STUB_STRATEGIES = [
         "is_active": True,
         "updated_at": "2024-01-01T00:00:00Z",
         "parameters": {
-            "version": 1, "budget_usdt": 1000.0, "max_open_positions": 3,
+            "version": 1, "budget_usdc": 1000.0, "max_open_positions": 3,
             "risk_per_trade_pct": 1.0, "take_profit_pct": 3.0, "stop_loss_pct": 2.0,
             "cooldown_seconds": 300,
         },
@@ -29,7 +29,7 @@ _STUB_STRATEGIES = [
         "is_active": True,
         "updated_at": "2024-01-01T00:00:00Z",
         "parameters": {
-            "version": 2, "budget_usdt": 2000.0, "max_open_positions": 3,
+            "version": 2, "budget_usdc": 2000.0, "max_open_positions": 3,
             "risk_per_trade_pct": 1.0, "take_profit_pct": 3.0, "stop_loss_pct": 2.0,
             "cooldown_seconds": 300,
         },
@@ -49,12 +49,12 @@ _STUB_ADMIN_USERS = [
 
 _STUB_TRANSACTIONS = [
     {
-        "id": "tx1", "transaction_type": "TRADE", "asset": "BTC", "quote_asset": "USDT",
+        "id": "tx1", "transaction_type": "TRADE", "asset": "BTC", "quote_asset": "USDC",
         "direction": "IN", "price": 45000.0, "amount": 0.1, "fee_amount": 2.5,
         "timestamp": "2024-01-15T10:00:00Z",
     },
     {
-        "id": "tx2", "transaction_type": "TRADE", "asset": "ETH", "quote_asset": "USDT",
+        "id": "tx2", "transaction_type": "TRADE", "asset": "ETH", "quote_asset": "USDC",
         "direction": "OUT", "price": 2500.0, "amount": 1.0, "fee_amount": 1.5,
         "timestamp": "2024-01-16T10:00:00Z",
     },
@@ -75,6 +75,49 @@ def _get_store_user():
 def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
     """Route les reponses stub selon le path et la methode."""
 
+    # ── /market/exchanges (public, pas d'auth) ───────────────────────────────
+    if "/market/exchanges" in path:
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {"id": "binance", "label": "Binance"},
+                {"id": "kraken", "label": "Kraken"},
+            ],
+        })
+
+    # ── /market/public/prices (public, pas d'auth) ───────────────────────────
+    if "/market/public/prices" in path:
+        exchange = (kwargs.get("query_params") or {}).get("exchange", "binance")
+        # Prix en string : le backend serialise ses champs Decimal en chaine JSON
+        # (comme le fait reellement FastAPI/pydantic), pas en nombre natif.
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {"symbol": "BTCUSDC", "exchange": exchange, "price": "65000.0", "as_of": "2024-01-01T00:00:00Z"},
+                {"symbol": "ETHUSDC", "exchange": exchange, "price": "3200.0", "as_of": "2024-01-01T00:00:00Z"},
+            ],
+            "warnings": [],
+        })
+
+    # ── /market/public/klines (public, pas d'auth) ───────────────────────────
+    if "/market/public/klines" in path:
+        exchange = (kwargs.get("query_params") or {}).get("exchange", "binance")
+        symbol = (kwargs.get("query_params") or {}).get("symbols", "BTCUSDC")
+        interval = (kwargs.get("query_params") or {}).get("interval", "1h")
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {
+                    "symbol": symbol, "exchange": exchange, "interval": interval,
+                    "open_time": "2024-01-01T00:00:00Z",
+                    "open": "100.0", "high": "110.0", "low": "95.0", "close": "105.0", "volume": "12.5",
+                },
+                {
+                    "symbol": symbol, "exchange": exchange, "interval": interval,
+                    "open_time": "2024-01-01T01:00:00Z",
+                    "open": "105.0", "high": "115.0", "low": "100.0", "close": "108.0", "volume": "9.0",
+                },
+            ],
+            "warnings": [],
+        })
+
     # ── /users/me/settings (GET ou PUT) ──────────────────────────────────────
     if "/users/me/settings" in path:
         _, user = _get_store_user()
@@ -83,6 +126,26 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
         return ApiResponse(
             status_code=200,
             data={"configured_exchanges": [exchange] if configured else []},
+        )
+
+    # ── /users/me/api-keys (multi-credential) ────────────────────────────────
+    if "/users/me/api-keys" in path and method == "GET":
+        _, user = _get_store_user()
+        configured = bool(getattr(user, "binance_configured", False)) if user else False
+        if not configured:
+            return ApiResponse(status_code=200, data=[])
+        return ApiResponse(
+            status_code=200,
+            data=[
+                {
+                    "id": "cred_binance_1",
+                    "exchange": "binance",
+                    "label": "Binance Spot principal",
+                    "api_key_masked": "AK_****",
+                    "created_at": "2024-01-01T00:00:00Z",
+                    "is_primary": True,
+                }
+            ],
         )
 
     # ── /users/me (GET ou PUT) ────────────────────────────────────────────────
@@ -117,6 +180,15 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
     if "/users" in path and method == "GET":
         return ApiResponse(status_code=200, data=_STUB_ADMIN_USERS)
 
+    # ── /strategies/available-models ──────────────────────────────────────────
+    if "/strategies/available-models" in path:
+        return ApiResponse(status_code=200, data={
+            "data": [
+                {"name": "random_forest", "path": "artifacts/registry/random_forest/best", "available": True},
+                {"name": "lstm", "path": "artifacts/registry/lstm/best", "available": False},
+            ]
+        })
+
     # ── /strategies/deployments ───────────────────────────────────────────────
     if "/strategies/deployments" in path:
         return ApiResponse(status_code=200, data=[])
@@ -147,7 +219,7 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
         return ApiResponse(status_code=200, data={
             "total_usd_value": 10000.0,
             "balances": [
-                {"asset": "USDT", "available": 5000.0, "locked": 0.0, "usd_value": 5000.0},
+                {"asset": "USDC", "available": 5000.0, "locked": 0.0, "usd_value": 5000.0},
                 {"asset": "BTC", "available": 0.1, "locked": 0.0, "usd_value": 4500.0},
             ],
         })

@@ -6,30 +6,30 @@
 
 ## 1. Failles de sécurité critiques
 
-### 1.1 Secrets par défaut en dur
+### 1.1 Secrets par défaut en dur — **RÉSOLU (2026-08-02)**
 
-**Fichier :** `backend/src/shared/config/settings.py:34`
+**Fichier :** `backend/src/shared/config/settings.py` (ex-`SECRET_KEY`, renommé `JWT_SIGNING_KEY`)
 ```python
-SECRET_KEY: SecretStr = "your-secret-key-change-this-in-production"
+JWT_SIGNING_KEY: SecretStr  # plus de valeur par defaut, obligatoire via l'environnement
 ```
 
-La clé secrète JWT a une valeur par défaut triviale. Si un déploiement oublie de surcharger `.env`, **n'importe qui peut signer des JWT valides**. Même constat pour `MINIO_SECRET_KEY` (ligne 77).
+La clé secrète JWT avait une valeur par défaut triviale. Si un déploiement oubliait de surcharger `.env`, **n'importe qui pouvait signer des JWT valides**. Corrigé : le champ n'a plus de défaut (`ValidationError` au démarrage si absent), la variable a été renommée `JWT_SIGNING_KEY` pour éviter l'ambiguïté avec les autres secrets du projet (`EXCHANGE_ENC_KEY`, `MINIO_SECRET_KEY`). Même constat pour `MINIO_SECRET_KEY` (ligne 77) — non traité par ce fix, reste à surveiller si sa valeur par défaut (`miniopassword`) est un jour exposée.
 
-**Risque :** Élevé — compromet toute l'authentification.
+**Risque :** Élevé — compromettait toute l'authentification.
 
 ---
 
-### 1.2 CORS et Allowed Hosts en wildcard
+### 1.2 CORS et Allowed Hosts en wildcard — **RÉSOLU (2026-08-02)**
 
-**Fichier :** `backend/src/shared/config/settings.py:45-51`
+**Fichier :** `backend/src/shared/config/settings.py`
 ```python
-CORS_ORIGINS: list[str] = ["*"]
-ALLOWED_HOSTS: list[str] = ["*"]
+CORS_ORIGINS: list[str]    # plus de valeur par defaut, obligatoire via l'environnement
+ALLOWED_HOSTS: list[str]   # idem
 ```
 
-En production, `CORS_ORIGINS: ["*"]` autorise n'importe quel site à faire des requêtes跨域 vers l'API. Combiné avec `ALLOWED_HOSTS: ["*"]`, le `TrustedHostMiddleware` est neutralisé.
+En production, `CORS_ORIGINS: ["*"]` autorisait n'importe quel site à faire des requêtes cross-origin vers l'API. Combiné avec `ALLOWED_HOSTS: ["*"]`, le `TrustedHostMiddleware` était neutralisé. Corrigé : les deux champs n'ont plus de défaut (`ValidationError` au démarrage si absents), fournis via l'environnement sous forme de liste séparée par des virgules.
 
-**Risque :** Élevé — attaques CSRF potentielles, pas de protection Host header.
+**Risque :** Élevé — attaques CSRF potentielles, pas de protection Host header. *(historique, corrigé)*
 
 ---
 
@@ -261,7 +261,13 @@ Ce pattern try/except silencieux est répété dans quasiment toutes les pages. 
 
 ### 6.1 Tests backend quasi absents
 
-Le dossier `backend/src/tests/` existe avec une belle structure :
+> **✅ Résolu (2026-07-27)** — Constat périmé : ce n'est plus le cas. Le dossier
+> `backend/tests/` contient désormais 113 tests réels (auth, chiffrement des clés API,
+> exécution multi-exchange, endpoints publics...), en plus de 171 côté frontend, 32 côté
+> `utils/` et 3 côté `jobs/` (319 au total). Constat original conservé ci-dessous pour
+> mémoire, ne reflète plus l'état du code.
+
+Le dossier `backend/tests/` existe avec une belle structure :
 ```
 tests/
 ├── conftest.py
@@ -273,6 +279,14 @@ tests/
 Mais les fichiers sont vides ou squelettiques. Pour un backend avec ~2000 lignes de code métier (auth, database, settings, error handling), c'est un **vide critique**. Aucune garantie que le login, le refresh token, ou le fallback SQLite fonctionnent.
 
 ### 6.2 Pre-commit hook exécute les tests à chaque commit
+
+> **✅ Partiellement résolu (2026-07-27)** — `scripts/run-tests-if-needed.sh` ne lance plus
+> systématiquement toute la suite : il cible désormais les suites concernées par les zones
+> modifiées (`backend/`, `frontend/`, `utils/`, `jobs/`), avec prise en compte des
+> dépendances (`utils/` relance aussi `backend`/`jobs`, qui en dépendent). Le déclenchement
+> du hook lui-même reste sur tout fichier `.py` modifié (pas de granularité par fichier de
+> test précis) — la remarque garde donc une part de validité, mais l'attente "toute la
+> suite à chaque commit" décrite ci-dessous n'est plus exacte.
 
 **Fichier :** `.pre-commit-config.yaml:53-58`
 ```yaml
@@ -304,8 +318,8 @@ Ces dépendances alourdissent l'image Docker backend inutilement.
 
 | Priorité | Problème | Impact | Effort |
 |----------|----------|--------|--------|
-| **P0** | `SECRET_KEY` par défaut | 🔴 Critique | 5 min |
-| **P0** | CORS/ALLOWED_HOSTS en wildcard | 🔴 Critique | 5 min |
+| **P0** | ~~`SECRET_KEY`/`JWT_SIGNING_KEY` par défaut~~ | 🔴 Critique | ✅ Résolu 2026-08-02 |
+| **P0** | ~~CORS/ALLOWED_HOSTS en wildcard~~ | 🔴 Critique | ✅ Résolu 2026-08-02 |
 | **P0** | `from_orm()` cassé en Pydantic V2 | 🔴 Critique (runtime error) | 2 min |
 | **P1** | Script SQL en syntaxe MySQL | 🟠 Élevé | 30 min |
 | **P1** | Timestamp en dur dans health check | 🟠 Élevé (debugging) | 1 min |

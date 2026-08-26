@@ -20,18 +20,18 @@ RAW = [1735732800000, "1", "2", "0.5", "1.5", "10", 1735736399999, "123.4", 7, "
 
 class TestMapKline:
     def test_source_is_binance(self):
-        assert map_kline("btcusdt", "1h", RAW)["source"] == "binance"
+        assert map_kline("btcusdc", "1h", RAW)["source"] == "binance"
 
     def test_symbol_uppercased(self):
-        assert map_kline("btcusdt", "1h", RAW)["symbol"] == "BTCUSDT"
+        assert map_kline("btcusdc", "1h", RAW)["symbol"] == "BTCUSDC"
 
     def test_uses_provided_close_time(self):
         # Binance fournit close_time -> pas de dérivation
-        d = map_kline("BTCUSDT", "1h", RAW)
+        d = map_kline("BTCUSDC", "1h", RAW)
         assert d["close_time"] == datetime(2025, 1, 1, 12, 59, 59, 999000, tzinfo=UTC)
 
     def test_preserves_rich_extras(self):
-        d = map_kline("BTCUSDT", "1h", RAW)
+        d = map_kline("BTCUSDC", "1h", RAW)
         assert d["quote_asset_volume"] == 123.4
         assert d["number_of_trades"] == 7
         assert d["taker_buy_base_volume"] == 3.1
@@ -67,10 +67,10 @@ def test_fetch_klines_offline(monkeypatch):
 
     monkeypatch.setattr(bn.requests, "get", fake_get)  # <-- on remplace requests.get
 
-    rows = bn.fetch_klines("BTCUSDT", "1h", limit=1)
+    rows = bn.fetch_klines("BTCUSDC", "1h", limit=1)
     assert rows[0]["source"] == "binance"
     assert "/api/v3/klines" in captured["url"]  # bonne URL
-    assert captured["params"]["symbol"] == "BTCUSDT"  # bons params
+    assert captured["params"]["symbol"] == "BTCUSDC"  # bons params
 
 def test_fetch_klines_http_error_raises(monkeypatch):
     class BadResp:
@@ -81,12 +81,12 @@ def test_fetch_klines_http_error_raises(monkeypatch):
 
     monkeypatch.setattr(bn.requests, "get", lambda *a, **k: BadResp())
     with pytest.raises(RuntimeError):
-        bn.fetch_klines("BTCUSDT", "1h")
+        bn.fetch_klines("BTCUSDC", "1h")
 
 def test_driver_fetch_klines_offline(monkeypatch):
     def fake_get(url, params=None, timeout=None):
         return FakeResp([[1735732800000, "1", "2", "0.5", "1.5", "10", 1735736399999, "123", 7, "3", "4"]])
 
     monkeypatch.setattr(bn.requests, "get", fake_get)
-    rows = bn.BinanceMarketDataDriver().fetch_klines("BTCUSDT", "1h", limit=1)
+    rows = bn.BinanceMarketDataDriver().fetch_klines("BTCUSDC", "1h", limit=1)
     assert rows[0]["source"] == "binance"

@@ -1,5 +1,8 @@
 # Crypto-Bot Backend
 
+Statut: référence
+Derniere revision: 2026-07-27
+
 Backend FastAPI pour le projet de trading automatise de cryptomonnaies.
 
 ## Architecture
@@ -42,28 +45,28 @@ backend/
 │   │       ├── registry.py      #     Registre & factory des strategies
 │   │       ├── indicators/      #     Indicateurs techniques (SMA, RSI, BB, MACD)
 │   │       └── implementations/ #     Implementations concretes
-│   ├── shared/                  # Infrastructure transversale
-│   │   ├── config/
-│   │   │   ├── settings.py      #   Settings Pydantic (env vars, auto-detection Docker)
-│   │   │   ├── security.py      #   Configuration securite
-│   │   │   └── constants.py     #   Enums (OrderType, StrategyType, TimeFrame...)
-│   │   ├── database/
-│   │   │   ├── connection.py    #   DatabaseManager (PostgreSQL → SQLite fallback)
-│   │   │   ├── dependencies.py  #   get_db() pour injection FastAPI
-│   │   │   ├── migrations/      #   Alembic
-│   │   │   ├── seeds/           #   Donnees initiales
-│   │   │   └── sql/             #   Scripts SQL (triggers, vues)
-│   │   ├── models/
-│   │   │   └── base.py          #   BaseModel (UUID + timestamps), mixins
-│   │   ├── core/
-│   │   │   └── exceptions.py    #   Hierarchie d'exceptions custom
-│   │   └── schemas/
-│   │       └── common.py        #   BaseResponse, PaginatedResponse
-│   └── tests/
-│       ├── unit/                #   Tests unitaires
-│       ├── integration/         #   Tests API, DB, services externes
-│       ├── fixtures/            #   Factories & fixtures
-│       └── conftest.py
+│   └── shared/                  # Infrastructure transversale
+│       ├── config/
+│       │   ├── settings.py      #   Settings Pydantic (env vars, auto-detection Docker)
+│       │   ├── security.py      #   Configuration securite
+│       │   └── constants.py     #   Enums (OrderType, StrategyType, TimeFrame...)
+│       ├── database/
+│       │   ├── connection.py    #   DatabaseManager (PostgreSQL → SQLite fallback)
+│       │   ├── dependencies.py  #   get_db() pour injection FastAPI
+│       │   ├── migrations/      #   Alembic
+│       │   ├── seeds/           #   Donnees initiales
+│       │   └── sql/             #   Scripts SQL (triggers, vues)
+│       ├── models/
+│       │   └── base.py          #   BaseModel (UUID + timestamps), mixins
+│       ├── core/
+│       │   └── exceptions.py    #   Hierarchie d'exceptions custom
+│       └── schemas/
+│           └── common.py        #   BaseResponse, PaginatedResponse
+├── tests/
+│   ├── unit/                    #   Tests unitaires
+│   ├── integration/              #   Tests API, DB, services externes
+│   ├── fixtures/                 #   Factories & fixtures
+│   └── conftest.py
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── Dockerfile
@@ -150,6 +153,13 @@ Prefix : `/api/v1`
 | POST | `/strategies/deployments/{id}/stop` | Oui | Arreter un deploiement |
 | POST | `/strategies/validate` | Non | Valider des parametres |
 
+### Inference (`/inference`)
+
+| Methode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| POST | `/inference/predict` | Non | Prediction a partir d'un vecteur de features pre-calcule |
+| GET | `/inference/model` | Non | Metadonnees du modele ML deploye |
+
 ### Infra
 
 | Methode | Route | Description |
@@ -199,16 +209,16 @@ uvicorn src.main:app --reload --port 8009
 cd backend
 
 # Tests unitaires + integration (SQLite en memoire)
-pytest src/tests -v
+pytest tests -v
 
 # Avec coverage
-pytest src/tests -v --cov=src --cov-report=html
+pytest tests -v --cov=src --cov-report=html
 
 # Tests unitaires seuls
-pytest src/tests/unit -v
+pytest tests/unit -v
 
 # Tests d'integration seuls (CRUD user avec BDD)
-pytest src/tests/integration -v
+pytest tests/integration -v
 ```
 
 ## Documentation interactive
@@ -220,7 +230,8 @@ pytest src/tests/integration -v
 
 | Variable | Description | Defaut |
 |----------|-------------|--------|
-| `SECRET_KEY` | Cle de signature JWT | - |
+| `JWT_SIGNING_KEY` | Cle de signature JWT | - |
+| `CORS_ORIGINS` | Origines autorisees a appeler l'API (liste separee par des virgules) | - |
 | `POSTGRES_HOST` | Host PostgreSQL | localhost |
 | `POSTGRES_PORT` | Port PostgreSQL | 5432 |
 | `POSTGRES_USER` | Utilisateur PostgreSQL | - |
@@ -245,4 +256,4 @@ Le backend fait partie du monorepo `Crypto-bot-app`. La CI est definie dans `.gi
 | test | `test:integration` | Tests avec vrais services (Postgres) |
 | deploy | `deploy:staging`, `deploy:production` | Deploy VM AWS + GitOps K8s |
 
-Voir `docs/SETUP.md` pour le detail du workflow et des commandes Makefile.
+Voir `docs/01-setup.md` pour le detail du workflow et des commandes Makefile.

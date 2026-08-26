@@ -10,6 +10,7 @@ from prerequisites.exchange import (
 
 
 def test_requirement_mode_by_page() -> None:
+    assert requirement_mode_for_page("dashboard") == ExchangeRequirementMode.BLOCK_CONTENT
     assert requirement_mode_for_page("portfolio") == ExchangeRequirementMode.BLOCK_CONTENT
     assert requirement_mode_for_page("performance") == ExchangeRequirementMode.BLOCK_CONTENT
     assert requirement_mode_for_page("bot_control") == ExchangeRequirementMode.DISABLE_ACTIONS
@@ -18,6 +19,7 @@ def test_requirement_mode_by_page() -> None:
 
 
 def test_page_requires_exchange_flag() -> None:
+    assert page_requires_exchange("dashboard") is True
     assert page_requires_exchange("portfolio") is True
     assert page_requires_exchange("account") is False
 

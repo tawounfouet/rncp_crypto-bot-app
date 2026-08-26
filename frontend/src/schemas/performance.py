@@ -8,16 +8,16 @@ from pydantic import BaseModel, Field
 
 
 class PerformanceMetrics(BaseModel):
-    pnl_realized_usdt: float
+    pnl_realized_usdc: float
     roi_pct: float
     max_drawdown_pct: float
     win_rate_pct: float
-    fees_usdt: float
+    fees_usdc: float
 
 
 class EquityPoint(BaseModel):
     timestamp: datetime
-    equity_usdt: float
+    equity_usdc: float
 
 
 class TradeJournalEntry(BaseModel):
@@ -27,8 +27,8 @@ class TradeJournalEntry(BaseModel):
     side: str
     entry_price: float
     exit_price: float
-    pnl_usdt: float
-    fee_usdt: float
+    pnl_usdc: float
+    fee_usdc: float
     duration_min: int
     closed_at: datetime
 

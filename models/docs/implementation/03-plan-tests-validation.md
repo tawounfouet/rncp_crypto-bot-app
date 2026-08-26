@@ -1,5 +1,8 @@
 # Plan de tests et validation
 
+Statut: référence
+Derniere revision: 2026-06-10
+
 ## Objectif
 
 Prouver que le MVP fonctionne de bout en bout sans dépendre d'une démonstration fragile.
@@ -20,7 +23,7 @@ Prouver que le MVP fonctionne de bout en bout sans dépendre d'une démonstratio
 Cas à tester :
 
 - `config.yaml` existe
-- les symboles MVP sont exactement `BTCUSDT` et `BTCETH`
+- les symboles MVP sont exactement `BTCUSDC` et `BTCETH`
 - les ratios de split totalisent `1.0`
 - le scaler est fit sur `train`
 - les classes de labels sont `SELL=0`, `HOLD=1`, `BUY=2`

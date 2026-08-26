@@ -50,7 +50,7 @@ def train_from_processed_dataset(path: str | Path, config_path: str = "config.ya
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate baseline classifiers.")
     parser.add_argument("--config", default="config.yaml")
-    parser.add_argument("--dataset", default="data/processed/BTCUSDT/1h_features.parquet")
+    parser.add_argument("--dataset", default="data/processed/BTCUSDC/1h_features.parquet")
     args = parser.parse_args()
     train_from_processed_dataset(args.dataset, args.config)
 

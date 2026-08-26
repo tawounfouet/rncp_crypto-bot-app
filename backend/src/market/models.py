@@ -182,7 +182,7 @@ class MarketData(BaseModel):
         Create MarketData instance from Binance kline data.
 
         Args:
-            symbol: Trading symbol (e.g., "BTCUSDT")
+            symbol: Trading symbol (e.g., "BTCUSDC")
             timeframe: Timeframe (e.g., "1h")
             kline_data: Binance kline data list
             exchange: Exchange name

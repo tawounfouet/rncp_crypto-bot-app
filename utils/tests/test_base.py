@@ -35,7 +35,7 @@ class TestIntervalToTimedelta:
 class TestNormalizeOhlcv:
     def _base(self, **over):
         args = dict(
-            symbol="btcusdt",
+            symbol="btcusdc",
             interval="1h",
             source="binance",
             open_time_ms=OPEN_MS,
@@ -52,7 +52,7 @@ class TestNormalizeOhlcv:
         assert self._base()["open_time"] == datetime(2025, 1, 1, 12, 0, tzinfo=UTC)
 
     def test_symbol_uppercased(self):
-        assert self._base(symbol="btcusdt")["symbol"] == "BTCUSDT"
+        assert self._base(symbol="btcusdc")["symbol"] == "BTCUSDC"
 
     def test_source_is_parameterized(self):
         assert self._base(source="kraken")["source"] == "kraken"

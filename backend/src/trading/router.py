@@ -622,8 +622,8 @@ async def quick_market_buy(
     Quick market buy order - simplified endpoint for buying at market price.
 
     Args:
-        symbol: Trading symbol (e.g., BTCUSDT)
-        quote_amount: Amount to spend in quote asset (e.g., USDT)
+        symbol: Trading symbol (e.g., BTCUSDC)
+        quote_amount: Amount to spend in quote asset (e.g., USDC)
         deployment_id: Optional strategy deployment ID
         current_user: Current authenticated user
         trading_service: Trading service instance
@@ -664,7 +664,7 @@ async def quick_market_sell(
     Quick market sell order - simplified endpoint for selling at market price.
 
     Args:
-        symbol: Trading symbol (e.g., BTCUSDT)
+        symbol: Trading symbol (e.g., BTCUSDC)
         quantity: Quantity to sell in base asset
         deployment_id: Optional strategy deployment ID
         current_user: Current authenticated user

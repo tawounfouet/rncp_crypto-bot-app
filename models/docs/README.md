@@ -6,7 +6,7 @@ Ce dossier centralise les documents de décision et de mise en œuvre de la couc
 
 Créer une base documentaire claire avant l'implémentation du MVP :
 
-- expliquer pourquoi le périmètre est limité à `BTCUSDT` et `BTCETH`
+- expliquer pourquoi le périmètre est limité à `BTCUSDC` et `BTCETH`
 - capitaliser sur les labs précédents sans reprendre leur complexité inutile
 - spécifier les contrats de données, modèles, signaux et API
 - donner un guide d'implémentation directement exploitable par l'équipe

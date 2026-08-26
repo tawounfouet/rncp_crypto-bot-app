@@ -53,7 +53,7 @@ class MarketDataInsertService:
 
         Args:
             exchange: Exchange source (e.g. 'binance', 'kraken') — resolved via the registry
-            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            symbol: Trading pair symbol (e.g., 'BTCUSDC')
             interval: Time interval (e.g., '1h', '4h', '1d')
             start_time: Start datetime for historical data
             end_time: End datetime (default: now)
@@ -363,12 +363,47 @@ class MarketDataInsertService:
             logger.warning(f"Symbol validation failed for {exchange}:{symbol}: {e!s}")
             return False
 
+    def get_coverage(self) -> list[dict]:
+        """Return data coverage summary grouped by symbol and timeframe.
+
+        Returns:
+            List of dicts with symbol, timeframe, count, first_candle, last_candle.
+        """
+        from sqlalchemy import func
+
+        try:
+            rows = (
+                self.db.query(
+                    MarketData.symbol,
+                    MarketData.interval_timeframe,
+                    func.count(MarketData.id).label("count"),
+                    func.min(MarketData.open_time).label("first_candle"),
+                    func.max(MarketData.open_time).label("last_candle"),
+                )
+                .group_by(MarketData.symbol, MarketData.interval_timeframe)
+                .order_by(MarketData.symbol, MarketData.interval_timeframe)
+                .all()
+            )
+            return [
+                {
+                    "symbol": r.symbol,
+                    "timeframe": r.interval_timeframe,
+                    "count": r.count,
+                    "first_candle": r.first_candle.isoformat() if r.first_candle else None,
+                    "last_candle": r.last_candle.isoformat() if r.last_candle else None,
+                }
+                for r in rows
+            ]
+        except Exception as e:
+            logger.error(f"Error fetching coverage: {e!s}")
+            return []
+
     def get_latest_data(self, symbol: str, interval: str, limit: int = 100, exchange: str | None = None) -> list[dict]:
         """
         Retrieve the latest market data from PostgreSQL database.
 
         Args:
-            symbol: Trading pair symbol (e.g., 'BTCUSDT')
+            symbol: Trading pair symbol (e.g., 'BTCUSDC')
             interval: Time interval (e.g., '1h', '4h', '1d')
             limit: Maximum number of records to retrieve (default: 100)
             exchange: Restrict to this exchange (a symbol can exist on several)

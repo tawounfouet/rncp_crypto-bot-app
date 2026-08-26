@@ -13,20 +13,19 @@ import numpy as np
 import pandas as pd
 
 from src.utils.logger import get_logger
+from utils.trading.signals import SIGNAL_TO_VALUE as SIGNAL_TO_POSITION
 
 
 logger = get_logger(__name__)
 
-SIGNAL_TO_POSITION = {"BUY": 1, "HOLD": 0, "SELL": -1}
-
 
 @dataclass
 class BacktestConfig:
-    fee_rate: float = 0.001        # 0.1% Binance spot taker fee, applied on entry + exit
+    fee_rate: float = 0.001  # 0.1% Binance spot taker fee, applied on entry + exit
     slippage_rate: float = 0.0001  # 0.01% slippage estimate
-    initial_capital: float = 1.0   # normalised — results are in % terms
-    allow_short: bool = False       # if False, SELL signals move to HOLD
-    min_hold_bars: int = 1         # minimum bars a signal must persist before acting
+    initial_capital: float = 1.0  # normalised — results are in % terms
+    allow_short: bool = False  # if False, SELL signals move to HOLD
+    min_hold_bars: int = 1  # minimum bars a signal must persist before acting
 
 
 @dataclass
@@ -48,9 +47,9 @@ class BacktestResult:
             "buy_and_hold_return": round(self.buy_and_hold_return, 6),
             "excess_return": round(self.excess_return, 6),
             "max_drawdown": round(self.max_drawdown, 6),
-            "sharpe_ratio": round(self.sharpe_ratio, 6) if not (
-                isinstance(self.sharpe_ratio, float) and np.isnan(self.sharpe_ratio)
-            ) else None,
+            "sharpe_ratio": round(self.sharpe_ratio, 6)
+            if not (isinstance(self.sharpe_ratio, float) and np.isnan(self.sharpe_ratio))
+            else None,
             "win_rate": round(self.win_rate, 6),
             "n_trades": self.n_trades,
             "fees_paid": round(self.fees_paid, 6),
@@ -96,7 +95,6 @@ def run_backtest(
 
     capital = config.initial_capital
     position = 0
-    entry_price = 0.0
     fees_paid = 0.0
     equity_curve = [capital]
     trade_returns = []
@@ -122,7 +120,6 @@ def run_backtest(
                 exit_cost = capital * cost_per_trade
                 capital -= exit_cost
                 fees_paid += exit_cost
-                trade_return = (capital - equity_curve[-n_trades - 1]) / equity_curve[-n_trades - 1] if n_trades < len(equity_curve) else 0.0
                 trade_returns.append(float(capital / equity_curve[max(0, len(equity_curve) - 1)] - 1))
 
             # Open new position
@@ -130,7 +127,6 @@ def run_backtest(
                 entry_cost = capital * cost_per_trade
                 capital -= entry_cost
                 fees_paid += entry_cost
-                entry_price = price
                 n_trades += 1
 
             position = target_position
@@ -176,13 +172,15 @@ def run_backtest(
     logger.info(
         "backtest complete strategy_return=%.4f buy_hold=%.4f excess=%.4f "
         "max_drawdown=%.4f sharpe=%.4f win_rate=%.4f n_trades=%d fees=%.6f",
-        result.strategy_return, result.buy_and_hold_return, result.excess_return,
-        result.max_drawdown, result.sharpe_ratio if not (
-            isinstance(result.sharpe_ratio, float) and np.isnan(result.sharpe_ratio)
-        ) else float("nan"),
-        result.win_rate if not (
-            isinstance(result.win_rate, float) and np.isnan(result.win_rate)
-        ) else float("nan"),
-        result.n_trades, result.fees_paid,
+        result.strategy_return,
+        result.buy_and_hold_return,
+        result.excess_return,
+        result.max_drawdown,
+        result.sharpe_ratio
+        if not (isinstance(result.sharpe_ratio, float) and np.isnan(result.sharpe_ratio))
+        else float("nan"),
+        result.win_rate if not (isinstance(result.win_rate, float) and np.isnan(result.win_rate)) else float("nan"),
+        result.n_trades,
+        result.fees_paid,
     )
     return result

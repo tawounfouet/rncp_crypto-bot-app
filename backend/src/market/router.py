@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from market.insert_service import MarketDataInsertService
 from market.schemas import (
+    ExchangeListResponse,
+    ExchangeOption,
     MarketDataListResponse,
     MarketDataRequest,
     MarketDataResponse,
@@ -23,6 +25,10 @@ from market.schemas import (
     MarketSummaryResponse,
     PriceInfo,
     PriceResponse,
+    PublicKlineInfo,
+    PublicKlineListResponse,
+    PublicPriceInfo,
+    PublicPriceListResponse,
     SymbolInfo,
     SymbolListResponse,
     TechnicalIndicators,
@@ -30,6 +36,11 @@ from market.schemas import (
     TradingPair,
 )
 from market.service import MarketDataService
+from utils.connectors.exchanges.registry import (
+    get_market_data_driver,
+    list_configured_exchanges,
+    supports_sandbox_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +48,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["Market Data"])
 
 # Constants
-SYMBOL_DESCRIPTION = "Trading symbol (e.g., BTCUSDT)"
+SYMBOL_DESCRIPTION = "Trading symbol (e.g., BTCUSDC)"
+
+DEFAULT_PUBLIC_SYMBOLS = ["BTCUSDC", "ETHUSDC"]
+EXCHANGE_LABELS = {"binance": "Binance", "binance_us": "Binance.US", "kraken": "Kraken"}
 
 
 # Dependency to get market data service
@@ -47,8 +61,126 @@ def get_market_data_service() -> MarketDataService:
 
 
 # ============================================================================
+# PUBLIC MARKET ENDPOINTS (no auth — accessible connecté ou non)
+# ============================================================================
+
+
+@router.get("/exchanges", response_model=ExchangeListResponse)
+async def list_public_exchanges() -> ExchangeListResponse:
+    """
+    **Liste des plateformes disponibles pour la consultation des prix publics.**
+
+    Source unique de vérité : les drivers de données de marché réellement enregistrés
+    (`utils/connectors/exchanges/registry.py`), pas un catalogue codé en dur côté frontend.
+    """
+    ids = list_configured_exchanges()
+    return ExchangeListResponse(
+        data=[
+            ExchangeOption(
+                id=exchange_id,
+                label=EXCHANGE_LABELS.get(exchange_id, exchange_id.capitalize()),
+                supports_sandbox=supports_sandbox_credentials(exchange_id),
+            )
+            for exchange_id in ids
+        ]
+    )
+
+
+@router.get("/public/prices", response_model=PublicPriceListResponse)
+async def get_public_prices(
+    exchange: str = Query("binance", description="Exchange source (e.g., binance, kraken)"),
+    symbols: str = Query(",".join(DEFAULT_PUBLIC_SYMBOLS), description="Paires séparées par des virgules"),
+) -> PublicPriceListResponse:
+    """
+    **Derniers prix publics pour une ou plusieurs paires, sans authentification.**
+
+    Interroge directement le driver de données de marché (API publique de l'exchange,
+    aucune clé requise) — pas la base de données de collecte historique.
+    """
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    driver = get_market_data_driver(exchange)
+
+    prices: list[PublicPriceInfo] = []
+    warnings: list[str] = []
+    for symbol in symbol_list:
+        try:
+            rows = driver.fetch_klines(symbol, "1m", limit=1)
+            if not rows:
+                warnings.append(f"Aucune donnée pour {symbol} sur {exchange}")
+                continue
+            latest = rows[-1]
+            prices.append(
+                PublicPriceInfo(symbol=symbol, exchange=exchange, price=latest["close"], as_of=latest["close_time"])
+            )
+        except Exception as exc:
+            logger.warning(f"Public price fetch failed exchange={exchange} symbol={symbol}: {exc}")
+            warnings.append(f"{symbol}: indisponible sur {exchange}")
+
+    return PublicPriceListResponse(data=prices, warnings=warnings)
+
+
+@router.get("/public/klines", response_model=PublicKlineListResponse)
+async def get_public_klines(
+    exchange: str = Query("binance", description="Exchange source (e.g., binance, kraken)"),
+    symbols: str = Query(",".join(DEFAULT_PUBLIC_SYMBOLS), description="Paires séparées par des virgules"),
+    interval: str = Query("1h", description="Intervalle des bougies (e.g., 1m, 1h)"),
+    limit: int = Query(24, ge=1, le=1000, description="Nombre de bougies par paire"),
+) -> PublicKlineListResponse:
+    """
+    **Série de bougies (klines) publiques pour une ou plusieurs paires, sans authentification.**
+
+    Interroge directement le driver de données de marché (API publique de l'exchange,
+    aucune clé requise) — pas la base de données de collecte historique.
+    """
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    driver = get_market_data_driver(exchange)
+
+    klines: list[PublicKlineInfo] = []
+    warnings: list[str] = []
+    for symbol in symbol_list:
+        try:
+            rows = driver.fetch_klines(symbol, interval, limit=limit)
+            if not rows:
+                warnings.append(f"Aucune donnée pour {symbol} sur {exchange}")
+                continue
+            for row in rows:
+                klines.append(
+                    PublicKlineInfo(
+                        symbol=symbol,
+                        exchange=exchange,
+                        interval=interval,
+                        open_time=row["open_time"],
+                        open=row["open"],
+                        high=row["high"],
+                        low=row["low"],
+                        close=row["close"],
+                        volume=row["volume"],
+                    )
+                )
+        except Exception as exc:
+            logger.warning(f"Public kline fetch failed exchange={exchange} symbol={symbol}: {exc}")
+            warnings.append(f"{symbol}: indisponible sur {exchange}")
+    return PublicKlineListResponse(data=klines, warnings=warnings)
+
+
+# ============================================================================
 # MARKET DATA INSERTION ENDPOINT (NEW - Real Binance Data)
 # ============================================================================
+
+
+@router.get("/data/coverage")
+async def get_data_coverage(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return OHLCV data coverage grouped by symbol and timeframe.
+
+    Each entry shows how many candles are stored and their date range,
+    so the frontend can check availability before running a backtest.
+    """
+    insert_service = MarketDataInsertService(db)
+    coverage = insert_service.get_coverage()
+    return {"success": True, "message": f"{len(coverage)} series", "data": coverage}
 
 
 @router.post("/data/insert", response_model=BaseResponse)
@@ -64,7 +196,7 @@ async def insert_historical_data(
     Uses UPSERT logic to handle duplicate records (updates if exists, inserts if new).
 
     **Parameters:**
-    - **symbol**: Trading pair (e.g., 'BTCUSDT')
+    - **symbol**: Trading pair (e.g., 'BTCUSDC')
     - **interval**: Timeframe ('1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w')
     - **start_time**: Start datetime for historical data (ISO format)
     - **end_time**: End datetime (optional, defaults to now)
@@ -73,7 +205,7 @@ async def insert_historical_data(
     **Example Request:**
     ```json
     {
-        "symbol": "BTCUSDT",
+        "symbol": "BTCUSDC",
         "interval": "1h",
         "start_time": "2024-01-01T00:00:00Z",
         "end_time": "2024-01-31T23:59:59Z",
@@ -158,7 +290,7 @@ async def fetch_market_data(
     """
     Fetch historical market data (OHLCV) for a specific symbol and timeframe.
 
-    - **symbol**: Trading symbol (e.g., BTCUSDT)
+    - **symbol**: Trading symbol (e.g., BTCUSDC)
     - **interval**: Timeframe (e.g., 1m, 5m, 15m, 1h, 4h, 1d)
     - **start_time**: Optional start time for historical data
     - **end_time**: Optional end time for historical data
@@ -390,7 +522,7 @@ async def get_multiple_prices(
     """
     Get current prices for multiple symbols.
 
-    - **symbols**: Comma-separated list of trading symbols (e.g., BTCUSDT,ETHUSDT,BNBUSDT)
+    - **symbols**: Comma-separated list of trading symbols (e.g., BTCUSDC,ETHUSDC,BNBUSDC)
     """
     try:
         symbol_list = [s.strip().upper() for s in symbols.split(",")]

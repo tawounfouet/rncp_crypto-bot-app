@@ -16,16 +16,6 @@ class ProjectSettings(BaseModel):
     random_state: int = 42
 
 
-class ExchangeSettings(BaseModel):
-    name: str = "binance"
-    testnet: bool = True
-    base_url: str
-    api_key_env: str
-    api_secret_env: str
-    request_timeout_seconds: int = 20
-    rate_limit_sleep_seconds: float = 0.25
-
-
 class DataPaths(BaseModel):
     raw: Path
     processed: Path
@@ -185,9 +175,37 @@ class LSTMSettings(BaseModel):
     output_size: int = Field(gt=0)
 
 
+class MLPSettings(BaseModel):
+    enabled: bool = True
+    hidden_layer_sizes: tuple[int, ...] = (128, 64)
+    activation: Literal["identity", "logistic", "tanh", "relu"] = "relu"
+    solver: Literal["lbfgs", "sgd", "adam"] = "adam"
+    alpha: float = Field(ge=0)
+    learning_rate_init: float = Field(gt=0)
+    batch_size: int = Field(gt=0)
+    max_iter: int = Field(gt=0)
+    early_stopping: bool = True
+    random_state: int = 42
+
+
+class XGBoostSettings(BaseModel):
+    enabled: bool = True
+    n_estimators: int = Field(gt=0)
+    max_depth: int = Field(gt=0)
+    learning_rate: float = Field(gt=0)
+    subsample: float = Field(gt=0, le=1)
+    colsample_bytree: float = Field(gt=0, le=1)
+    min_child_weight: float = Field(ge=0)
+    reg_lambda: float = Field(ge=0)
+    n_jobs: int = -1
+    random_state: int = 42
+
+
 class ModelsSettings(BaseModel):
     random_forest: RandomForestSettings
     lstm: LSTMSettings
+    mlp: MLPSettings
+    xgboost: XGBoostSettings
 
 
 class EarlyStoppingSettings(BaseModel):
@@ -280,7 +298,6 @@ class LoggingSettings(BaseModel):
 
 class AppSettings(BaseModel):
     project: ProjectSettings
-    exchange: ExchangeSettings
     data: DataSettings
     features: FeaturesSettings
     labels: LabelSettings

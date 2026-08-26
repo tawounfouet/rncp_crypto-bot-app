@@ -8,7 +8,7 @@ MinIO sous la convention :
 
 Exécutable par Airflow (PythonOperator) ou en ligne de commande :
 
-    python collect_ohlcv.py --symbol BTCUSDT --interval 1h
+    python collect_ohlcv.py --symbol BTCUSDC --interval 1h
     python collect_ohlcv.py --exchange kraken --symbol ETHEUR --interval 1h --limit 500
 
 Variables d'environnement MinIO (voir ``utils.connectors.minio``) :
@@ -56,7 +56,7 @@ def run_ingestion(
         ``raw/ohlcv/{exchange}/{SYMBOL}/{interval}/{YYYY-MM-DD}.parquet``
 
     Args:
-        symbol: Paire de trading (ex: ``BTCUSDT``, ``ETHEUR``)
+        symbol: Paire de trading (ex: ``BTCUSDC``, ``ETHEUR``)
         interval: Intervalle de temps (ex: ``1h``)
         limit: Nombre de klines à collecter (max 1000 par appel)
         exchange: Exchange source (ex: ``binance``, ``kraken``) — résolu par le registry
@@ -97,7 +97,7 @@ def run_ingestion(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Collecte OHLCV multi-exchange et stocke dans MinIO.")
     parser.add_argument("--exchange", default="binance", help="Exchange source (ex: binance, kraken)")
-    parser.add_argument("--symbol", required=True, help="Paire de trading ex: BTCUSDT")
+    parser.add_argument("--symbol", required=True, help="Paire de trading ex: BTCUSDC")
     parser.add_argument("--interval", required=True, help="Intervalle ex: 1h, 4h, 1d")
     parser.add_argument("--limit", type=int, default=1000, help="Nombre de klines (max 1000)")
     parser.add_argument("--bucket", default=None, help="Bucket MinIO cible (défaut: env MINIO_BUCKET)")

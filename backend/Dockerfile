@@ -6,7 +6,7 @@
 
 # Stage 1: Builder
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as builder
+FROM python:${PYTHON_VERSION}-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -32,7 +32,7 @@ RUN pip install --upgrade pip && \
 # Stage 2: Test (utilise par la CI pour les tests d'integration)
 # Build: docker build -f backend/Dockerfile --target test -t backend:test .
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as test
+FROM python:${PYTHON_VERSION}-slim AS test
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -54,12 +54,12 @@ COPY backend/ .
 COPY utils/ ./utils
 COPY backend/ci/parse_test_report.py /usr/local/bin/parse_test_report.py
 
-CMD ["pytest", "src/tests", "-v"]
+CMD ["pytest", "tests", "-v"]
 
 
 # Stage 3: Runtime (image de production, legere, user non-root)
 ARG PYTHON_VERSION
-FROM python:${PYTHON_VERSION}-slim as runtime
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -88,9 +88,9 @@ WORKDIR /app
 COPY --chown=app:app backend/ .
 COPY --chown=app:app utils/ ./utils
 
-# Creer les repertoires necessaires
-RUN mkdir -p logs data && \
-    chown -R app:app /app
+# Creer les repertoires necessaires (logs/ et data/ sont exclues du
+# build context par .dockerignore -> crees ici avec les bons droits)
+RUN mkdir -p logs data && chown -R app:app logs data
 
 # Changer vers l'utilisateur non-root
 USER app
