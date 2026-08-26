@@ -110,6 +110,7 @@ services:
       - MINIO_BUCKET=crypto-bot-data
       - ENVIRONMENT=staging
       - DEBUG=true
+      - APP_VERSION=${APP_VERSION:-staging}
       - EXCHANGE_ENC_KEY=${EXCHANGE_ENC_KEY}
       - JWT_SIGNING_KEY=${JWT_SIGNING_KEY}
       - CORS_ORIGINS=${CORS_ORIGINS}

@@ -153,7 +153,7 @@ class StrategyRegistry:
         """
         return {name: self.get_strategy_info(name) for name in self.list_strategies()}
 
-    def discover_strategies(self, package_path: str = "src.backend.strategies.implementations") -> int:
+    def discover_strategies(self, package_path: str = "strategy.engine.implementations") -> int:
         """
         Automatically discover and register strategies from a package.
 

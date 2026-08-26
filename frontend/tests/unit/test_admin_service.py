@@ -61,7 +61,7 @@ def test_admin_toggle_user_status(store) -> None:
     service.list_users()  # populate _user_list
     ok, _ = service.set_enabled("alice@cryptobot.dev", False)
     assert ok is True
-    client.deactivate_user.assert_called_once_with("fake-token", "u1")
+    client.deactivate_user.assert_called_once_with("fake-token", user_id="u1")
 
 
 def test_admin_activate_user(store) -> None:
@@ -73,12 +73,26 @@ def test_admin_activate_user(store) -> None:
     service.list_users()
     ok, _ = service.set_enabled("alice@cryptobot.dev", True)
     assert ok is True
-    client.activate_user.assert_called_once_with("fake-token", "u1")
+    client.activate_user.assert_called_once_with("fake-token", user_id="u1")
 
 
-def test_admin_set_role_not_available(store) -> None:
+def test_admin_set_role_promotes_user(store) -> None:
     store.current_user_email = "admin@cryptobot.dev"
-    service = AdminService(store, client=MagicMock())
-    ok, message = service.set_role("alice@cryptobot.dev", UserRole.ADMIN)
-    assert ok is False
-    assert "non disponible" in message
+    client = MagicMock(spec=BackendApiClient)
+    client.list_users.return_value = _ok(MOCK_USERS)
+    client.make_user_admin.return_value = _ok({"message": "promoted"})
+    service = AdminService(store, client=client)
+    ok, _ = service.set_role("alice@cryptobot.dev", UserRole.ADMIN)
+    assert ok is True
+    client.make_user_admin.assert_called_once_with("fake-token", user_id="u1")
+
+
+def test_admin_set_role_demotes_user(store) -> None:
+    store.current_user_email = "admin@cryptobot.dev"
+    client = MagicMock(spec=BackendApiClient)
+    client.list_users.return_value = _ok(MOCK_USERS)
+    client.remove_user_admin.return_value = _ok({"message": "demoted"})
+    service = AdminService(store, client=client)
+    ok, _ = service.set_role("admin@cryptobot.dev", UserRole.USER)
+    assert ok is True
+    client.remove_user_admin.assert_called_once_with("fake-token", user_id="u2")

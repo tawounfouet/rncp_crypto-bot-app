@@ -30,6 +30,11 @@ if ! kubectl --context admin@crypto-bot get ns dev &>/dev/null; then
     exit 1
 fi
 
+# versions.env = source unique de verite (memes images/versions que la CI et
+# le docker-compose local) -- PYTHON_VERSION n'a pas de defaut dans les
+# Dockerfiles, sans ce chargement le build echoue (ARG vide -> "FROM python:-slim").
+export $(grep -v '^\s*#' versions.env | grep '=' | xargs)
+
 echo "=== Dev Deploy (tag :$TAG) ==="
 
 if [[ "$COMPONENT" == "backend" || "$COMPONENT" == "all" ]]; then
@@ -37,7 +42,7 @@ if [[ "$COMPONENT" == "backend" || "$COMPONENT" == "all" ]]; then
     echo "[1/2] Building backend..."
     # Contexte = racine du repo (pas ./backend) : backend/Dockerfile fait COPY utils/,
     # le package multi-exchange partage avec jobs/orchestration (cf. issue #10).
-    docker build --target runtime -f backend/Dockerfile -t "$REGISTRY/backend:$TAG" .
+    docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --target runtime -f backend/Dockerfile -t "$REGISTRY/backend:$TAG" .
     echo "Pushing backend:$TAG..."
     docker push "$REGISTRY/backend:$TAG"
     echo "Restarting backend pods..."
@@ -47,7 +52,7 @@ fi
 if [[ "$COMPONENT" == "frontend" || "$COMPONENT" == "all" ]]; then
     echo ""
     echo "[2/2] Building frontend..."
-    docker build -t "$REGISTRY/frontend:$TAG" ./frontend
+    docker build --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg APP_VERSION=$TAG -t "$REGISTRY/frontend:$TAG" ./frontend
     echo "Pushing frontend:$TAG..."
     docker push "$REGISTRY/frontend:$TAG"
     echo "Restarting frontend pods..."

@@ -84,11 +84,26 @@ class CcxtClient(ExchangeClient):
         symbol: str,
         side: str,
         order_type: str,
-        quantity: Decimal,
+        quantity: Decimal | None = None,
         price: Decimal | None = None,
+        quote_quantity: Decimal | None = None,
     ) -> OrderResult:
         native_symbol = CcxtDriver.to_native_symbol(symbol)
         params = {"validate": True} if self._validate_only else {}
+
+        if quote_quantity is not None:
+            if quantity is not None:
+                raise ValueError("quantity et quote_quantity sont mutuellement exclusifs")
+            if side.lower() != "buy" or order_type.lower() != "market":
+                raise ValueError("quote_quantity n'est supporte que pour les ordres MARKET BUY")
+            # Methode unifiee ccxt : depense un montant en devise de cotation plutot qu'une
+            # quantite d'actif de base -- leve NotSupported proprement si l'exchange ne gere
+            # pas ce mode (cf. self._client.has['createMarketBuyOrderWithCost']).
+            raw = self._client.create_market_buy_order_with_cost(native_symbol, float(quote_quantity), params)
+            return self._to_order_result(symbol, raw)
+
+        if quantity is None:
+            raise ValueError("quantity est requis quand quote_quantity n'est pas fourni")
         raw = self._client.create_order(
             native_symbol,
             order_type.lower(),
@@ -104,13 +119,31 @@ class CcxtClient(ExchangeClient):
         raw = self._client.cancel_order(order_id, native_symbol)
         return self._to_order_result(symbol, raw)
 
+    def get_open_orders(self, symbol: str | None = None) -> list[OrderResult]:
+        native_symbol = CcxtDriver.to_native_symbol(symbol) if symbol else None
+        raw_orders = self._client.fetch_open_orders(native_symbol)
+        return [self._to_order_result(symbol or self._from_native_symbol(raw), raw) for raw in raw_orders]
+
+    @staticmethod
+    def _from_native_symbol(raw: dict) -> str:
+        native_symbol = str(raw.get("symbol", ""))
+        return native_symbol.replace("/", "")
+
     def _to_order_result(self, symbol: str, raw: dict) -> OrderResult:
+        # Pour un ordre MARKET, "price" (prix limite demande) est souvent absent ou non
+        # representatif -- "average" (prix moyen reellement execute) est la source fiable
+        # quand disponible. "filled" (quantite reellement executee) prime sur "amount"
+        # (quantite demandee) pour la meme raison, notamment avec quote_quantity ou
+        # "amount" ne correspond a rien de significatif cote reponse.
+        filled = raw.get("filled")
+        quantity = filled if filled not in (None, 0) else raw.get("amount", "0")
+        executed_price = raw.get("average") if raw.get("average") is not None else raw.get("price")
         return OrderResult(
             order_id=str(raw.get("id")),
             symbol=symbol,
             side=raw.get("side", ""),
             order_type=raw.get("type", ""),
             status=raw.get("status", "unknown"),
-            quantity=Decimal(str(raw.get("amount", "0"))),
-            price=Decimal(str(raw["price"])) if raw.get("price") is not None else None,
+            quantity=Decimal(str(quantity)),
+            price=Decimal(str(executed_price)) if executed_price is not None else None,
         )

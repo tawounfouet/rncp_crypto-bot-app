@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from mocks.db import MockStore
 from schemas.auth import AuthResult, LoginRequest, MockUser, RegisterRequest
 from services.auth_api_client import ApiResponse, AuthApiClient
+from services.runtime_mode import allow_mock_fallback
 from state.session import (
     clear_auth_session,
     get_access_token,
@@ -33,7 +34,7 @@ class AuthService:
         self.client = client or AuthApiClient()
 
     def login(self, payload: LoginRequest) -> AuthResult:
-        identifier = payload.email.strip()
+        identifier = payload.email.strip().lower()
         ok, message = validate_email(identifier)
         if not ok:
             return AuthResult(success=False, message=message)
@@ -123,6 +124,10 @@ class AuthService:
                     return None
 
         if response.status_code in {401, 403}:
+            clear_auth_session(store=self.store)
+            return None
+
+        if not allow_mock_fallback():
             clear_auth_session(store=self.store)
             return None
 

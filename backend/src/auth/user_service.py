@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from fastapi import HTTPException, status
 from shared.database.connection import get_db_session
+from sqlalchemy import func
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
@@ -37,18 +38,45 @@ def _model_to_dict(obj: object) -> dict:
 class UserService:
     """Service for handling user operations."""
 
+    @staticmethod
+    def _mask_secret(secret: str, visible: int = 4) -> str:
+        if not secret:
+            return ""
+        if len(secret) <= visible * 2:
+            return "*" * len(secret)
+        return f"{secret[:visible]}{'*' * (len(secret) - visible * 2)}{secret[-visible:]}"
+
+    def _create_settings(self, user_id: str, session: Session) -> UserSettings:
+        settings = UserSettings(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            theme="light",
+            notification_preferences={
+                "email": True,
+                "push": False,
+                "trading_alerts": True,
+                "price_alerts": True,
+                "portfolio_alerts": True,
+            },
+            risk_profile="moderate",
+            api_keys=None,
+        )
+        session.add(settings)
+        session.flush()
+        return settings
+
     def create_user(self, user_data: UserCreate) -> User:
         """Create a new user."""
+        email = str(user_data.email).strip().lower()
+        username = user_data.username.strip()
         with get_db_session() as session:
             # Check if user already exists
             existing_user = (
-                session.query(User)
-                .filter((User.email == user_data.email) | (User.username == user_data.username))
-                .first()
+                session.query(User).filter((func.lower(User.email) == email) | (User.username == username)).first()
             )
 
             if existing_user:
-                if existing_user.email == user_data.email:
+                if existing_user.email.lower() == email:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Email already registered",
@@ -63,8 +91,8 @@ class UserService:
             hashed_password = auth_service.get_password_hash(user_data.password)
             db_user = User(
                 id=str(uuid.uuid4()),
-                email=user_data.email,
-                username=user_data.username,
+                email=email,
+                username=username,
                 hashed_password=hashed_password,
                 first_name=user_data.first_name,
                 last_name=user_data.last_name,
@@ -92,21 +120,7 @@ class UserService:
 
     def create_default_settings(self, user_id: str, session: Session):
         """Create default settings for a user."""
-        default_settings = UserSettings(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            theme="light",
-            notification_preferences={
-                "email": True,
-                "push": False,
-                "trading_alerts": True,
-                "price_alerts": True,
-                "portfolio_alerts": True,
-            },
-            risk_profile="moderate",
-            api_keys=None,
-        )
-        session.add(default_settings)
+        self._create_settings(user_id, session)
 
     def get_user_by_id(self, user_id: str) -> User | None:
         """Get user by ID."""
@@ -301,21 +315,7 @@ class UserService:
 
             if not settings:
                 # Create new settings if none exist
-                settings = UserSettings(
-                    id=str(uuid.uuid4()),
-                    user_id=user_id,
-                    theme="light",
-                    notification_preferences={
-                        "email": True,
-                        "push": False,
-                        "trading_alerts": True,
-                        "price_alerts": True,
-                        "portfolio_alerts": True,
-                    },
-                    risk_profile="moderate",
-                    api_keys=None,
-                )
-                session.add(settings)
+                settings = self._create_settings(user_id, session)
 
             # Update API credentials if provided (exchange defaults to "binance" for compat)
             update_data = settings_data.model_dump(exclude_unset=True)

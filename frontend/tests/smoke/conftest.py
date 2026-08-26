@@ -47,6 +47,36 @@ _STUB_ADMIN_USERS = [
     },
 ]
 
+_STUB_BOT_TEMPLATE = {
+    "id": "tpl_ai_rsi_btcusdt_1h",
+    "name": "AI RSI Mean Reversion BTCUSDC 1h",
+    "description": "Bot Spot Testnet cle en main.",
+    "model_type": "regime_classifier_v1",
+    "strategy_type": "rsi_reversal",
+    "symbol": "BTCUSDC",
+    "timeframe": "1h",
+    "signal_source": "regime_classifier_v1+rsi_reversal",
+    "execution_params": {},
+    "risk_limits": {},
+    "order_policy": {},
+    "version": "1.0",
+    "status": "published",
+}
+
+
+def _stub_user_bot(instance_id: str, *, status: str = "STOPPED") -> dict:
+    return {
+        "id": instance_id,
+        "bot_template_id": _STUB_BOT_TEMPLATE["id"],
+        "status": status,
+        "mode": "TESTNET",
+        "auto_trade_enabled": status == "ACTIVE",
+        "config_snapshot": {**_STUB_BOT_TEMPLATE, "name": _STUB_BOT_TEMPLATE["name"]},
+        "updated_at": "2024-01-01T00:00:00Z",
+        "last_decision_at": "2024-01-01T00:00:00Z",
+    }
+
+
 _STUB_TRANSACTIONS = [
     {
         "id": "tx1", "transaction_type": "TRADE", "asset": "BTC", "quote_asset": "USDC",
@@ -172,9 +202,140 @@ def _stub_request(self, method: str, path: str, **kwargs) -> ApiResponse:
             "is_active": True, "is_admin": False,
         })
 
-    # ── /users/{id}/activate|deactivate ──────────────────────────────────────
-    if "/users/" in path and ("activate" in path or "deactivate" in path):
+    # ── /users/{id}/activate|deactivate|make-admin|remove-admin ──────────────
+    if "/users/" in path and any(
+        suffix in path for suffix in ("activate", "deactivate", "make-admin", "remove-admin")
+    ):
         return ApiResponse(status_code=200, data={"message": "ok"})
+
+    # ── /user-bots/performance-summary ────────────────────────────────────────
+    if "/user-bots/performance-summary" in path:
+        return ApiResponse(status_code=200, data={
+            "generated_at": "2024-01-16T12:00:00Z",
+            "period_start": "2023-12-17T12:00:00Z",
+            "period_end": "2024-01-16T12:00:00Z",
+            "period_days": 30,
+            "bot_id": None,
+            "model_name": None,
+            "unavailable_reasons": [],
+            "global_performance": {
+                "capital_initial": 1000.0,
+                "capital_current": 1050.0,
+                "pnl_total": 50.0,
+                "pnl_realized": 50.0,
+                "pnl_unrealized": 0.0,
+                "total_orders": 2,
+                "total_trades": 2,
+                "win_rate_pct": 60.0,
+            },
+            "bots": [
+                {
+                    "bot_id": "inst_1",
+                    "bot_name": "AI RSI Mean Reversion BTCUSDC 1h",
+                    "model_name": "bot_rsi_reversal_btcusdt_1h",
+                    "model_version": "1",
+                    "pnl_total": 50.0,
+                    "pnl_realized": 50.0,
+                    "pnl_unrealized": 0.0,
+                    "orders": 2,
+                    "trades": 2,
+                    "last_decision": "BUY",
+                    "last_decision_at": "2024-01-16T11:00:00Z",
+                    "last_ai_signal": "BUY",
+                    "average_confidence": 0.72,
+                    "pnl_contribution_pct": 100.0,
+                }
+            ],
+            "decisions": [
+                {
+                    "id": "dec_1",
+                    "bot_id": "inst_1",
+                    "bot_name": "AI RSI Mean Reversion BTCUSDC 1h",
+                    "timestamp": "2024-01-16T11:00:00Z",
+                    "model_source": "mlflow",
+                    "registry_source": "mlflow",
+                    "model_name": "bot_rsi_reversal_btcusdt_1h",
+                    "model_version": "1",
+                    "confidence": 0.72,
+                    "raw_ai_signal": "BUY",
+                    "deterministic_signal": "BUY",
+                    "final_action": "BUY",
+                    "risk_decision": "PASS",
+                    "reason": "Signal confirme",
+                }
+            ],
+            "orders": [
+                {
+                    "id": "ord_1",
+                    "bot_id": "inst_1",
+                    "bot_name": "AI RSI Mean Reversion BTCUSDC 1h",
+                    "created_at": "2024-01-16T11:00:00Z",
+                    "symbol": "BTCUSDC",
+                    "side": "BUY",
+                    "order_type": "MARKET",
+                    "status": "FILLED",
+                    "binance_order_id": "123456",
+                    "quote_order_quantity": 100.0,
+                    "quantity": 0.0022,
+                }
+            ],
+            "trades": [
+                {
+                    "id": "trd_1",
+                    "bot_id": "inst_1",
+                    "bot_name": "AI RSI Mean Reversion BTCUSDC 1h",
+                    "order_id": "ord_1",
+                    "trade_time": "2024-01-16T11:00:00Z",
+                    "symbol": "BTCUSDC",
+                    "side": "BUY",
+                    "quantity": 0.0022,
+                    "price": 45000.0,
+                    "fee": 0.1,
+                    "fee_asset": "USDT",
+                    "realized_pnl": 0.0,
+                }
+            ],
+            "pnl_curve": [],
+        })
+
+    # ── /user-bots/{id}/start|pause|stop ──────────────────────────────────────
+    if "/user-bots/" in path and any(
+        suffix in path for suffix in ("/start", "/pause", "/stop")
+    ):
+        instance_id = path.rstrip("/").split("/")[-2]
+        new_status = "ACTIVE" if path.endswith("/start") else "STOPPED" if path.endswith("/stop") else "PAUSED"
+        return ApiResponse(status_code=200, data={
+            "success": True,
+            "message": "Action appliquee.",
+            "bot": _stub_user_bot(instance_id, status=new_status),
+        })
+
+    # ── /user-bots/{id}/decisions|orders|trades ───────────────────────────────
+    if "/user-bots/" in path and any(
+        suffix in path for suffix in ("/decisions", "/orders", "/trades")
+    ):
+        return ApiResponse(status_code=200, data=[])
+
+    # ── /user-bots/{id}/position|performance ──────────────────────────────────
+    if "/user-bots/" in path and any(suffix in path for suffix in ("/position", "/performance")):
+        return ApiResponse(status_code=200, data={})
+
+    # ── /user-bots (liste / creation) ─────────────────────────────────────────
+    if "/user-bots" in path:
+        if method == "POST":
+            return ApiResponse(status_code=201, data=_stub_user_bot("inst_1"))
+        return ApiResponse(
+            status_code=200,
+            data=[_stub_user_bot("inst_1"), _stub_user_bot("inst_2")],
+        )
+
+    # ── /bot-templates ─────────────────────────────────────────────────────────
+    if "/bot-templates" in path:
+        parts = path.rstrip("/").split("/")
+        last = parts[-1]
+        if last not in ("", "bot-templates"):
+            return ApiResponse(status_code=200, data=_STUB_BOT_TEMPLATE)
+        return ApiResponse(status_code=200, data=[_STUB_BOT_TEMPLATE])
 
     # ── /users/ (liste admin) ─────────────────────────────────────────────────
     if "/users" in path and method == "GET":

@@ -6,8 +6,12 @@ from io import BytesIO
 import pandas as pd
 
 # Import MinIO client
-from minio import Minio
-from minio.error import S3Error
+try:
+    from minio import Minio
+    from minio.error import S3Error
+except ModuleNotFoundError:
+    Minio = None
+    S3Error = Exception
 
 # Configurer le logger
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -44,6 +48,8 @@ class ClientMinIO:
             Minio: Client MinIO
         """
         if self._client is None:
+            if Minio is None:
+                raise RuntimeError("minio package is required to use object storage")
             try:
                 self._client = Minio(
                     self.endpoint,

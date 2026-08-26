@@ -17,6 +17,7 @@ CCXT_IDS = {
 }
 
 # quotes connues, les plus LONGUES d'abord (USDC avant USD !)
+# Pas d'USDT : non conforme MiCA (pas d'agrement EMT), cf. commit e2455de.
 _KNOWN_QUOTES = ["USDC", "USD", "EUR", "BTC", "ETH"]
 
 

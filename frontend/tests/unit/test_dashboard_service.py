@@ -145,12 +145,37 @@ def _mock_token():
         yield
 
 
+MOCK_USER_BOTS = [
+    {
+        "id": "inst_btc",
+        "status": "ACTIVE",
+        "auto_trade_enabled": True,
+        "config_snapshot": {"name": "BTC Scalp", "strategy_type": "scalping", "environment": "testnet"},
+        "updated_at": "2024-01-01T00:00:00Z",
+        "last_decision_at": "2024-01-01T00:00:00Z",
+    },
+    {
+        "id": "inst_sol",
+        "status": "STOPPED",
+        "auto_trade_enabled": False,
+        "config_snapshot": {"name": "SOL Trend", "strategy_type": "trend", "environment": "testnet"},
+        "updated_at": "2024-01-01T00:00:00Z",
+        "last_decision_at": "2024-01-01T00:00:00Z",
+    },
+]
+
+
+def _performance_for(instance_id: str, *, realized_pnl: float) -> dict:
+    return {"id": instance_id, "realized_pnl": realized_pnl, "unrealized_pnl": 0.0}
+
+
 def test_get_overview_loads_snapshot_per_bot(store) -> None:
     client = MagicMock(spec=BackendApiClient)
-    client.list_strategies.return_value = _ok(MOCK_STRATEGIES)
-    client.list_deployments.return_value = _ok(MOCK_DEPLOYMENTS)
-    client.get_trading_stats.return_value = _ok(MOCK_STATS)
-    client.list_transactions.return_value = _ok([])
+    client.list_user_bots.return_value = _ok(MOCK_USER_BOTS)
+    client.get_user_bot_performance.side_effect = lambda token, *, instance_id: _ok(
+        _performance_for(instance_id, realized_pnl=2000.0 if instance_id == "inst_btc" else 501.5)
+    )
+    client.list_user_bot_trades.return_value = _ok([])
     service = DashboardService(store, client=client)
 
     overview = service.get_overview(period_days=30)
@@ -158,17 +183,16 @@ def test_get_overview_loads_snapshot_per_bot(store) -> None:
     assert overview.total_bots == 2
     assert overview.active_bots == 1
     assert overview.pnl_usdc == pytest.approx(2501.5)
-    assert client.get_trading_stats.call_count == 2
+    assert client.get_user_bot_performance.call_count == 2
 
 
 def test_get_overview_no_bots_returns_empty(store) -> None:
     client = MagicMock(spec=BackendApiClient)
-    client.list_strategies.return_value = _ok([])
-    client.list_deployments.return_value = _ok([])
+    client.list_user_bots.return_value = _ok([])
     service = DashboardService(store, client=client)
 
     overview = service.get_overview(period_days=30)
 
     assert overview.total_bots == 0
     assert overview.bots == []
-    client.get_trading_stats.assert_not_called()
+    client.get_user_bot_performance.assert_not_called()

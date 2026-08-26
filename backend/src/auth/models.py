@@ -3,6 +3,7 @@ User domain models for the Crypto Trading Bot.
 Contains User, UserSession, UserAccount, and UserSettings models.
 """
 
+import bots.models  # noqa: F401
 import strategy.models  # noqa: F401
 import trading.models  # noqa: F401
 from shared.config.security import decrypt_secret, encrypt_secret
@@ -66,6 +67,15 @@ class User(BaseModel):
     # Trading relationships
     orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
+    exchange_credentials = relationship("UserExchangeCredential", back_populates="user", cascade="all, delete-orphan")
+
+    # Bot template/instance relationships
+    bot_instances = relationship("UserBotInstance", back_populates="user", cascade="all, delete-orphan")
+    bot_runs = relationship("BotRun", back_populates="user", cascade="all, delete-orphan")
+    bot_decisions = relationship("TradingDecision", back_populates="user", cascade="all, delete-orphan")
+    bot_orders = relationship("BotOrder", back_populates="user", cascade="all, delete-orphan")
+    bot_trades = relationship("BotTrade", back_populates="user", cascade="all, delete-orphan")
+    bot_positions = relationship("BotPosition", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def full_name(self) -> str:
@@ -100,7 +110,7 @@ class UserSession(BaseModel):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Session information
-    token = Column(String(255), unique=True, nullable=False, index=True)
+    token = Column(String(1024), unique=True, nullable=False, index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
 
     # Session metadata
@@ -180,6 +190,50 @@ class UserAccount(BaseModel):
 
     def __repr__(self) -> str:
         return f"<UserAccount(id={self.id}, user_id={self.user_id}, provider={self.provider})>"
+
+
+@register_model
+class UserExchangeCredential(BaseModel):
+    """Encrypted exchange API credentials owned by a user."""
+
+    __tablename__ = "user_exchange_credentials"
+
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    exchange = Column(String(50), nullable=False, default="binance", index=True)
+    environment = Column(String(20), nullable=False, default="testnet", index=True)
+    api_key_encrypted = Column(JSON, nullable=False)
+    api_secret_encrypted = Column(JSON, nullable=False)
+    label = Column(String(120), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    permissions_checked = Column(Boolean, default=False, nullable=False)
+    last_verified_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="exchange_credentials")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "exchange",
+            "environment",
+            "label",
+            name="uq_user_exchange_environment_label",
+        ),
+    )
+
+    def get_api_key(self) -> str | None:
+        return self._decrypt_value(self.api_key_encrypted)
+
+    def get_api_secret(self) -> str | None:
+        return self._decrypt_value(self.api_secret_encrypted)
+
+    def set_credentials(self, api_key: str, api_secret: str) -> None:
+        self.api_key_encrypted = encrypt_secret(api_key)
+        self.api_secret_encrypted = encrypt_secret(api_secret)
+
+    def _decrypt_value(self, stored_value):
+        if isinstance(stored_value, dict) and "ciphertext" in stored_value and "nonce" in stored_value:
+            return decrypt_secret(stored_value["ciphertext"], stored_value["nonce"])
+        return stored_value
 
 
 @register_model

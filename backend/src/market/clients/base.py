@@ -64,11 +64,22 @@ class ExchangeClient(ABC):
         symbol: str,
         side: str,
         order_type: str,
-        quantity: Decimal,
+        quantity: Decimal | None = None,
         price: Decimal | None = None,
+        quote_quantity: Decimal | None = None,
     ) -> OrderResult:
-        """Place un ordre."""
+        """Place un ordre.
+
+        `quantity` (actif de base) et `quote_quantity` (devise de cotation, ex. "depenser
+        100 USDC") sont mutuellement exclusifs. `quote_quantity` n'est supporte que pour les
+        ordres MARKET BUY -- leve ValueError si l'exchange ou order_type ne le permet pas
+        (cf. CcxtClient.place_order).
+        """
 
     @abstractmethod
     def cancel_order(self, symbol: str, order_id: str) -> OrderResult:
         """Annule un ordre existant."""
+
+    @abstractmethod
+    def get_open_orders(self, symbol: str | None = None) -> list[OrderResult]:
+        """Retourne les ordres ouverts (tous symboles si `symbol` est omis)."""

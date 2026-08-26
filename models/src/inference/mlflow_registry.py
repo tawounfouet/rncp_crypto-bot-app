@@ -1,0 +1,106 @@
+"""Inference helpers for bot-specific models stored in MLflow Model Registry."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from functools import lru_cache
+from typing import Any
+
+import mlflow
+import mlflow.sklearn
+import pandas as pd
+from mlflow.tracking import MlflowClient
+
+from src.config.config_loader import load_config
+
+
+class ModelUnavailable(RuntimeError):
+    """Raised when a registered bot model cannot be loaded or used."""
+
+
+@dataclass(frozen=True)
+class ResolvedModel:
+    name: str
+    version: str
+    uri: str
+
+
+def configure_mlflow(config_path: str = "config.yaml") -> str:
+    settings = load_config(config_path)
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or settings.mlops.tracking_uri
+    mlflow.set_tracking_uri(tracking_uri)
+    return tracking_uri
+
+
+def resolve_model(model_name: str, model_version: str | None = None, config_path: str = "config.yaml") -> ResolvedModel:
+    configure_mlflow(config_path)
+    if model_version:
+        return ResolvedModel(name=model_name, version=str(model_version), uri=f"models:/{model_name}/{model_version}")
+
+    client = MlflowClient()
+    versions = client.search_model_versions(f"name='{model_name}'")
+    if not versions:
+        raise ModelUnavailable(f"MLflow model not found in registry: {model_name}")
+
+    latest = max(versions, key=lambda item: int(item.version))
+    return ResolvedModel(name=model_name, version=str(latest.version), uri=f"models:/{model_name}/{latest.version}")
+
+
+@lru_cache(maxsize=32)
+def _load_sklearn_model(model_name: str, model_version: str, config_path: str) -> Any:
+    configure_mlflow(config_path)
+    uri = f"models:/{model_name}/{model_version}"
+    try:
+        return mlflow.sklearn.load_model(uri)
+    except Exception as exc:  # pragma: no cover - MLflow raises backend-specific exceptions
+        raise ModelUnavailable(f"Failed to load MLflow model {uri}: {exc}") from exc
+
+
+def _class_labels(model: Any) -> list[str]:
+    classes = getattr(model, "classes_", None)
+    if classes is None and hasattr(model, "named_steps"):
+        final_step = next(reversed(model.named_steps.values()))
+        classes = getattr(final_step, "classes_", None)
+    if classes is None:
+        return []
+    return [str(label).upper() for label in classes]
+
+
+def predict_registered_bot_model(
+    *,
+    model_name: str,
+    features: dict[str, float],
+    model_version: str | None = None,
+    config_path: str = "config.yaml",
+) -> dict[str, Any]:
+    resolved = resolve_model(model_name, model_version, config_path)
+    model = _load_sklearn_model(resolved.name, resolved.version, config_path)
+    frame = pd.DataFrame([features])
+
+    try:
+        raw_signal = str(model.predict(frame)[0]).upper()
+    except Exception as exc:
+        raise ModelUnavailable(f"Failed to predict with MLflow model {resolved.uri}: {exc}") from exc
+    if raw_signal not in {"BUY", "SELL", "HOLD"}:
+        raise ModelUnavailable(f"MLflow model returned unsupported signal: {raw_signal}")
+
+    probabilities: dict[str, float] = {}
+    confidence = 1.0
+    if hasattr(model, "predict_proba"):
+        class_labels = _class_labels(model)
+        proba = model.predict_proba(frame)[0]
+        probabilities = {label: float(value) for label, value in zip(class_labels, proba, strict=False)}
+        confidence = float(probabilities.get(raw_signal, max(probabilities.values()) if probabilities else 0.0))
+
+    return {
+        "model_source": "mlflow",
+        "model_name": resolved.name,
+        "model_version": resolved.version,
+        "signal": raw_signal,
+        "confidence": confidence,
+        "probabilities": probabilities,
+        "features": features,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }

@@ -17,6 +17,7 @@ except ImportError:
 from src.config.config_loader import load_config
 from src.features.build import build_symbol_features
 from src.training.train_baselines import train_from_processed_dataset as train_baselines_from_processed_dataset
+from src.training.train_bot_rsi_reversal import train_from_processed_dataset as train_bot_rsi_from_processed_dataset
 from src.training.train_lstm import train_from_processed_dataset as train_lstm_from_processed_dataset
 from src.training.train_mlp import train_from_processed_dataset as train_mlp_from_processed_dataset
 from src.training.train_random_forest import train_from_processed_dataset
@@ -65,6 +66,13 @@ def train_xgboost_command(args: argparse.Namespace) -> None:
 def train_baselines_command(args: argparse.Namespace) -> None:
     train_baselines_from_processed_dataset(args.dataset, args.config)
     print(f"baselines evaluated on: {args.dataset}")
+
+
+def train_bot_rsi_command(args: argparse.Namespace) -> None:
+    result = train_bot_rsi_from_processed_dataset(args.dataset, args.config, registered_model_name=args.model_name)
+    print(
+        f"bot model registered: name={result['model_name']} version={result['model_version']} run_id={result['run_id']}"
+    )
 
 
 def check_command(args: argparse.Namespace) -> None:
@@ -142,6 +150,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Processed dataset path",
     )
     train_baselines_parser.set_defaults(func=train_baselines_command)
+
+    train_bot_rsi_parser = subparsers.add_parser(
+        "train-bot-rsi",
+        help="Train and register RSI bot model in MLflow (config.yaml:data.symbols[0])",
+    )
+    train_bot_rsi_parser.add_argument(
+        "--dataset",
+        default=None,
+        help="Processed feature dataset path (defaut : derive de config.yaml:data.symbols[0]/primary_interval)",
+    )
+    train_bot_rsi_parser.add_argument(
+        "--model-name",
+        default="bot_rsi_reversal_btcusdt_1h",
+        help="MLflow registered model name",
+    )
+    train_bot_rsi_parser.set_defaults(func=train_bot_rsi_command)
 
     api_parser = subparsers.add_parser("api", help="Start FastAPI signal API")
     api_parser.add_argument("--host", help="API host override")

@@ -30,6 +30,8 @@ class ExchangeCredentialStatus(BaseModel):
     updated_at: datetime | None = None
     api_key_masked: str = ""
     api_secret_masked: str = ""
+    permissions_checked: bool = False
+    last_verified_at: datetime | None = None
 
 
 class ApiCredentialInput(BaseModel):

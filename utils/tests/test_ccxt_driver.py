@@ -17,6 +17,14 @@ class TestToNativeSymbol:
         assert CcxtDriver.to_native_symbol("LTCEUR") == "LTC/EUR"
         assert CcxtDriver.to_native_symbol("btcusdc") == "BTC/USDC"
 
+    def test_usdt_quote_rejected_mica_compliance(self):
+        # USDT n'a pas d'agrement EMT, non conforme MiCA (UE) -- volontairement absent
+        # de _KNOWN_QUOTES, cf. commit e2455de. Ne pas re-ajouter USDT ici : si un
+        # symbole *USDT apparait a nouveau quelque part (ex. templates de bots), c'est
+        # ce symbole qu'il faut corriger vers *USDC, pas cette liste.
+        with pytest.raises(ValueError):
+            CcxtDriver.to_native_symbol("BTCUSDT")
+
     def test_unknown_quote_raises(self):
         with pytest.raises(ValueError):
             CcxtDriver.to_native_symbol("ABCXYZ")

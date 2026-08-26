@@ -27,7 +27,7 @@ help: ## Afficher cette aide
 	@echo ""
 
 generate-requirements: ## Generer les fichiers requirements.txt a partir de versions.env et des templates
-	python3 scripts/generate-requirements.py
+	python scripts/generate-requirements.py
 
 # ===========================================================================
 # Dev
@@ -43,13 +43,19 @@ prepare-dirs: ## Corriger les permissions des dossiers bind-montes ecrits par de
 dev-up: generate-requirements prepare-dirs ## Demarrer l'environnement dev (retry auto + backoff si le pull echoue)
 	@n=5; d=5; for i in $$(seq 1 $$n); do \
 		echo ">>> dev-up : tentative $$i/$$n" ; \
-		docker compose up -d && exit 0 ; \
+		if docker compose up -d ; then \
+			echo ">>> Pour creer un compte admin : make dev-admin" ; \
+			exit 0 ; \
+		fi ; \
 		if [ $$i -lt $$n ]; then \
 			echo ">>> echec (credsStore / Docker Desktop ?), nouvel essai dans $${d}s..." ; \
 			sleep $$d ; d=$$((d + 5)) ; \
 		fi ; \
 	done ; \
 	echo ">>> dev-up : echec apres $$n tentatives. Voir docs/04-troubleshooting.md (Probleme 6)." ; exit 1
+
+dev-admin: ## Creer ou reinitialiser le compte admin de demonstration (CLI interactive, saisie email/mot de passe)
+	docker compose exec crypto-bot-backend python /app/scripts/create_admin.py
 
 dev-down: ## Arreter l'environnement dev
 	docker compose down
@@ -69,6 +75,12 @@ dev-build: generate-requirements ## (Re)build les images dev (cache activé = ra
 dev-rebuild: generate-requirements ## Rebuild COMPLET sans cache (lent, en cas de pépin)
 	docker compose build --no-cache
 
+bot-sync-templates: ## Reseed les bot_templates integres sans toucher aux bots utilisateur
+	docker compose exec crypto-bot-backend python /app/scripts/sync_bot_templates.py --show-active
+
+bot-migrate-templates: ## Reseed les bot_templates et migre les snapshots des bots utilisateur integres
+	docker compose exec crypto-bot-backend python /app/scripts/sync_bot_templates.py --migrate-instances --show-active
+
 # ===========================================================================
 # ML / MLOps
 # ===========================================================================
@@ -84,6 +96,9 @@ ml-logs: ## Suivre les logs de la couche ML
 
 ml-train-rf: ## Lancer un entrainement Random Forest
 	docker compose exec crypto-bot-ml-api python -m src.main train-rf
+
+ml-train-bot-rsi: ## Entrainer et versionner le modele MLflow du bot RSI BTCUSDT 1h
+	docker compose exec crypto-bot-ml-api python -m src.main train-bot-rsi
 
 # ===========================================================================
 # Staging (usage local ou VM)
@@ -130,7 +145,7 @@ test-backend: ## Lancer les tests unitaires backend
 	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest backend/tests -v
 
 test-frontend: ## Lancer les tests frontend mock-first
-	cd frontend && ../$(VENV_PYTHON) -m pytest tests -q
+	cd frontend && ../$(VENV_PYTHON) -m pytest tests -q -o cache_dir=/tmp/frontend-pytest-cache
 
 test-utils: ## Lancer les tests de la couche connecteurs partagee (utils/)
 	PYTHONPATH=. $(VENV_PYTHON) -m pytest utils/tests -q -o cache_dir=/tmp/utils-pytest-cache

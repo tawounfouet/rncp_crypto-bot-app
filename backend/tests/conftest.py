@@ -76,6 +76,7 @@ def db_engine():
 
     # Importer tous les models pour les enregistrer dans Base.metadata
     import auth.models  # noqa: F401
+    import bots.models  # noqa: F401
     import market.models  # noqa: F401
     import strategy.models  # noqa: F401
     import trading.models  # noqa: F401
@@ -130,7 +131,9 @@ def patch_db_session(db_session):
     with patch("auth.user_service.get_db_session", _get_test_session):
         with patch("auth.service.get_db_session", _get_test_session):
             with patch("strategy.service.get_db_session", _get_test_session):
-                yield db_session
+                with patch("bots.service.get_db_session", _get_test_session):
+                    with patch("bots.execution.get_db_session", _get_test_session):
+                        yield db_session
 
 @pytest.fixture
 def make_user():

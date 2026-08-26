@@ -53,12 +53,14 @@ CREATE TABLE users (
     hashed_password VARCHAR(255) NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     is_admin BOOLEAN DEFAULT FALSE,
+    last_active_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_users_email (email),
     INDEX idx_users_username (username),
     INDEX idx_users_active (is_active),
+    INDEX idx_users_last_active (last_active_at),
     INDEX idx_users_created (created_at)
 );
 
@@ -66,7 +68,7 @@ CREATE TABLE users (
 CREATE TABLE user_sessions (
     id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
     user_id VARCHAR(36) NOT NULL,
-    token VARCHAR(255) UNIQUE NOT NULL,
+    token VARCHAR(1024) UNIQUE NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     ip_address VARCHAR(45),
     user_agent TEXT,
