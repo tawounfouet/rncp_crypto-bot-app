@@ -620,6 +620,8 @@ update:manifests:
         sed -i "s|crypto-bot-app/backend:[a-zA-Z0-9._-]*|crypto-bot-app/backend:${VERSION}|g" "${OVERLAY}"
         sed -i "s|crypto-bot-app/frontend:[a-zA-Z0-9._-]*|crypto-bot-app/frontend:${VERSION}|g" "${OVERLAY}"
         sed -i 's/deployed-commit: ".*"/deployed-commit: "'"${SHA}"'"/' "${OVERLAY}"
+        # APP_VERSION (affiche dans le footer frontend) suit le meme tag versionne
+        sed -i '/name: APP_VERSION/{n;s/value: .*/value: '"${VERSION}"'/}' "${OVERLAY}"
 
         COMMIT_MSG="ci(gitops): production ${VERSION} (${SHA})"
 
@@ -628,6 +630,8 @@ update:manifests:
         OVERLAY="overlays/staging/kustomization.yaml"
 
         sed -i 's/deployed-commit: ".*"/deployed-commit: "'"${SHA}"'"/' "${OVERLAY}"
+        # APP_VERSION (affiche dans le footer frontend) suit le sha du commit
+        sed -i '/name: APP_VERSION/{n;s/value: .*/value: '"${SHA}"'/}' "${OVERLAY}"
 
         COMMIT_MSG="ci(gitops): staging rollout ${SHA}"
       fi
