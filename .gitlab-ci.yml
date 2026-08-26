@@ -619,7 +619,9 @@ update:manifests:
 
         sed -i "s|crypto-bot-app/backend:[a-zA-Z0-9._-]*|crypto-bot-app/backend:${VERSION}|g" "${OVERLAY}"
         sed -i "s|crypto-bot-app/frontend:[a-zA-Z0-9._-]*|crypto-bot-app/frontend:${VERSION}|g" "${OVERLAY}"
-        sed -i 's/deployed-commit: ".*"/deployed-commit: "'"${SHA}"'"/' "${OVERLAY}"
+        # deployed-commit (panel "Version deployee" K8s) suit le tag versionne en prod,
+        # plus lisible que le SHA -- la staging garde le SHA (pas de tag).
+        sed -i 's/deployed-commit: ".*"/deployed-commit: "'"${VERSION}"'"/' "${OVERLAY}"
         # APP_VERSION (affiche dans le footer frontend) suit le meme tag versionne
         sed -i '/name: APP_VERSION/{n;s/value: .*/value: '"${VERSION}"'/}' "${OVERLAY}"
 
