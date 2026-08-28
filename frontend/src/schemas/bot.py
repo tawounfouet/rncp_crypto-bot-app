@@ -12,6 +12,7 @@ class BotInfo(BaseModel):
     id: str
     name: str
     strategy: str
+    exchange: str = "-"
     mode_live: bool
     mode_label: str = "PAPER"
     status: BotRuntimeStatus
@@ -63,6 +64,7 @@ class BotTemplate(BaseModel):
     description: str
     model_type: str
     strategy_type: str
+    exchange: str = "-"
     symbol: str
     timeframe: str
     signal_source: str

@@ -362,6 +362,7 @@ class BotControlService:
             strategy=str(
                 snapshot.get("strategy_type") or template.get("strategy_type") or "preconfigure"
             ),
+            exchange=str(snapshot.get("exchange") or template.get("exchange") or "-"),
             mode_live=mode_label == "LIVE",
             mode_label=mode_label,
             status=status,

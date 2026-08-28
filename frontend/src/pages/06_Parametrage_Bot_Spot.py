@@ -27,14 +27,16 @@ def _render_template_details(template: BotTemplate, already_selected: bool) -> N
     st.markdown(f"### {template.name}")
     st.caption(template.description)
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("Paire", template.symbol)
+        st.metric("Plateforme", template.exchange.capitalize())
     with col2:
-        st.metric("Timeframe", template.timeframe)
+        st.metric("Paire", template.symbol)
     with col3:
-        st.metric("Version", template.version)
+        st.metric("Timeframe", template.timeframe)
     with col4:
+        st.metric("Version", template.version)
+    with col5:
         render_status_badge("Statut", "DEJA CHOISI" if already_selected else "DISPONIBLE")
 
     st.markdown("---")
@@ -117,8 +119,9 @@ def main() -> None:
         )
         for selection in selections:
             snapshot = selection.config_snapshot
+            exchange = str(snapshot.get("exchange") or "-").capitalize()
             st.markdown(
-                f"- **{snapshot.get('name')}** - `{snapshot.get('symbol')}` - "
+                f"- **{snapshot.get('name')}** - `{exchange}` - `{snapshot.get('symbol')}` - "
                 f"`{snapshot.get('timeframe')}` - {selection.status.value}"
             )
 

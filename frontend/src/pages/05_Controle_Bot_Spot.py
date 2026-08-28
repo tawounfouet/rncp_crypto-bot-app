@@ -332,6 +332,7 @@ def main() -> None:
         with head_col:
             st.markdown(f"#### {bot.name}")
             render_status_badge("Statut", bot.status.value)
+            render_status_badge("Plateforme", bot.exchange.capitalize())
             render_status_badge("Mode", bot.mode_label)
             _render_ai_badge(bot, badge_trace)
             st.caption(
