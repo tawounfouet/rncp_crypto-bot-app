@@ -197,6 +197,11 @@ services:
     mem_limit: 1g
     environment:
       MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+      # CORS (protection distincte de --allowed-hosts ci-dessous, cf. commentaire) --
+      # lu directement dans l'environnement du process mlflow, pas via un flag CLI :
+      # doit donc etre declare ici pour etre transmis au conteneur, sinon .env.staging
+      # a beau avoir la bonne valeur, le process mlflow ne la voit jamais.
+      MLFLOW_SERVER_CORS_ALLOWED_ORIGINS: "${MLFLOW_SERVER_CORS_ALLOWED_ORIGINS:-}"
     ports:
       - "5001:5001"
     volumes:
@@ -209,6 +214,13 @@ services:
     # inclure l'IP publique de la VM (SANS oublier ":*" pour le port, sinon comparaison
     # exacte qui echoue -- cf. is_allowed_host_header dans mlflow/server/security_utils.py),
     # ex. MLFLOW_SERVER_ALLOWED_HOSTS=localhost:*,127.0.0.1:*,<IP_PUBLIQUE_VM>:*
+    #
+    # MLFLOW_SERVER_CORS_ALLOWED_ORIGINS : protection SEPAREE, bloque les requetes POST/PUT/
+    # DELETE/PATCH cross-origin (ex. runs/search, logged-models/search -- la plupart des
+    # appels de l'UI) sur la base de l'en-tete Origin, pas Host. Vide par defaut = tout
+    # bloque sauf localhost. Format origine complete avec schema, wildcard sur le port
+    # via fnmatch (cf. should_block_cors_request dans mlflow/server/security_utils.py),
+    # ex. MLFLOW_SERVER_CORS_ALLOWED_ORIGINS=http://<IP_PUBLIQUE_VM>:*
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
       interval: 30s
