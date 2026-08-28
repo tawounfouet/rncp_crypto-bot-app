@@ -198,7 +198,10 @@ local uniquement, comportement historique non retouché).
 `POST /internal/pipeline/train-xgboost`) plutôt que d'exécuter `python -m src.main` dans le
 conteneur Airflow — cf. `04-troubleshooting.md`, Problème 8. `deploy_model_*` copie le
 meilleur modèle vers MinIO (registre local, indépendant de la paire), `verify_inference`
-appelle l'endpoint d'inférence du backend.
+appelle `GET /signals/latest` sur `crypto-bot-ml-api` (features + prédiction calculées
+côté serveur à partir de MinIO, pas de dépendance au filesystem local d'Airflow —
+l'ancienne version lisait un parquet local, chemin inexistant en staging/production où
+`ml-api` tourne dans un conteneur séparé).
 
 ### `purge_inactive_users.py` — purge RGPD des comptes inactifs
 
