@@ -1,6 +1,6 @@
 # Rapport de couverture de test
 
-Snapshot du 2026-08-26 -- regenere a chaque `python3 scripts/track_coverage.py`
+Snapshot du 2026-08-28 -- regenere a chaque `python3 scripts/track_coverage.py`
 (ecrase le precedent, pas un historique -- voir `coverage_history.csv` pour l'evolution du %).
 
 ## Backend + utils (60.5%)
@@ -13,6 +13,7 @@ Snapshot du 2026-08-26 -- regenere a chaque `python3 scripts/track_coverage.py`
 | backend/src/market/binance_testnet_service.py | 160 | 160 | 0% | 8, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 22, 24, 25, 26, ... |
 | backend/src/shared/config/asgi.py | 33 | 33 | 0% | 16, 17, 20, 22, 25, 28, 31, 32, 35, 36, 37, 39, 42, 46, 47, ... |
 | backend/src/shared/config/wsgi.py | 22 | 22 | 0% | 17, 19, 22, 30, 32, 33, 35, 37, 43, 47, 54, 55, 56, 58, 59, ... |
+| utils/ml/registry.py | 4 | 4 | 0% | 1, 12, 15, 17 |
 | backend/src/strategy/engine/implementations/multi_indicator.py | 115 | 97 | 16% | 60, 63, 64, 65, 67, 68, 69, 71, 72, 74, 75, 77, 78, 90, 91, ... |
 | backend/src/market/clients/minio.py | 123 | 102 | 17% | 12, 13, 14, 27, 30, 31, 33, 38, 40, 50, 51, 52, 53, 54, 60, ... |
 | utils/connectors/minio.py | 107 | 88 | 18% | 31, 32, 35, 38, 39, 41, 42, 43, 47, 48, 54, 55, 56, 59, 60, ... |
@@ -40,7 +41,7 @@ Snapshot du 2026-08-26 -- regenere a chaque `python3 scripts/track_coverage.py`
 | backend/src/shared/models/base.py | 94 | 37 | 61% | 48, 52, 56, 57, 61, 62, 70, 74, 92, 101, 102, 103, 107, 151, 152, ... |
 | backend/src/strategy/engine/implementations/moving_average_crossover.py | 54 | 20 | 63% | 56, 69, 112, 116, 117, 118, 120, 121, 123, 124, 126, 127, 129, 130, 132, ... |
 | backend/src/strategy/engine/implementations/rsi_reversal.py | 60 | 22 | 63% | 64, 77, 138, 142, 143, 144, 146, 147, 149, 150, 152, 153, 158, 159, 161, ... |
-| backend/src/auth/user_service.py | 247 | 90 | 64% | 42, 43, 44, 45, 46, 146, 147, 148, 149, 152, 155, 156, 159, 160, 165, ... |
+| backend/src/auth/user_service.py | 248 | 90 | 64% | 43, 44, 45, 46, 47, 147, 148, 149, 150, 153, 156, 157, 160, 161, 166, ... |
 | backend/src/strategy/models.py | 224 | 77 | 66% | 59, 63, 64, 65, 70, 75, 80, 83, 128, 133, 134, 135, 139, 140, 141, ... |
 | backend/src/market/models.py | 88 | 30 | 66% | 55, 60, 71, 76, 81, 86, 91, 92, 93, 98, 103, 108, 113, 118, 124, ... |
 | backend/src/shared/database/dependencies.py | 6 | 2 | 67% | 26, 27 |
@@ -50,15 +51,15 @@ Snapshot du 2026-08-26 -- regenere a chaque `python3 scripts/track_coverage.py`
 | backend/src/bots/ai.py | 40 | 12 | 70% | 14, 27, 28, 30, 31, 48, 49, 51, 52, 69, 71, 72 |
 | backend/src/bots/router.py | 51 | 14 | 73% | 27, 36, 45, 58, 67, 96, 106, 116, 126, 136, 146, 156, 166, 176 |
 | backend/src/market/clients/binance_native.py | 42 | 11 | 74% | 53, 54, 55, 56, 57, 64, 67, 68, 71, 72, 75 |
-| backend/src/bots/service.py | 784 | 204 | 74% | 177, 179, 199, 200, 201, 202, 203, 204, 218, 229, 249, 250, 251, 257, 260, ... |
-| utils/tests/test_ccxt_driver.py | 62 | 16 | 74% | 65, 67, 68, 69, 70, 71, 72, 73, 75, 77, 78, 79, 80, 81, 82, ... |
+| backend/src/bots/service.py | 789 | 204 | 74% | 195, 197, 217, 218, 219, 220, 221, 222, 236, 247, 267, 268, 269, 275, 278, ... |
+| utils/tests/test_ccxt_driver.py | 62 | 16 | 74% | 66, 68, 69, 70, 71, 72, 73, 74, 76, 78, 79, 80, 81, 82, 83, ... |
 | backend/src/shared/config/settings.py | 199 | 46 | 77% | 135, 145, 150, 151, 156, 157, 158, 160, 161, 163, 164, 167, 168, 187, 194, ... |
 | backend/src/shared/core/exceptions.py | 34 | 7 | 79% | 43, 45, 70, 71, 72, 73, 74 |
 | utils/logging/logger.py | 49 | 9 | 82% | 46, 47, 48, 49, 50, 64, 89, 113, 127 |
 | backend/src/market/clients/ccxt_client.py | 75 | 13 | 83% | 78, 95, 96, 97, 98, 102, 103, 106, 123, 124, 125, 129, 130 |
+| utils/connectors/exchanges/registry.py | 23 | 2 | 91% | 42, 56 |
 | backend/src/market/insert_service.py | 125 | 9 | 93% | 208, 293, 372, 374, 375, 387, 397, 398, 399 |
 | utils/connectors/exchanges/binance_native.py | 31 | 2 | 94% | 65, 67 |
-| utils/connectors/exchanges/registry.py | 20 | 1 | 95% | 45 |
 | backend/src/market/clients/base.py | 37 | 1 | 97% | 24 |
 | backend/src/bots/models.py | 124 | 1 | 99% | 36 |
 | backend/src/auth/schemas.py | 128 | 1 | 99% | 16 |
@@ -109,8 +110,8 @@ Snapshot du 2026-08-26 -- regenere a chaque `python3 scripts/track_coverage.py`
 | src/pages/05_Controle_Bot_Spot.py | 227 | 118 | 48% | 30, 34, 36, 41, 42, 43, 44, 45, 46, 47, 49, 50, 51, 52, 56, ... |
 | src/services/bot_config_service.py | 150 | 63 | 58% | 36, 38, 54, 55, 56, 57, 60, 61, 62, 63, 64, 65, 75, 76, 77, ... |
 | src/mocks/factories.py | 83 | 34 | 59% | 19, 33, 37, 44, 48, 53, 54, 55, 66, 70, 77, 78, 79, 91, 100, ... |
-| src/services/account_service.py | 172 | 69 | 60% | 40, 51, 52, 68, 79, 102, 109, 110, 111, 112, 113, 138, 139, 143, 155, ... |
-| src/services/auth_api_client.py | 160 | 56 | 65% | 45, 50, 51, 52, 53, 54, 57, 64, 71, 78, 92, 106, 118, 130, 137, ... |
+| src/services/account_service.py | 172 | 68 | 60% | 40, 51, 52, 68, 102, 109, 110, 111, 112, 113, 138, 139, 143, 155, 156, ... |
+| src/services/auth_api_client.py | 160 | 59 | 63% | 45, 50, 51, 52, 53, 54, 57, 64, 71, 78, 92, 106, 118, 130, 137, ... |
 | src/app.py | 68 | 23 | 66% | 22, 27, 28, 32, 33, 37, 38, 49, 50, 55, 56, 57, 58, 59, 60, ... |
 | src/services/admin_service.py | 168 | 52 | 69% | 26, 29, 38, 70, 71, 72, 73, 76, 77, 78, 79, 80, 81, 103, 105, ... |
 | src/services/bot_control_service.py | 274 | 83 | 70% | 39, 61, 62, 65, 71, 141, 185, 193, 194, 196, 197, 198, 199, 205, 208, ... |
