@@ -13,7 +13,7 @@ Snapshot du 2026-08-28 -- regenere a chaque `python3 scripts/track_coverage.py`
 | backend/src/market/binance_testnet_service.py | 160 | 160 | 0% | 8, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 22, 24, 25, 26, ... |
 | backend/src/shared/config/asgi.py | 33 | 33 | 0% | 16, 17, 20, 22, 25, 28, 31, 32, 35, 36, 37, 39, 42, 46, 47, ... |
 | backend/src/shared/config/wsgi.py | 22 | 22 | 0% | 17, 19, 22, 30, 32, 33, 35, 37, 43, 47, 54, 55, 56, 58, 59, ... |
-| utils/ml/registry.py | 4 | 4 | 0% | 1, 12, 15, 17 |
+| utils/ml/registry.py | 7 | 7 | 0% | 1, 12, 19, 22, 24, 27, 29 |
 | backend/src/strategy/engine/implementations/multi_indicator.py | 115 | 97 | 16% | 60, 63, 64, 65, 67, 68, 69, 71, 72, 74, 75, 77, 78, 90, 91, ... |
 | backend/src/market/clients/minio.py | 123 | 102 | 17% | 12, 13, 14, 27, 30, 31, 33, 38, 40, 50, 51, 52, 53, 54, 60, ... |
 | utils/connectors/minio.py | 107 | 88 | 18% | 31, 32, 35, 38, 39, 41, 42, 43, 47, 48, 54, 55, 56, 59, 60, ... |
@@ -29,13 +29,13 @@ Snapshot du 2026-08-28 -- regenere a chaque `python3 scripts/track_coverage.py`
 | backend/src/shared/models/__init__.py | 46 | 30 | 35% | 52, 53, 54, 61, 63, 94, 105, 106, 107, 110, 111, 112, 115, 116, 117, ... |
 | backend/src/auth/dependencies.py | 37 | 24 | 35% | 28, 30, 33, 35, 37, 38, 39, 40, 56, 57, 59, 71, 72, 77, 90, ... |
 | backend/src/market/clients/binance.py | 162 | 102 | 37% | 47, 48, 49, 50, 51, 52, 97, 100, 101, 102, 125, 132, 133, 134, 135, ... |
-| backend/src/bots/ml_client.py | 32 | 20 | 38% | 32, 36, 37, 39, 40, 43, 48, 49, 51, 52, 53, 54, 55, 56, 58, ... |
 | backend/src/trading/service.py | 253 | 156 | 38% | 86, 157, 158, 159, 160, 161, 162, 186, 187, 190, 191, 192, 193, 194, 195, ... |
 | backend/src/inference/service.py | 67 | 41 | 39% | 34, 35, 36, 37, 38, 42, 46, 50, 51, 52, 56, 57, 58, 60, 61, ... |
 | backend/src/strategy/engine/registry.py | 102 | 62 | 39% | 46, 49, 63, 64, 65, 66, 67, 69, 85, 107, 108, 109, 118, 133, 134, ... |
 | backend/src/auth/service.py | 200 | 114 | 43% | 17, 18, 22, 23, 24, 53, 55, 64, 69, 70, 71, 75, 76, 77, 78, ... |
 | backend/src/main.py | 112 | 60 | 46% | 40, 41, 44, 46, 48, 49, 52, 53, 54, 55, 57, 59, 61, 67, 68, ... |
 | backend/src/inference/router.py | 45 | 22 | 51% | 20, 21, 22, 32, 33, 34, 35, 36, 37, 38, 43, 55, 56, 57, 58, ... |
+| backend/src/bots/ml_client.py | 42 | 20 | 52% | 52, 56, 57, 59, 60, 63, 68, 69, 71, 72, 73, 74, 75, 76, 78, ... |
 | utils/logging/formatters.py | 21 | 10 | 52% | 25, 26, 27, 28, 29, 30, 40, 49, 50, 51 |
 | backend/src/strategy/engine/base_strategy.py | 76 | 34 | 55% | 81, 93, 94, 97, 100, 103, 106, 107, 110, 112, 113, 115, 116, 117, 125, ... |
 | backend/src/shared/models/base.py | 94 | 37 | 61% | 48, 52, 56, 57, 61, 62, 70, 74, 92, 101, 102, 103, 107, 151, 152, ... |

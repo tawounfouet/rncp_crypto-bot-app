@@ -52,6 +52,21 @@ def test_bot_model_prediction_endpoint_returns_mlflow_signal(monkeypatch):
     assert payload["model_version"] == "3"
 
 
+def test_trained_combos_endpoint_returns_registry_combos(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from src.api import main as api_main
+
+    fake_combos = [
+        {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+    ]
+    monkeypatch.setattr(api_main, "list_trained_combos", lambda: fake_combos)
+    response = TestClient(api_main.app).get("/bot-models/trained-combos")
+
+    assert response.status_code == 200
+    assert response.json() == {"combos": fake_combos}
+
+
 def test_bot_model_prediction_endpoint_reports_missing_model(monkeypatch):
     from fastapi.testclient import TestClient
 

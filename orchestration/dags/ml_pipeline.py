@@ -57,7 +57,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 
 from utils.connectors.exchanges.registry import list_configured_symbols
-from utils.ml.registry import list_configured_models
+from utils.ml.registry import list_pair_qualified_models
 
 logger = logging.getLogger(__name__)
 
@@ -95,15 +95,15 @@ INTERVAL = "1h"
 # (cf. models/src/api/main.py) -- pas de mapping a maintenir a la main ici, juste le nom
 # du modele.
 #
-# TRAINABLE_MODELS est un SOUS-ENSEMBLE explicite de utils.ml.registry (source unique de
-# verite pour "quels modeles l'app implemente"), pas une liste independante : un modele
-# retire/renomme cote utils disparait automatiquement d'ici. LSTM pas encore automatise
-# dans ce DAG (pas de route HTTP d'entrainement cote ml-api) ; propose en perspective
-# d'amelioration pour la soutenance. MLP reste hors de cette boucle : son comportement
-# pre-existant (un seul symbole, chemin A uniquement, pas de qualification par paire) n'a
-# pas ete retouche, cf. decision produit de se concentrer sur RF et XGBoost.
-_AUTOMATED_MODELS = {"random_forest", "xgboost"}
-TRAINABLE_MODELS = [model for model in list_configured_models() if model in _AUTOMATED_MODELS]
+# TRAINABLE_MODELS reprend utils.ml.registry.list_pair_qualified_models() (source unique
+# de verite pour "quels modeles sont entraines par paire", partagee avec
+# BotMlClient.list_trained_combos() cote backend) : un modele retire/renomme cote utils
+# disparait automatiquement d'ici. LSTM pas encore automatise dans ce DAG (pas de route
+# HTTP d'entrainement cote ml-api) ; propose en perspective d'amelioration pour la
+# soutenance. MLP reste hors de cette boucle : son comportement pre-existant (un seul
+# symbole, chemin A uniquement, pas de qualification par paire) n'a pas ete retouche,
+# cf. decision produit de se concentrer sur RF et XGBoost.
+TRAINABLE_MODELS = list_pair_qualified_models()
 
 # Dataset processed (output de build_features, input de train-rf). Chemin relatif au
 # cwd de crypto-bot-ml-api (/app), PAS a MODELS_DIR (bind-mount cote Airflow) : ml-api

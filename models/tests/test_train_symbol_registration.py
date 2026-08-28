@@ -75,6 +75,32 @@ def test_train_registers_model_qualified_by_symbol(train_module, tmp_path, monke
     assert len(eth_versions) == 1
 
 
+def test_list_trained_combos_reports_only_actually_registered_pairs(tmp_path, monkeypatch):
+    """Regression pour BotMlClient.list_trained_combos() : ne doit remonter que les
+    couples (modele, paire) reellement entraines, pas le produit cartesien complet de
+    utils.ml.registry x utils.connectors.exchanges.registry -- sinon le frontend
+    proposerait de creer un bot sur un modele qui n'existe pas encore."""
+    from src.inference.mlflow_registry import list_trained_combos
+    from src.training import train_random_forest, train_xgboost
+
+    config_path = _isolated_config(tmp_path)
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", _tracking_uri(tmp_path / "mlflow.db"))
+
+    dataset_path = tmp_path / "features.csv"
+    sample_features().to_csv(dataset_path, index=False)
+
+    # Seuls RF/BTCUSDC et XGBoost/ETHUSDC sont entraines -- RF/ETHUSDC et XGBoost/BTCUSDC
+    # ne doivent pas apparaitre dans le resultat.
+    train_random_forest.train_from_processed_dataset(dataset_path, str(config_path), symbol="BTCUSDC")
+    train_xgboost.train_from_processed_dataset(dataset_path, str(config_path), symbol="ETHUSDC")
+
+    combos = list_trained_combos(config_path=str(config_path))
+
+    assert {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"} in combos
+    assert {"symbol": "ETHUSDC", "model_name": "xgboost", "registered_name": "xgboost_ethusdc"} in combos
+    assert len(combos) == 2
+
+
 @pytest.mark.parametrize(
     "train_module",
     ["src.training.train_random_forest", "src.training.train_xgboost"],

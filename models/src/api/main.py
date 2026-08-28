@@ -17,6 +17,7 @@ from src.api.schemas import (
     ModelInfo,
     ModelsResponse,
     SignalResponse,
+    TrainedCombosResponse,
     TrainMLPRequest,
     TrainMLPResponse,
     TrainRandomForestRequest,
@@ -27,7 +28,7 @@ from src.api.schemas import (
 from src.config.config_loader import load_config
 from src.data.storage import read_dataset
 from src.features.build import build_symbol_features
-from src.inference.mlflow_registry import ModelUnavailable, predict_registered_bot_model
+from src.inference.mlflow_registry import ModelUnavailable, list_trained_combos, predict_registered_bot_model
 from src.inference.signal import INFERENCE_MODELS, predict_model_signal
 from src.training.train_mlp import train_from_processed_dataset as train_mlp_from_processed_dataset
 from src.training.train_random_forest import train_from_processed_dataset
@@ -164,6 +165,11 @@ def train_xgboost_endpoint(request: TrainXGBoostRequest) -> TrainXGBoostResponse
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_xgboost failed: {exc}") from exc
     return TrainXGBoostResponse(artifact_dir=str(artifact_dir))
+
+
+@app.get("/bot-models/trained-combos", response_model=TrainedCombosResponse)
+def trained_combos() -> TrainedCombosResponse:
+    return TrainedCombosResponse(combos=list_trained_combos())
 
 
 @app.post("/bot-models/predict", response_model=BotModelPredictionResponse)

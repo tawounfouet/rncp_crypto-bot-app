@@ -15,6 +15,9 @@ from mlflow.tracking import MlflowClient
 
 from src.config.config_loader import load_config
 
+from utils.connectors.exchanges.registry import list_configured_symbols
+from utils.ml.registry import list_pair_qualified_models
+
 
 class ModelUnavailable(RuntimeError):
     """Raised when a registered bot model cannot be loaded or used."""
@@ -66,6 +69,30 @@ def _class_labels(model: Any) -> list[str]:
     if classes is None:
         return []
     return [str(label).upper() for label in classes]
+
+
+def list_trained_combos(config_path: str = "config.yaml") -> list[dict[str, str]]:
+    """Couples (symbol, model_name) reellement entraines et disponibles dans le
+    registre MLflow, parmi les modeles/paires actuellement configures cote app.
+
+    Le nom d'enregistrement suit la convention "<model_name>_<symbol_lower>" (cf.
+    models/src/training/train_random_forest.py et train_xgboost.py) : un modele entraine
+    sous une ancienne configuration (paire ou modele retire depuis) est ignore ici,
+    seuls les combos correspondant a l'etat actuel de utils/ (source unique de verite)
+    sont retournes. C'est ce que BotMlClient.list_trained_combos() (backend/src/bots/
+    ml_client.py) interroge pour savoir quels bots peuvent etre proposes/crees.
+    """
+    configure_mlflow(config_path)
+    client = MlflowClient()
+    registered_names = {model.name for model in client.search_registered_models()}
+
+    combos = []
+    for model_name in list_pair_qualified_models():
+        for symbol in list_configured_symbols():
+            registered_name = f"{model_name}_{symbol.lower()}"
+            if registered_name in registered_names:
+                combos.append({"symbol": symbol, "model_name": model_name, "registered_name": registered_name})
+    return combos
 
 
 def predict_registered_bot_model(
