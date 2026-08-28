@@ -26,6 +26,7 @@ def _overview_to_dataframe(overview: DashboardOverview) -> pd.DataFrame:
             {
                 "Bot": row.name,
                 "Strategie": row.strategy,
+                "Plateforme": row.exchange.capitalize(),
                 "Statut": row.status,
                 "Mode": mode,
                 "PnL": format_currency(row.pnl_usdc),
