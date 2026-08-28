@@ -811,6 +811,9 @@ class TestBotService:
         assert decision.final_action == "BUY"
         assert decision.model_output["model_source"] == "ml_api"
         assert decision.model_output["model_version"] == "2"
+        # Regression : sans cette cle, le frontend (04_Performances_Spot.py, colonne
+        # "Signal IA") affiche "Donnee indisponible" meme quand le modele a repondu.
+        assert decision.model_output["raw_ai_signal"] == "BUY"
         # Regression : open_time est un pandas.Timestamp cote build_live_feature_frame(),
         # pas serialisable en JSON tel quel -- decision.market_snapshot est une colonne
         # JSON (bots/models.py), donc un int confirme que _clean_value() l'a bien converti

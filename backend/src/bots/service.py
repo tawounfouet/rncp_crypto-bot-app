@@ -1068,6 +1068,11 @@ class BotService:
                 "probabilities": prediction.get("probabilities") or {},
                 "features": features,
                 "action": ai_signal,
+                # raw_ai_signal : meme cle que le chemin RSI legacy (_compute_mlflow_rsi_
+                # signal), lue par le frontend (04_Performances_Spot.py, colonne "Signal
+                # IA") -- sans elle la colonne affiche "Donnee indisponible" pour tout bot
+                # de ce chemin, meme quand le modele a bien repondu.
+                "raw_ai_signal": ai_signal,
                 "indicators": {},
             }
             return market_snapshot, model_output, ai_signal, ai_signal
