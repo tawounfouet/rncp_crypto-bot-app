@@ -153,7 +153,6 @@ orchestration/dags/
 ├── example_cryptobot.py   Healthcheck (backend + DB), horaire
 ├── ingest_ohlcv.py        Un DAG généré par exchange (ingest_ohlcv_<exchange>_to_minio)
 ├── ml_pipeline.py         Features → training → déploiement → vérification
-├── bot_execution.py       Exécution des deployments actifs (signal ML + ordre), horaire
 └── purge_inactive_users.py Purge RGPD des comptes inactifs, hebdomadaire
 ```
 
@@ -206,7 +205,8 @@ appelle l'endpoint d'inférence du backend.
 Schedule : chaque dimanche à 03:00 UTC.
 
 Appelle `POST /api/v1/users/purge-inactive` sur `crypto-bot-backend` (même principe
-que `bot_execution.py` : Airflow orchestre un appel HTTP). Le backend supprime les
+que `ml_pipeline.py` : Airflow orchestre un appel HTTP, il n'exécute pas la logique
+métier lui-même). Le backend supprime les
 comptes dont `last_active_at` est plus ancien que 730 jours (réglo `PURGE_INACTIVE_DAYS`,
 configurable via variable d'environnement du DAG) — cf.
 `UserService.delete_inactive_users_older_than`, script manuel `backend/src/auth/purge_inactive_users.py`.

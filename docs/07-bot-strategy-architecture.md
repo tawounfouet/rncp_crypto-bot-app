@@ -307,23 +307,29 @@ distincte de `dev_ben`, indépendante du catalogue de bots, jamais activée.
 Ce document (§4.2 à §4.6) décrit un premier système, basé sur `StrategyDeployment` /
 `StrategyService.execute_active_deployments()`, déclenché par le DAG Airflow
 `orchestration/dags/bot_execution.py` (horaire). Il n'a **pas été supprimé** par ce merge
-et reste fonctionnel tel quel côté backend (`strategy/`), mais n'est plus atteignable
+et est resté fonctionnel tel quel côté backend (`strategy/`), mais n'était plus atteignable
 depuis le frontend : `06_Parametrage_Bot_Spot.py`/`05_Controle_Bot_Spot.py` et les
 services associés (`bot_config_service.py`, `bot_control_service.py`) ont été
 **entièrement remplacés** par le nouveau flux `bots/` (catalogue verrouillé, plus de
 formulaire de paramétrage libre — cf. §2, la décision "l'utilisateur ne paramètre pas le
 bot après sélection" est donc désormais appliquée strictement).
 
+**Mise à jour 2026-08-28** : le point ouvert ci-dessous est tranché. `orchestration/dags/
+bot_execution.py` est supprimé (plus aucune page ne crée de `StrategyDeployment` depuis le
+26/08, ce DAG tournait dans le vide) — décommissionné à l'occasion d'un bug qui lui était
+initialement attribué à tort (un 500 sur `POST /strategies/deployments/execute-active`,
+en réalité sans rapport avec le module `bots/` alors en cours de travail). Le module backend
+`strategy/` lui-même (`StrategyDeployment`, `execute_active_deployments`, l'endpoint) n'est
+**pas supprimé** — même logique que l'archivage de `strategy/engine/` (§4.5) : gelé, pas
+détruit, au cas où il servirait plus tard.
+
 Le second système (`bots/worker.py`, tâche asyncio interne démarrée par `main.py` au
 lancement de l'API si `ENABLE_BACKGROUND_TASKS`, toutes les `BOT_WORKER_INTERVAL_SECONDS`
 = 60s par défaut) exécute les `UserBotInstance` actifs — mécanisme séparé, pas orchestré
 par Airflow.
 
-**Point ouvert, pas tranché ici** : les deux boucles d'exécution tournent en parallèle
-sans lien entre elles. `strategy/` (backend) et son DAG Airflow sont-ils à décommissionner
-maintenant que plus aucune page ne crée de `StrategyDeployment`, ou gardés en dormant pour
-un usage futur (même logique que l'archivage de `strategy/engine/`, §4.5) ? À trancher
-avant la soutenance pour éviter la confusion entre les deux mécanismes.
+**Tranché le 2026-08-28** (cf. mise à jour ci-dessus) : le DAG Airflow est décommissionné
+(fichier supprimé), le module backend `strategy/` reste en dormant.
 
 ### 6. Tests — trous critiques identifiés à cette occasion
 

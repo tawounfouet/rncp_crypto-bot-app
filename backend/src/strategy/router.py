@@ -437,8 +437,12 @@ async def execute_active_deployments(strategy_service: StrategyService = Depends
     """
     Declenche l'execution de tous les deployments actifs (tous utilisateurs).
 
-    Appele par Airflow (bot_execution.py), pas par un utilisateur final -- pas
-    d'authentification, meme principe que POST /inference/predict-live.
+    Plus appele automatiquement depuis le 2026-08-28 : le DAG Airflow qui le declenchait
+    (orchestration/dags/bot_execution.py) a ete supprime, plus rien ne cree de
+    StrategyDeployment depuis le remplacement de ce flux par le module bots/ (cf.
+    docs/07-bot-strategy-architecture.md §4.7). Endpoint garde tel quel (module strategy/
+    gele, pas supprime) -- pas d'authentification si jamais rappele manuellement, meme
+    principe que POST /inference/predict-live.
     """
     try:
         results = await strategy_service.execute_active_deployments()
