@@ -1,7 +1,7 @@
 # 04 — Troubleshooting : Difficultés rencontrées
 
 Statut: référence
-Derniere revision: 2026-07-28
+Derniere revision: 2026-08-28
 
 Historique des problèmes rencontrés lors de l'intégration d'Airflow dans le projet
 `_dst-crypto-bot_v2`, avec causes racines et solutions appliquées.
@@ -313,6 +313,98 @@ Airflow orchestre, il n'héberge plus la stack ML.
 
 Le DAG `ingest_ohlcv` n'est pas concerné (dépendances légères, déjà dans
 `jobs/requirements.txt`) et fonctionne normalement.
+
+---
+
+## Problème 9 — Staging : `InvalidAccessKeyId` sur l'upload MinIO (ingestion)
+
+### Statut : résolu
+
+### Symptôme
+
+`ingest_ohlcv_binance_to_minio` / `ingest_ohlcv_kraken_to_minio` échouent sur la tâche
+`collect_<exchange>_<symbol>_<interval>` avec un `RuntimeError: Échec de l'upload MinIO
+pour raw/ohlcv/...` peu explicite dans le log de tâche Airflow (UI). La vraie erreur
+n'apparaît **pas** dans ce log : `utils/connectors/minio.py` utilise le logger maison
+`utils.logging.get_logger()` (`propagate = False`, handlers console + fichier propres),
+contrairement au reste du pipeline d'ingestion (`logging.getLogger(__name__)` standard,
+capté par Airflow). Sa ligne `logger.error("DataFrame upload failed ...")` part donc
+ailleurs — dans les logs bruts du conteneur (`docker logs <airflow-scheduler>`) ou dans
+`logs/cryptobot.log` à l'intérieur du conteneur, jamais dans le fichier que l'UI Airflow
+affiche.
+
+Une fois cette ligne retrouvée : `S3 operation failed; code: InvalidAccessKeyId, message:
+The Access Key Id you provided does not exist in our records.`
+
+### Cause
+
+`docker-compose.staging.yml` initialise l'identité réelle de MinIO depuis
+`MINIO_USER_ADMIN`/`MINIO_PWD_ADMIN`, alors que tous les services consommateurs
+(Airflow, `ml-api`, backend) s'authentifient avec `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`
+— deux paires de variables distinctes censées porter le même secret (même convention
+sur `docker-compose.yml` et `docker-compose.prod.yml`). Le `.env` de la VM staging avait
+les 4 variables présentes mais avec des valeurs différentes entre les deux paires : MinIO
+avait donc une identité réelle différente de celle utilisée pour s'y connecter.
+
+### Résolution retenue
+
+Alignement de `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` sur les valeurs de
+`MINIO_USER_ADMIN`/`MINIO_PWD_ADMIN` dans le `.env` de la VM (c'est cette 2e paire qui a
+servi à initialiser le vrai compte root MinIO au moment de la création du volume — l'aligner
+dans l'autre sens aurait nécessité de recréer le volume MinIO, donc de perdre les données
+déjà stockées). Puis redémarrage des seuls services consommateurs (pas `minio`, pour ne
+pas toucher son volume).
+
+**Point de vigilance pour la suite** : rien ne garantit aujourd'hui que ces deux paires
+restent synchronisées après un futur changement de l'une sans l'autre — à surveiller si
+l'erreur revient après une rotation de secrets.
+
+---
+
+## Problème 10 — Staging : `ml-api` reste sur une image d'il y a 3 semaines malgré un déploiement CI "réussi"
+
+### Statut : cause racine identifiée, pas corrigé (report décidé le 2026-08-28)
+
+### Symptôme
+
+Après le merge d'une MR sur `staging` et un pipeline CI vert (`build:docker` +
+`deploy:staging` tous deux en succès, nouvelle image `ml-api` bien poussée sur le
+registre avec un digest récent), le DAG `cryptobot_ml_pipeline` échoue sur les tâches
+`train_random_forest_*`/`train_xgboost_*` avec `RuntimeError: Route d'entrainement
+introuvable: .../internal/pipeline/train-xgboost` — une route pourtant bien présente
+dans le code déployé. `docker inspect staging-ml-api --format '{{.Image}}'` puis
+`docker image inspect ... --format '{{.Created}}'` confirment que le conteneur tourne
+sur une image construite le **2026-08-02**, sans rapport avec le commit réellement
+déployé.
+
+### Cause
+
+Le disque de la VM staging est plein. `docker pull` pour `ml-api` (une image ~980 Mo)
+échoue en cours de téléchargement (`write ... no space left on device`) avant de pouvoir
+remplacer l'image locale. Le job `deploy:staging` (`.gitlab-ci.yml`) fait ce pull avec
+`docker compose ... pull --ignore-pull-failures` : ce flag masque silencieusement l'échec,
+la suite du déploiement (`down` + `up -d`) continue et redémarre donc l'ancienne image déjà
+en cache local, sans qu'aucune erreur ne remonte dans les logs du pipeline CI (qui affiche
+"success"). Un `docker compose pull` lancé manuellement sans ce flag confirme l'erreur
+disque explicitement.
+
+Point annexe rencontré en diagnostiquant : un `docker compose` lancé à la main sur la VM
+(hors `make`/script CI) échoue avec `service "postgres" has neither an image nor a build
+context specified` si `versions.env` n'est pas d'abord chargé dans le shell — le Makefile
+le fait via `include versions.env`, le script CI via `export $(grep ... versions.env)`,
+mais rien ne le fait automatiquement pour une commande `docker compose` tapée directement.
+
+### Résolution — reportée
+
+Diagnostic terminé, correctif reporté (décision du 2026-08-28, fin de session). Actions à
+prévoir pour une prochaine session :
+- Libérer de l'espace disque sur la VM staging (`docker system prune`, ou identifier ce qui
+  consomme l'espace avant de purger aveuglément — ne pas le faire sans vérifier d'abord ce
+  qui serait supprimé).
+- Retirer ou remplacer `--ignore-pull-failures` dans `deploy:staging` (`.gitlab-ci.yml`) par
+  quelque chose qui fait échouer le pipeline si le pull échoue vraiment, plutôt que de
+  déployer silencieusement une image obsolète.
+- Envisager une alerte/vérification d'espace disque disponible avant déploiement.
 
 ---
 
