@@ -175,12 +175,6 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
-    # Idempotant : seed les artefacts ML dev (random_forest) et le modele bot RSI
-    # MLflow si absents, puis demarre l'API. Meme comportement que dev (docker-compose.yml).
-    command: >
-      /bin/sh -c "python -m src.mlops.bootstrap_dev_artifacts --config config.yaml &&
-      python -m src.mlops.bootstrap_bot_models --config config.yaml &&
-      python -m src.main --config config.yaml api --host 0.0.0.0 --port 8010"
     depends_on:
       postgres:
         condition: service_healthy
