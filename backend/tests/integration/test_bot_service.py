@@ -125,10 +125,9 @@ class TestBotService:
         assert db_instance.config_snapshot["symbol"] != db_template.symbol
 
     def test_start_user_bot_requires_binance_testnet_credentials(self, patch_db_session):
-        from fastapi import HTTPException
-
         from bots.schemas import UserBotCreate
         from bots.service import BotService
+        from fastapi import HTTPException
 
         user_id = _create_user()
         service = BotService()
@@ -726,7 +725,17 @@ class TestBotService:
                 }
 
         fake_frame = pd.DataFrame(
-            [{"open_time": 1, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 10.0, "rsi_14": 55.0}]
+            [
+                {
+                    "open_time": 1,
+                    "open": 100.0,
+                    "high": 101.0,
+                    "low": 99.0,
+                    "close": 100.5,
+                    "volume": 10.0,
+                    "rsi_14": 55.0,
+                }
+            ]
         )
         monkeypatch.setattr("bots.service.build_live_feature_frame", lambda symbol, timeframe: fake_frame)
 
@@ -748,3 +757,110 @@ class TestBotService:
         assert decision.final_action == "BUY"
         assert decision.model_output["model_source"] == "ml_api"
         assert decision.model_output["model_version"] == "2"
+
+    def test_user_creates_two_bots_with_different_trained_combos_start_stop_and_results(
+        self, patch_db_session, monkeypatch
+    ):
+        """Parcours utilisateur (etape 9 du plan, sans vraie stack Docker/testnet) : cle
+        Binance -> creer un bot (BTCUSDC/RF) -> start -> execution -> stop -> resultats ->
+        creer un 2e bot (ETHUSDC/XGBoost) -> start -> execution -> stop -> resultats
+        consolides sur les deux bots. La verification "en reel" (vraie cle testnet, vraie
+        UI) reste faite par Nathalie -- ce test couvre le meme parcours cote backend avec
+        des fakes, pour qu'une regression soit attrapee sans avoir a relancer la stack."""
+        import pandas as pd
+        from bots.schemas import UserBotCreate
+        from bots.service import BotService
+
+        class FakeExecutionGateway:
+            def __init__(self):
+                self.orders = []
+
+            def open_orders(self, user_id, symbol, *, exchange="binance"):
+                return []
+
+            def balances(self, user_id, *, non_zero=True, exchange="binance"):
+                return [{"asset": "USDC", "free": "1000", "locked": "0"}]
+
+            def place_order(self, user_id, order, *, exchange="binance"):
+                self.orders.append(order)
+                return {
+                    "symbol": order.symbol,
+                    "orderId": 40000 + len(self.orders),
+                    "clientOrderId": order.client_order_id,
+                    "status": "FILLED",
+                    "executedQty": "0.002",
+                    "cummulativeQuoteQty": "100",
+                }
+
+        class FakeMlClient:
+            def __init__(self):
+                self.calls = []
+
+            def list_trained_combos(self):
+                return [
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                    {"symbol": "ETHUSDC", "model_name": "xgboost", "registered_name": "xgboost_ethusdc"},
+                ]
+
+            def predict(self, *, model_name, features, model_version=None):
+                self.calls.append(model_name)
+                return {
+                    "model_source": "mlflow",
+                    "model_name": model_name,
+                    "model_version": "1",
+                    "signal": "BUY",
+                    "confidence": 0.8,
+                    "probabilities": {"BUY": 0.8, "SELL": 0.1, "HOLD": 0.1},
+                    "features": features,
+                    "generated_at": "2026-06-27T00:00:00+00:00",
+                }
+
+        fake_frame = pd.DataFrame(
+            [{"open_time": 1, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 10.0}]
+        )
+        monkeypatch.setattr("bots.service.build_live_feature_frame", lambda symbol, timeframe: fake_frame)
+
+        user_id = _create_user()
+        _grant_binance_credentials(patch_db_session, user_id, monkeypatch)
+        fake_binance = FakeExecutionGateway()
+        fake_ml = FakeMlClient()
+        service = BotService(execution_gateway=fake_binance, ml_client=fake_ml)
+        service.sync_builtin_templates()
+        templates = {item.slug: item for item in service.list_templates()}
+
+        # Bot 1 : BTCUSDC / random_forest
+        bot1 = service.create_user_bot(
+            user_id, UserBotCreate(bot_template_id=templates["ml-random_forest-btcusdc-1h-v1"].id)
+        )
+        service.start_user_bot(user_id, bot1.id)
+        decision1 = service.execute_once(bot1.id, worker_id="test-worker")
+        stop1 = service.stop_user_bot(user_id, bot1.id)
+        performance1 = service.get_performance(user_id, bot1.id)
+
+        assert decision1.final_action == "BUY"
+        assert stop1.bot.status == "STOPPED"
+        assert performance1.total_orders == 1
+
+        # Bot 2 : ETHUSDC / xgboost, cree apres coup, independant du premier
+        bot2 = service.create_user_bot(user_id, UserBotCreate(bot_template_id=templates["ml-xgboost-ethusdc-1h-v1"].id))
+        service.start_user_bot(user_id, bot2.id)
+        decision2 = service.execute_once(bot2.id, worker_id="test-worker")
+        stop2 = service.stop_user_bot(user_id, bot2.id)
+        performance2 = service.get_performance(user_id, bot2.id)
+
+        assert decision2.final_action == "BUY"
+        assert stop2.bot.status == "STOPPED"
+        assert performance2.total_orders == 1
+
+        assert set(fake_ml.calls) == {"random_forest_btcusdc", "xgboost_ethusdc"}
+
+        all_bots = service.list_user_bots(user_id)
+        assert {bot.id for bot in all_bots} == {bot1.id, bot2.id}
+
+        summary = service.get_user_performance_summary(user_id)
+        assert summary.global_performance.total_orders == 2
+        assert summary.global_performance.total_trades == 2
+        assert {row.bot_name for row in summary.bots} == {
+            templates["ml-random_forest-btcusdc-1h-v1"].name,
+            templates["ml-xgboost-ethusdc-1h-v1"].name,
+        }
