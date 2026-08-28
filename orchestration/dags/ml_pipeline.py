@@ -111,9 +111,6 @@ TRAINABLE_MODELS = list_pair_qualified_models()
 # racine du repo (cf. docker-compose.yml), pas vers ./models/data (qui n'existe pas).
 PROCESSED_DIR = os.path.join("data", "processed")
 
-INFERENCE_URL = os.environ.get(
-    "INFERENCE_URL", "http://crypto-bot-backend:8009/api/v1/inference"
-)
 ML_API_URL = os.environ.get("ML_API_URL", "http://crypto-bot-ml-api:8010")
 
 # Le training peut prendre plusieurs minutes sur le jeu de donnees complet.
@@ -178,24 +175,24 @@ def _train_mlp_callable() -> None:
 
 
 def _verify_inference_callable() -> None:
-    """Appelle /inference/predict avec un vrai vecteur de features (derniere ligne du
-    dataset traite), pas un features factice — un vecteur incomplet echoue en 400,
-    jamais en 200 (piege trouve dans la version initiale de ce DAG, jamais verifiee
-    en conditions reelles avant ce diagnostic)."""
-    import pandas as pd
+    """Verifie le pipeline d'inference cote ml-api.
 
-    feature_columns = requests.get(f"{INFERENCE_URL}/model", timeout=30).json()["feature_columns"]
-    dataset_path = os.path.join("/app", _feature_path(SYMBOLS[0]))
-    row = pd.read_parquet(dataset_path).iloc[-1]
-    features = {col: float(row[col]) for col in feature_columns}
-
-    response = requests.post(
-        f"{INFERENCE_URL}/predict",
-        json={"symbol": SYMBOLS[0], "interval": INTERVAL, "features": features},
+    Appelle GET /signals/latest sur crypto-bot-ml-api : cette route construit
+    elle-meme les features depuis MinIO (via build_symbol_features) et sert une
+    prediction avec le modele deployee, le tout cote serveur. C'est un veritable
+    aller-retour data -> features -> modele, sans dependre du filesystem local
+    d'Airflow (l'ancienne version lisait le parquet de features dans le conteneur
+    Airflow, chemin qui n'existe pas en staging/production ou ml-api tourne dans
+    un conteneur separe avec son propre /app/data).
+    """
+    response = requests.get(
+        f"{ML_API_URL}/signals/latest",
+        params={"symbol": SYMBOLS[0], "interval": INTERVAL, "model": "random_forest"},
         timeout=60,
     )
     response.raise_for_status()
-    logger.info("verify_inference: %s", response.json())
+    body = response.json()
+    logger.info("verify_inference signal=%s confidence=%s model=%s", body["signal"], body["confidence"], body["model_name"])
 
 
 def _deploy_callable(model_name: str) -> None:

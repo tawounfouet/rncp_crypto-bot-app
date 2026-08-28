@@ -175,6 +175,12 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
+    # Idempotant : seed les artefacts ML dev (random_forest) et le modele bot RSI
+    # MLflow si absents, puis demarre l'API. Meme comportement que dev (docker-compose.yml).
+    command: >
+      /bin/sh -c "python -m src.mlops.bootstrap_dev_artifacts --config config.yaml &&
+      python -m src.mlops.bootstrap_bot_models --config config.yaml &&
+      python -m src.main --config config.yaml api --host 0.0.0.0 --port 8010"
     depends_on:
       postgres:
         condition: service_healthy
@@ -252,6 +258,14 @@ services:
       - BINANCE_BASE_URL=https://api.binance.com
     volumes:
       - staging_airflow_logs:/opt/airflow/logs
+      # Bind-mounts des sources (meme pattern que dev docker-compose.yml) : Airflow doit
+      # voir le code courant (DAGs USDC) et les artefacts entrenes par ml-api dans
+      # models/artifacts -- sinon l'image autonome est figee (cf. deploy_model dans ml_pipeline).
+      - ./orchestration/dags:/opt/airflow/dags
+      - ./orchestration/plugins:/opt/airflow/plugins
+      - ./jobs:/opt/airflow/jobs
+      - ./models:/opt/airflow/models
+      - ./utils:/opt/airflow/utils
     depends_on:
       postgres:
         condition: service_healthy
@@ -288,6 +302,14 @@ services:
       - BINANCE_BASE_URL=https://api.binance.com
     volumes:
       - staging_airflow_logs:/opt/airflow/logs
+      # Bind-mounts des sources (meme pattern que dev docker-compose.yml) : Airflow doit
+      # voir le code courant (DAGs USDC) et les artefacts entrenes par ml-api dans
+      # models/artifacts -- sinon l'image autonome est figee (cf. deploy_model dans ml_pipeline).
+      - ./orchestration/dags:/opt/airflow/dags
+      - ./orchestration/plugins:/opt/airflow/plugins
+      - ./jobs:/opt/airflow/jobs
+      - ./models:/opt/airflow/models
+      - ./utils:/opt/airflow/utils
     depends_on:
       postgres:
         condition: service_healthy
