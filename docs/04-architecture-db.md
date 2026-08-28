@@ -1,7 +1,12 @@
 # Architecture de la Base de Données - Crypto Trading Bot
 
 Statut: référence
-Derniere revision: 2026-04-03
+Derniere revision: 2026-08-28
+
+> Mise à jour 2026-08-28 : corrections multi-exchange et stratégies (voir
+> `05-multi-exchange-layer.md` et `07-bot-strategy-architecture.md` pour le détail des décisions).
+> Le schéma reste globalement valide, seules les mentions "Binance uniquement" et la liste des
+> types de stratégies étaient obsolètes.
 
 ## 📋 Vue d'Ensemble
 
@@ -11,7 +16,7 @@ Cette documentation présente l'architecture complète de la base de données du
 
 - **Modulaire** : Séparation claire des domaines métier
 - **Scalable** : Optimisée pour la croissance des données
-- **Compatible** : Intégration native avec l'API Binance
+- **Compatible** : format d'échange unifié (CCXT), multi-exchange (Binance, Kraken)
 - **Performante** : Index optimisés pour les requêtes critiques
 - **Sécurisée** : Contraintes et validations appropriées
 
@@ -301,7 +306,11 @@ erDiagram
 #### `strategies` - Définitions des Stratégies
 - **Objectif** : Templates de stratégies de trading
 - **Champs clés** :
-  - `strategy_type` : 'moving_average_crossover', 'rsi_reversal', etc.
+  - `strategy_type` : types ML sélectionnables côté utilisateur (`ml_random_forest`, `ml_lstm`,
+    `ml_mlp`, `ml_xgboost`) ; les types à règles fixes (`moving_average_crossover`,
+    `rsi_reversal`, `bollinger_bands`, `grid_trading`, `mean_reversion`, `momentum`) existent
+    encore dans le code (moteur archivé, non supprimé) mais ne sont plus exposés à la sélection
+    — voir `07-bot-strategy-architecture.md`
   - `parameters` : Configuration JSON flexible
   - `parameter_hash` : Cache et versionning
   - `is_public` : Partage communautaire
@@ -411,10 +420,11 @@ erDiagram
 
 ### 📝 Description des Tables
 
-#### `orders` - Ordres de Trading (Compatible Binance)
-- **Objectif** : Gestion complète des ordres avec compatibilité API Binance
+#### `orders` - Ordres de Trading (multi-exchange, format CCXT unifié)
+- **Objectif** : Gestion complète des ordres, schéma hérité du format Binance mais utilisé pour
+  tous les exchanges supportés via CCXT (Binance, Kraken)
 - **Champs clés** :
-  - `exchange_order_id` / `client_order_id` : IDs Binance
+  - `exchange_order_id` / `client_order_id` : IDs renvoyés par l'exchange
   - `order_type` : 'MARKET', 'LIMIT', 'STOP_LOSS', etc.
   - `side` : 'BUY' / 'SELL'
   - `status` : 'NEW', 'FILLED', 'CANCELED', etc.
@@ -423,7 +433,7 @@ erDiagram
 #### `order_fills` - Exécutions Partielles
 - **Objectif** : Détail des fills pour ordres partiellement exécutés
 - **Champs clés** :
-  - `trade_id` : ID unique du trade Binance
+  - `trade_id` : ID unique du trade côté exchange
   - `commission` / `commission_asset` : Frais détaillés
   - `is_buyer` / `is_maker` : Type d'exécution
 
@@ -469,7 +479,7 @@ erDiagram
 - **Champs clés** :
   - **OHLCV** : `open_price`, `high_price`, `low_price`, `close_price`, `volume`
   - `interval_timeframe` : '1m', '5m', '15m', '1h', '4h', '1d'
-  - **Données Binance** : `quote_asset_volume`, `taker_buy_*`
+  - **Champs hérités du format Binance/CCXT** (présents pour tous les exchanges) : `quote_asset_volume`, `taker_buy_*`
   - **Contrainte unique** : Évite les doublons par (symbol, exchange, timeframe, open_time)
 
 ---
@@ -620,7 +630,7 @@ sequenceDiagram
     U->>S: Crée stratégie
     U->>D: Déploie stratégie
     D->>O: Génère ordre
-    O->>E: Envoie à Binance
+    O->>E: Envoie à l'exchange (Binance/Kraken via CCXT)
     E-->>O: Confirmation + fills
     O->>D: Mise à jour état
     D->>S: Mise à jour métriques
@@ -670,7 +680,7 @@ Cette architecture de base de données offre :
 
 ✅ **Modularité** : Domaines bien séparés  
 ✅ **Performance** : Index optimisés  
-✅ **Compatibilité** : API Binance native  
+✅ **Compatibilité** : multi-exchange via CCXT (Binance, Kraken)  
 ✅ **Analytics** : Vues pré-calculées  
 ✅ **Sécurité** : Contraintes robustes  
 ✅ **Évolutivité** : Prête pour la croissance  

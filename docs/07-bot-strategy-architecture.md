@@ -1,7 +1,7 @@
 # Architecture bot — ce que l'utilisateur configure vs ce qui est fixé par le modèle
 
-Statut: proposition (décision ouverte)
-Derniere revision: 2026-07-27
+Statut: décision actée, en cours d'implémentation
+Derniere revision: 2026-08-28
 
 > Réflexion menée le 2026-07-24, **avant tout codage**. Décide comment un "bot" combine
 > plateforme, mode simulé/réel, modèle ML et paramètres de risque. Complète
