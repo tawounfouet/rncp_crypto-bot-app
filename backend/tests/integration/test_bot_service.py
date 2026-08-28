@@ -41,6 +41,24 @@ def _grant_binance_credentials(session, user_id: str, monkeypatch) -> None:
     session.flush()
 
 
+def _republish_template(monkeypatch, slug: str) -> None:
+    """Republie temporairement un template desactive (ai-rsi-btcusdt-1h-v1, ai-trend-
+    ethusdt-4h-v1 -- masques du catalogue par defaut depuis le 2026-08-28, cf.
+    DEFAULT_BOT_TEMPLATES) pour que create_user_bot() accepte de creer une instance dessus
+    dans les tests qui exercent leur mecanique specifique (RSI/mlflow, trend deterministe),
+    sans changer le comportement produit reel (create_user_bot exige "published").
+
+    Monkeypatch le dict source (DEFAULT_BOT_TEMPLATES), pas la ligne BotTemplate en base :
+    ensure_default_templates() est appele de facon defensive a chaque lecture/ecriture
+    (list_templates, create_user_bot...) et reecrase TOUS les champs -- dont status -- a
+    partir de ce dict a chaque appel, donc modifier seulement la ligne DB serait annule
+    des le prochain appel."""
+    from bots.service import DEFAULT_BOT_TEMPLATES
+
+    template_data = next(item for item in DEFAULT_BOT_TEMPLATES if item["slug"] == slug)
+    monkeypatch.setitem(template_data, "status", "published")
+
+
 def _fake_klines(rows: int = 180, *, base_price: float = 50000.0) -> list[dict]:
     """Klines normalisees (cf. utils.connectors.exchanges.base.normalize_ohlcv), pas le
     format brut Binance (liste de listes) de l'ancien Testnet lab."""
@@ -72,7 +90,7 @@ class TestBotService:
     def test_list_templates_seeds_preconfigured_bots(self, patch_db_session):
         from bots.service import BotService
 
-        templates = BotService().list_templates()
+        templates = BotService().list_templates(include_disabled=True)
 
         assert len(templates) >= 2
         first = templates[0]
@@ -82,11 +100,26 @@ class TestBotService:
         assert first.risk_limits
         assert first.order_policy
 
+    def test_legacy_static_templates_are_disabled_and_hidden_by_default(self, patch_db_session):
+        """Les 2 templates figes (RSI, trend) sont masques du catalogue par defaut depuis le
+        2026-08-28, maintenant que des templates ML reellement entraines existent -- restent
+        crees en base (status="disabled") pour ne pas casser les instances utilisateur deja
+        verrouillees dessus, mais ne doivent plus apparaitre dans un list_templates() normal."""
+        from bots.service import BotService
+
+        service = BotService()
+        published = {item.slug for item in service.list_templates()}
+        all_templates = {item.slug for item in service.list_templates(include_disabled=True)}
+
+        assert "ai-rsi-btcusdt-1h-v1" not in published
+        assert "ai-trend-ethusdt-4h-v1" not in published
+        assert {"ai-rsi-btcusdt-1h-v1", "ai-trend-ethusdt-4h-v1"} <= all_templates
+
     def test_user_bot_create_rejects_user_supplied_configuration(self, patch_db_session):
         from bots.schemas import UserBotCreate
         from bots.service import BotService
 
-        template = BotService().list_templates()[0]
+        template = BotService().list_templates(include_disabled=True)[0]
 
         with pytest.raises(ValidationError):
             UserBotCreate(
@@ -96,14 +129,15 @@ class TestBotService:
                 risk_limits={"risk_per_trade_pct": 99},
             )
 
-    def test_create_user_bot_locks_template_snapshot(self, patch_db_session):
+    def test_create_user_bot_locks_template_snapshot(self, patch_db_session, monkeypatch):
         from bots.models import BotTemplate, UserBotInstance
         from bots.schemas import UserBotCreate
         from bots.service import BotService
 
         user_id = _create_user()
         service = BotService()
-        template = service.list_templates()[0]
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
+        template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
 
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
 
@@ -124,14 +158,15 @@ class TestBotService:
         assert db_instance.config_snapshot["symbol"] == template.symbol
         assert db_instance.config_snapshot["symbol"] != db_template.symbol
 
-    def test_start_user_bot_requires_binance_testnet_credentials(self, patch_db_session):
+    def test_start_user_bot_requires_binance_testnet_credentials(self, patch_db_session, monkeypatch):
         from bots.schemas import UserBotCreate
         from bots.service import BotService
         from fastapi import HTTPException
 
         user_id = _create_user()
         service = BotService()
-        template = service.list_templates()[0]
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
+        template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
 
         with pytest.raises(HTTPException) as exc_info:
@@ -149,7 +184,8 @@ class TestBotService:
         _grant_binance_credentials(patch_db_session, user_id, monkeypatch)
 
         service = BotService()
-        template = service.list_templates()[0]
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
+        template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
 
         result = service.start_user_bot(user_id, instance.id)
@@ -206,7 +242,8 @@ class TestBotService:
 
         fake_binance = FakeExecutionGateway()
         service = BotService(execution_gateway=fake_binance)
-        template = service.list_templates()[0]
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
+        template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
         service.start_user_bot(user_id, instance.id)
         service._compute_template_signal = lambda snapshot: (
@@ -236,13 +273,15 @@ class TestBotService:
         assert performance.net_position_quantity == Decimal("0.00200000")
         assert performance.last_action == "BUY"
 
-    def test_user_performance_summary_distinguishes_bots_and_filters_model(self, patch_db_session):
+    def test_user_performance_summary_distinguishes_bots_and_filters_model(self, patch_db_session, monkeypatch):
         from bots.models import BotOrder, BotTrade, TradingDecision
         from bots.schemas import UserBotCreate
         from bots.service import BotService, MLFLOW_RSI_MODEL_NAME
 
         user_id = _create_user()
         service = BotService()
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
+        _republish_template(monkeypatch, "ai-trend-ethusdt-4h-v1")
         templates = service.list_templates()
         rsi_template = next(item for item in templates if item.slug == "ai-rsi-btcusdt-1h-v1")
         trend_template = next(item for item in templates if item.slug == "ai-trend-ethusdt-4h-v1")
@@ -408,7 +447,8 @@ class TestBotService:
         _grant_binance_credentials(patch_db_session, user_id, monkeypatch)
 
         service = BotService(execution_gateway=FakeExecutionGateway())
-        template = service.list_templates()[0]
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
+        template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
         snapshot = dict(instance.config_snapshot)
         snapshot["risk_limits"] = {**snapshot["risk_limits"], "max_daily_loss_pct": 1.0}
@@ -511,6 +551,7 @@ class TestBotService:
         fake_binance = FakeExecutionGateway()
         fake_ml = FakeMlClient()
         service = BotService(execution_gateway=fake_binance, ml_client=fake_ml)
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
         template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
         service.start_user_bot(user_id, instance.id)
@@ -551,6 +592,7 @@ class TestBotService:
         _grant_binance_credentials(patch_db_session, user_id, monkeypatch)
 
         service = BotService(execution_gateway=FakeExecutionGateway(), ml_client=MissingModelClient())
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
         template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
         service.start_user_bot(user_id, instance.id)
@@ -568,13 +610,14 @@ class TestBotService:
         assert decision.model_output["status"] == "SKIP_MODEL_UNAVAILABLE"
         assert "MLflow model not found" in decision.model_output["error"]
 
-    def test_sync_builtin_templates_migrates_existing_rsi_snapshot_to_ml_api(self, patch_db_session):
+    def test_sync_builtin_templates_migrates_existing_rsi_snapshot_to_ml_api(self, patch_db_session, monkeypatch):
         from bots.models import UserBotInstance
         from bots.schemas import UserBotCreate
         from bots.service import BotService, MLFLOW_RSI_MODEL_NAME, MLFLOW_RSI_MODEL_TYPE
 
         user_id = _create_user()
         service = BotService()
+        _republish_template(monkeypatch, "ai-rsi-btcusdt-1h-v1")
         template = next(item for item in service.list_templates() if item.slug == "ai-rsi-btcusdt-1h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
 
@@ -602,7 +645,7 @@ class TestBotService:
         assert migrated.config_snapshot["signal_source"] == f"mlflow:{MLFLOW_RSI_MODEL_NAME}+rsi_reversal"
         assert migrated.config_snapshot["execution_params"]["mlflow_model_name"] == MLFLOW_RSI_MODEL_NAME
 
-    def test_other_bot_still_uses_deterministic_model(self, patch_db_session):
+    def test_other_bot_still_uses_deterministic_model(self, patch_db_session, monkeypatch):
         from bots.schemas import UserBotCreate
         from bots.service import BotService
 
@@ -616,6 +659,7 @@ class TestBotService:
 
         user_id = _create_user()
         service = BotService(execution_gateway=FakeExecutionGateway(), ml_client=FailingMlClient())
+        _republish_template(monkeypatch, "ai-trend-ethusdt-4h-v1")
         template = next(item for item in service.list_templates() if item.slug == "ai-trend-ethusdt-4h-v1")
         instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
 
@@ -678,7 +722,7 @@ class TestBotService:
         result = service.sync_builtin_templates()
 
         assert result["templates_synced"] >= 3  # 2 templates figes + 1 template ML genere
-        templates = service.list_templates()
+        templates = service.list_templates(include_disabled=True)
         assert any(item.slug == "ml-random_forest-btcusdc-1h-v1" for item in templates)
 
     def test_pair_qualified_ml_bot_computes_signal_from_live_features(self, patch_db_session, monkeypatch):

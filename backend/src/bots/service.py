@@ -104,7 +104,12 @@ DEFAULT_BOT_TEMPLATES: list[dict[str, Any]] = [
             "cooldown_seconds": 3600,
         },
         "version": "1.0",
-        "status": "published",
+        # Disabled le 2026-08-28 : masque du catalogue maintenant que des templates ML
+        # reellement entraines (chemin B, _generate_ml_templates()) sont disponibles --
+        # les instances utilisateur deja creees a partir de ce template continuent de
+        # fonctionner normalement (config_snapshot verrouillee, aucun controle de status
+        # au start/execute, seul create_user_bot exige "published").
+        "status": "disabled",
     },
     {
         "slug": "ai-trend-ethusdt-4h-v1",
@@ -140,7 +145,8 @@ DEFAULT_BOT_TEMPLATES: list[dict[str, Any]] = [
             "cooldown_seconds": 14400,
         },
         "version": "1.0",
-        "status": "published",
+        # Disabled le 2026-08-28 : meme raison que ai-rsi-btcusdt-1h-v1 ci-dessus.
+        "status": "disabled",
     },
 ]
 
