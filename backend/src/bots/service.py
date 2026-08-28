@@ -1787,6 +1787,14 @@ class BotService:
                 return None
         except Exception:
             pass
+        if isinstance(value, datetime):
+            # pandas.Timestamp est une sous-classe de datetime (n'a pas d'attribut .item(),
+            # cf. ci-dessus) -- ni l'un ni l'autre n'est serialisable en JSON tel quel
+            # (colonnes JSON, cf. bots/models.py). pd.NaT est aussi une instance de datetime
+            # mais deja filtre par pd.isna() ci-dessus (value.timestamp() y leverait sinon).
+            # Meme convention que _klines_to_frame() (epoch ms) pour rester coherent entre
+            # les deux chemins de calcul du signal.
+            return int(value.timestamp() * 1000)
         return value
 
     @staticmethod

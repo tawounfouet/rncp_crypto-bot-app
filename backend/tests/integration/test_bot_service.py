@@ -729,10 +729,15 @@ class TestBotService:
                     "generated_at": "2026-06-27T00:00:00+00:00",
                 }
 
+        # open_time est un vrai datetime (pas un int) pour reproduire fidelement
+        # build_live_feature_frame() : une fois passe par pd.DataFrame(...), pandas le
+        # convertit en Timestamp -- pas serialisable en JSON tel quel, cf. bug reel corrige
+        # dans _clean_value() (StrategyDeployment/decision.market_snapshot est une colonne
+        # JSON, bots/models.py).
         fake_frame = pd.DataFrame(
             [
                 {
-                    "open_time": 1,
+                    "open_time": datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
                     "open": 100.0,
                     "high": 101.0,
                     "low": 99.0,
@@ -762,6 +767,11 @@ class TestBotService:
         assert decision.final_action == "BUY"
         assert decision.model_output["model_source"] == "ml_api"
         assert decision.model_output["model_version"] == "2"
+        # Regression : open_time est un pandas.Timestamp cote build_live_feature_frame(),
+        # pas serialisable en JSON tel quel -- decision.market_snapshot est une colonne
+        # JSON (bots/models.py), donc un int confirme que _clean_value() l'a bien converti
+        # avant l'ecriture en base (sinon l'ecriture aurait leve, testee de bout en bout ici).
+        assert isinstance(decision.market_snapshot["open_time"], int)
 
     def test_pair_qualified_ml_bot_records_skip_when_model_unavailable(self, patch_db_session, monkeypatch):
         """Regression pour le StringDataRightTruncation constate en Postgres reel : le
@@ -786,7 +796,16 @@ class TestBotService:
                 raise BotModelUnavailable("MLflow model not found in registry")
 
         fake_frame = pd.DataFrame(
-            [{"open_time": 1, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 10.0}]
+            [
+                {
+                    "open_time": datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+                    "open": 100.0,
+                    "high": 101.0,
+                    "low": 99.0,
+                    "close": 100.5,
+                    "volume": 10.0,
+                }
+            ]
         )
         monkeypatch.setattr("bots.service.build_live_feature_frame", lambda symbol, timeframe: fake_frame)
 
@@ -863,7 +882,16 @@ class TestBotService:
                 }
 
         fake_frame = pd.DataFrame(
-            [{"open_time": 1, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 10.0}]
+            [
+                {
+                    "open_time": datetime(2026, 8, 28, 12, 0, tzinfo=UTC),
+                    "open": 100.0,
+                    "high": 101.0,
+                    "low": 99.0,
+                    "close": 100.5,
+                    "volume": 10.0,
+                }
+            ]
         )
         monkeypatch.setattr("bots.service.build_live_feature_frame", lambda symbol, timeframe: fake_frame)
 
