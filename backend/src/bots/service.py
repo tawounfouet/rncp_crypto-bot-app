@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from auth.models import UserSettings
 from fastapi import HTTPException, status
+from inference.live_features import build_live_feature_frame
 from market.clients.quotes import get_default_quote
 from shared.database.connection import get_db_session
 from sqlalchemy.orm import Session
@@ -35,6 +37,16 @@ from bots.schemas import (
     UserPerformanceGlobalResponse,
     UserPerformanceSummaryResponse,
 )
+
+logger = logging.getLogger(__name__)
+
+# TradingDecision.strategy_signal est un String(20) (bots/models.py) -- "SKIP_MODEL_
+# UNAVAILABLE" (22 caracteres) le depasse. SQLite (utilise en test) n'applique pas cette
+# contrainte de longueur, contrairement a Postgres (prod/staging) : le bug etait invisible
+# en test, decouvert seulement en conditions reelles (StringDataRightTruncation). Le status
+# complet reste "SKIP_MODEL_UNAVAILABLE" dans model_output/risk_decision (colonnes non
+# contraintes), seul ce libelle-la doit rester court.
+MODEL_UNAVAILABLE_STRATEGY_SIGNAL = "SKIP_UNAVAILABLE"
 
 MLFLOW_RSI_MODEL_TYPE = "mlflow_bot_rsi_reversal_v1"
 # Nom du modele tel qu'enregistre dans le registre MLflow existant -- pas renomme en
@@ -92,7 +104,12 @@ DEFAULT_BOT_TEMPLATES: list[dict[str, Any]] = [
             "cooldown_seconds": 3600,
         },
         "version": "1.0",
-        "status": "published",
+        # Disabled le 2026-08-28 : masque du catalogue maintenant que des templates ML
+        # reellement entraines (chemin B, _generate_ml_templates()) sont disponibles --
+        # les instances utilisateur deja creees a partir de ce template continuent de
+        # fonctionner normalement (config_snapshot verrouillee, aucun controle de status
+        # au start/execute, seul create_user_bot exige "published").
+        "status": "disabled",
     },
     {
         "slug": "ai-trend-ethusdt-4h-v1",
@@ -128,9 +145,20 @@ DEFAULT_BOT_TEMPLATES: list[dict[str, Any]] = [
             "cooldown_seconds": 14400,
         },
         "version": "1.0",
-        "status": "published",
+        # Disabled le 2026-08-28 : meme raison que ai-rsi-btcusdt-1h-v1 ci-dessus.
+        "status": "disabled",
     },
 ]
+
+# strategy_type place-holder pour les templates generes dynamiquement depuis
+# BotMlClient.list_trained_combos() (chemin B, modeles qualifies par paire) -- ce ne sont
+# jamais des regles techniques valides pour strategy.engine.registry.get_strategy(), donc
+# _compute_template_signal() doit intercepter ce cas AVANT tout appel a _create_strategy().
+PAIR_QUALIFIED_ML_STRATEGY_TYPE = "ml_registry_signal"
+# Timeframe des modeles entraines par le DAG ml_pipeline (orchestration/dags/ml_pipeline.py::
+# INTERVAL) -- a garder synchronise manuellement, comme build_live_feature_frame()
+# (inference/live_features.py) l'est deja avec models/config.yaml.
+PAIR_QUALIFIED_ML_TIMEFRAME = "1h"
 
 
 class BotService:
@@ -146,7 +174,68 @@ class BotService:
 
     def ensure_default_templates(self, session: Session) -> None:
         """Create or refresh built-in immutable bot templates."""
-        for template_data in DEFAULT_BOT_TEMPLATES:
+        self._upsert_templates(session, DEFAULT_BOT_TEMPLATES)
+
+    def _generate_ml_templates(self) -> list[dict[str, Any]]:
+        """Un template par couple (paire, modele) reellement entraine, cf.
+        BotMlClient.list_trained_combos() (chemin B, MLflow Model Registry) --
+        remplace la necessite d'une liste figee pour ces modeles-la (RF, XGBoost).
+
+        Si le ml-api est injoignable, retourne [] plutot que de faire echouer tout le
+        cycle de synchronisation : les templates deja en base restent visibles tels
+        quels, juste pas rafraichis pour ce cycle.
+        """
+        try:
+            combos = self.ml_client.list_trained_combos()
+        except BotModelUnavailable as exc:
+            logger.warning("Could not list trained model combos from ml-api, skipping ML templates: %s", exc)
+            return []
+
+        templates = []
+        for combo in combos:
+            symbol = str(combo["symbol"]).upper()
+            model_name = str(combo["model_name"])
+            registered_name = str(combo["registered_name"])
+            templates.append(
+                {
+                    "slug": f"ml-{model_name}-{symbol.lower()}-{PAIR_QUALIFIED_ML_TIMEFRAME}-v1",
+                    "name": f"{model_name.replace('_', ' ').title()} {symbol} {PAIR_QUALIFIED_ML_TIMEFRAME}",
+                    "description": (
+                        f"Bot Testnet pilote par le modele {model_name} entraine sur {symbol} "
+                        f'(registre MLflow "{registered_name}").'
+                    ),
+                    "model_type": f"ml_{model_name}",
+                    "strategy_type": PAIR_QUALIFIED_ML_STRATEGY_TYPE,
+                    "symbol": symbol,
+                    "timeframe": PAIR_QUALIFIED_ML_TIMEFRAME,
+                    "signal_source": f"mlflow:{registered_name}",
+                    "exchange": _DEFAULT_TEMPLATE_EXCHANGE,
+                    "environment": "testnet",
+                    "execution_params": {"registry_model_name": registered_name},
+                    "risk_limits": {
+                        "risk_per_trade_pct": 1.0,
+                        "stop_loss_pct": 2.0,
+                        "take_profit_pct": 4.0,
+                        "max_order_quote_quantity": "100",
+                        "max_open_orders": 1,
+                        "max_user_open_positions": 3,
+                        "max_daily_loss_pct": 3.0,
+                    },
+                    "order_policy": {
+                        "order_type": "MARKET",
+                        "quote_order_quantity": "100",
+                        "quote_asset": _DEFAULT_TEMPLATE_QUOTE,
+                        "cooldown_seconds": 3600,
+                    },
+                    "version": "1.0",
+                    "status": "published",
+                }
+            )
+        return templates
+
+    @staticmethod
+    def _upsert_templates(session: Session, templates: list[dict[str, Any]]) -> None:
+        for template_data in templates:
             template = session.query(BotTemplate).filter(BotTemplate.slug == template_data["slug"]).first()
             if template is None:
                 session.add(BotTemplate(**template_data))
@@ -161,13 +250,21 @@ class BotService:
         The user-facing bot configuration is stored as a snapshot when the user selects a
         template. Product-owned template upgrades therefore need an explicit snapshot
         migration, otherwise active bots keep executing the old deterministic config.
+
+        Les templates ML generes dynamiquement (_generate_ml_templates(), un appel HTTP au
+        ml-api) ne sont rafraichis qu'ici -- pas a chaque lecture (ensure_default_templates,
+        appele par list_templates/get_template/create_user_bot), pour ne pas coupler tout
+        appel de lecture a la disponibilite du ml-api. Ils sont donc a jour au demarrage du
+        backend (cf. main.py) et lors d'une resynchronisation explicite, pas en temps reel.
         """
         with get_db_session() as session:
-            self.ensure_default_templates(session)
+            ml_templates = self._generate_ml_templates()
+            all_templates = [*DEFAULT_BOT_TEMPLATES, *ml_templates]
+            self._upsert_templates(session, all_templates)
             migrated_instances = self._migrate_builtin_instance_snapshots(session) if migrate_instances else []
             template_count = (
                 session.query(BotTemplate)
-                .filter(BotTemplate.slug.in_([template["slug"] for template in DEFAULT_BOT_TEMPLATES]))
+                .filter(BotTemplate.slug.in_([template["slug"] for template in all_templates]))
                 .count()
             )
             session.flush()
@@ -774,6 +871,12 @@ class BotService:
         return TradingDecisionResponse.model_validate(decision)
 
     def _compute_template_signal(self, snapshot: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+        if str(snapshot.get("strategy_type")) == PAIR_QUALIFIED_ML_STRATEGY_TYPE:
+            # Pas de moteur de regles techniques ici (strategy.engine.registry n'a jamais
+            # connu PAIR_QUALIFIED_ML_STRATEGY_TYPE) -- le signal vient entierement du
+            # modele MLflow qualifie par paire, cf. _compute_pair_qualified_ml_signal().
+            return self._compute_pair_qualified_ml_signal(snapshot)
+
         symbol = str(snapshot["symbol"])
         timeframe = str(snapshot["timeframe"])
         strategy_type = str(snapshot["strategy_type"])
@@ -906,7 +1009,88 @@ class BotService:
                 "action": "HOLD",
                 "indicators": indicators,
             }
-            return market_snapshot, model_output, "SKIP_MODEL_UNAVAILABLE", "HOLD"
+            return market_snapshot, model_output, MODEL_UNAVAILABLE_STRATEGY_SIGNAL, "HOLD"
+
+    def _compute_pair_qualified_ml_signal(
+        self, snapshot: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+        """Signal pour un template genere par _generate_ml_templates() (chemin B : modele
+        MLflow qualifie par paire, ex. "random_forest_btcusdc"). Contrairement au chemin
+        RSI historique, il n'y a pas de strategie technique de reference ici -- le modele
+        entraine EST la strategie (decision actee, cf. memoire "strategy/engine archive").
+
+        Les features sont recalculees en direct depuis les klines (build_live_feature_frame,
+        deja utilise par backend/src/strategy/service.py pour le chemin A) puis transmises
+        telles quelles au ml-api : c'est predict_registered_bot_model() (chemin B) qui filtre
+        et ordonne les colonnes selon l'artefact feature_columns.json du run d'entrainement --
+        pas de liste de colonnes dupliquee ici.
+        """
+        symbol = str(snapshot["symbol"])
+        timeframe = str(snapshot["timeframe"])
+        params = dict(snapshot.get("execution_params") or {})
+        registry_model_name = str(params["registry_model_name"])
+
+        frame = build_live_feature_frame(symbol, timeframe)
+        if frame.empty:
+            raise RuntimeError(f"No live feature data available for {symbol} {timeframe}")
+        last_row = frame.iloc[-1]
+
+        market_snapshot = {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "open_time": self._clean_value(last_row.get("open_time")),
+            "open": self._clean_value(last_row.get("open")),
+            "high": self._clean_value(last_row.get("high")),
+            "low": self._clean_value(last_row.get("low")),
+            "close": self._clean_value(last_row.get("close")),
+            "volume": self._clean_value(last_row.get("volume")),
+        }
+        features = {
+            column: value
+            for column, value in ((col, self._feature_float(last_row.get(col))) for col in frame.columns)
+            if value is not None
+        }
+
+        try:
+            prediction = self.ml_client.predict(model_name=registry_model_name, features=features)
+            ai_signal = str(prediction.get("signal") or "").upper()
+            if ai_signal not in {"BUY", "SELL", "HOLD"}:
+                raise BotModelUnavailable(f"Invalid ML signal received: {ai_signal or '<empty>'}")
+            model_output = {
+                "model_type": snapshot["model_type"],
+                "model_source": "ml_api",
+                "registry_source": prediction.get("model_source") or "mlflow",
+                "model_name": prediction.get("model_name") or registry_model_name,
+                "model_version": prediction.get("model_version"),
+                "signal_source": snapshot["signal_source"],
+                "strategy_type": snapshot["strategy_type"],
+                "confidence": self._clean_value(prediction.get("confidence")),
+                "probabilities": prediction.get("probabilities") or {},
+                "features": features,
+                "action": ai_signal,
+                # raw_ai_signal : meme cle que le chemin RSI legacy (_compute_mlflow_rsi_
+                # signal), lue par le frontend (04_Performances_Spot.py, colonne "Signal
+                # IA") -- sans elle la colonne affiche "Donnee indisponible" pour tout bot
+                # de ce chemin, meme quand le modele a bien repondu.
+                "raw_ai_signal": ai_signal,
+                "indicators": {},
+            }
+            return market_snapshot, model_output, ai_signal, ai_signal
+        except BotModelUnavailable as exc:
+            model_output = {
+                "model_type": snapshot["model_type"],
+                "model_source": "ml_api",
+                "registry_source": "mlflow",
+                "model_name": registry_model_name,
+                "signal_source": snapshot["signal_source"],
+                "strategy_type": snapshot["strategy_type"],
+                "status": "SKIP_MODEL_UNAVAILABLE",
+                "error": str(exc),
+                "features": features,
+                "action": "HOLD",
+                "indicators": {},
+            }
+            return market_snapshot, model_output, MODEL_UNAVAILABLE_STRATEGY_SIGNAL, "HOLD"
 
     @staticmethod
     def _uses_mlflow_rsi_model(snapshot: dict[str, Any]) -> bool:
@@ -1614,6 +1798,14 @@ class BotService:
                 return None
         except Exception:
             pass
+        if isinstance(value, datetime):
+            # pandas.Timestamp est une sous-classe de datetime (n'a pas d'attribut .item(),
+            # cf. ci-dessus) -- ni l'un ni l'autre n'est serialisable en JSON tel quel
+            # (colonnes JSON, cf. bots/models.py). pd.NaT est aussi une instance de datetime
+            # mais deja filtre par pd.isna() ci-dessus (value.timestamp() y leverait sinon).
+            # Meme convention que _klines_to_frame() (epoch ms) pour rester coherent entre
+            # les deux chemins de calcul du signal.
+            return int(value.timestamp() * 1000)
         return value
 
     @staticmethod

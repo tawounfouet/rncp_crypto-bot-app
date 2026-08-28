@@ -289,10 +289,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    command: >
-      /bin/sh -c "python -m src.mlops.bootstrap_dev_artifacts --config config.yaml &&
-      python -m src.mlops.bootstrap_bot_models --config config.yaml &&
-      python -m src.main --config config.yaml api --host 0.0.0.0 --port 8010"
     networks:
       - dev-network
 

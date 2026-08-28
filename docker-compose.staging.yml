@@ -252,6 +252,14 @@ services:
       - BINANCE_BASE_URL=https://api.binance.com
     volumes:
       - staging_airflow_logs:/opt/airflow/logs
+      # Bind-mounts des sources (meme pattern que dev docker-compose.yml) : Airflow doit
+      # voir le code courant (DAGs USDC) et les artefacts entrenes par ml-api dans
+      # models/artifacts -- sinon l'image autonome est figee (cf. deploy_model dans ml_pipeline).
+      - ./orchestration/dags:/opt/airflow/dags
+      - ./orchestration/plugins:/opt/airflow/plugins
+      - ./jobs:/opt/airflow/jobs
+      - ./models:/opt/airflow/models
+      - ./utils:/opt/airflow/utils
     depends_on:
       postgres:
         condition: service_healthy
@@ -288,6 +296,14 @@ services:
       - BINANCE_BASE_URL=https://api.binance.com
     volumes:
       - staging_airflow_logs:/opt/airflow/logs
+      # Bind-mounts des sources (meme pattern que dev docker-compose.yml) : Airflow doit
+      # voir le code courant (DAGs USDC) et les artefacts entrenes par ml-api dans
+      # models/artifacts -- sinon l'image autonome est figee (cf. deploy_model dans ml_pipeline).
+      - ./orchestration/dags:/opt/airflow/dags
+      - ./orchestration/plugins:/opt/airflow/plugins
+      - ./jobs:/opt/airflow/jobs
+      - ./models:/opt/airflow/models
+      - ./utils:/opt/airflow/utils
     depends_on:
       postgres:
         condition: service_healthy

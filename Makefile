@@ -157,6 +157,7 @@ test-coverage: ## Lancer les tests avec coverage (backend + frontend + utils, un
 # separees, comme test-backend/test-frontend/test-utils.
 	PYTHONPATH=backend/src:. $(VENV_PYTHON) -m pytest --cov=backend/src --cov=utils --cov-report=term-missing --cov-report=json:coverage.json backend/tests utils/tests
 	cd frontend && PYTHONPATH=src ../$(VENV_PYTHON) -m pytest --cov=src --cov-report=term-missing --cov-report=json:coverage.json tests
+	$(VENV_PYTHON) scripts/track_coverage.py
 
 test-jobs: ## Lancer les tests unitaires des jobs (backend/src/jobs)
 	PYTHONPATH=. $(VENV_PYTHON) -m pytest jobs/tests -q -o cache_dir=/tmp/utils-pytest-cache

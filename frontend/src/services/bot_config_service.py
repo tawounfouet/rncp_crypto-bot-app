@@ -169,6 +169,7 @@ class BotConfigService:
             description=str(payload.get("description") or ""),
             model_type=str(payload.get("model_type", "")),
             strategy_type=str(payload.get("strategy_type", "")),
+            exchange=str(payload.get("exchange") or "-"),
             symbol=str(payload.get("symbol", "")),
             timeframe=str(payload.get("timeframe", "")),
             signal_source=str(payload.get("signal_source", "")),

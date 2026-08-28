@@ -59,6 +59,7 @@ class BuildFeaturesResponse(BaseModel):
 
 class TrainRandomForestRequest(BaseModel):
     dataset: str
+    symbol: str | None = None
     config: str = "config.yaml"
 
 
@@ -77,6 +78,7 @@ class TrainMLPResponse(BaseModel):
 
 class TrainXGBoostRequest(BaseModel):
     dataset: str
+    symbol: str | None = None
     config: str = "config.yaml"
 
 
@@ -103,3 +105,15 @@ class BotModelPredictionResponse(BaseModel):
     probabilities: dict[str, float]
     features: dict[str, float]
     generated_at: str
+
+
+class TrainedModelCombo(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    symbol: str
+    model_name: str
+    registered_name: str
+
+
+class TrainedCombosResponse(BaseModel):
+    combos: list[TrainedModelCombo]

@@ -4,7 +4,7 @@ Appelle POST /users/purge-inactive sur crypto-bot-backend (suppression des compt
 dont ``last_active_at`` est plus ancien que 730 jours -- cf.
 UserService.delete_inactive_users_older_than, script manuel backend/src/auth/
 purge_inactive_users.py). Planifie chaque dimanche a 03:00 UTC. Meme principe que
-bot_execution.py : Airflow orchestre un appel HTTP, il n'execute pas la logique
+ml_pipeline.py : Airflow orchestre un appel HTTP, il n'execute pas la logique
 metier lui-meme (le conteneur Airflow n'heberge pas la stack backend).
 """
 

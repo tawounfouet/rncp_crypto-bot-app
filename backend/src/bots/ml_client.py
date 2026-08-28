@@ -22,6 +22,26 @@ class BotMlClient:
         self.base_url = (base_url or os.getenv("ML_API_URL") or "http://crypto-bot-ml-api:8010").rstrip("/")
         self.timeout_seconds = timeout_seconds
 
+    def list_trained_combos(self) -> list[dict[str, str]]:
+        """Couples (symbol, model_name) reellement entraines, tels que rapportes par le
+        MLflow Model Registry cote ml-api (cf. src/inference/mlflow_registry.py::
+        list_trained_combos()). Utilise pour ne proposer/creer un bot que sur une
+        combinaison paire/modele qui a effectivement un modele entraine disponible.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/bot-models/trained-combos",
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise BotModelUnavailable(f"ML API unavailable: {exc}") from exc
+
+        try:
+            return response.json()["combos"]
+        except (ValueError, KeyError) as exc:
+            raise BotModelUnavailable("ML API returned an invalid trained-combos response") from exc
+
     def predict(
         self,
         *,

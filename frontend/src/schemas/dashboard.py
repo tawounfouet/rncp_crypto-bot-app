@@ -11,6 +11,7 @@ class DashboardBotRow(BaseModel):
     bot_id: str
     name: str
     strategy: str
+    exchange: str = "-"
     mode_live: bool
     status: str
     pnl_usdc: float

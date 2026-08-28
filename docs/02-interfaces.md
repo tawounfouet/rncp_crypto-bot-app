@@ -110,7 +110,8 @@ Sources : `orchestration/docs/03-dags.md`.
 **Mecanisme** : le DAG `ml_pipeline` (quotidien, 06:00 UTC) appelle
 `crypto-bot-ml-api` en HTTP plutot que d'executer `python -m src.main` dans le
 conteneur Airflow — `POST /internal/pipeline/features`,
-`POST /internal/pipeline/train-rf`. Choix fait pour eviter d'installer les
+`POST /internal/pipeline/train-random_forest`, `POST /internal/pipeline/train-xgboost`
+(convention : `train-<model_name>`, un appel par symbole configure). Choix fait pour eviter d'installer les
 dependances lourdes de `models/` (torch, scikit-learn, mlflow) dans l'image
 Airflow (conflits de versions constates, cf. `04-troubleshooting.md` probleme 8,
 resolu).

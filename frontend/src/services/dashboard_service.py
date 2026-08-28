@@ -29,6 +29,7 @@ def aggregate_overview(
                 bot_id=bot.id,
                 name=bot.name,
                 strategy=bot.strategy,
+                exchange=bot.exchange,
                 mode_live=bot.mode_live,
                 status=bot.status.value,
                 pnl_usdc=metrics.pnl_realized_usdc if metrics else 0.0,

@@ -72,10 +72,7 @@ def _render_login_form(service: AuthService) -> None:
 
 def main() -> None:
     store, user = setup_page(title="Connexion", icon=":material/lock:", page_key="login")
-    render_page_header(
-        "Connexion",
-        "Authentification reelle via le backend FastAPI. Les ecrans metier restent mockes.",
-    )
+    render_page_header("Connexion", "Connectez-vous a votre compte.")
 
     if user:
         _render_logged_in_state()
@@ -94,12 +91,6 @@ def main() -> None:
                 "Creez votre compte depuis la page Inscription pour acceder a l'application.</p>"
                 "<p><strong>• Compte administrateur de demonstration</strong><br>"
                 "Utilisez ce compte pour acceder aux ecrans d'administration.</p>"
-                "<p>Email : admin@cryptobot.dev<br>"
-                "Mot de passe : Admin123!</p>"
-                "<p><strong>Note :</strong><br>"
-                "L'authentification et la gestion de session sont reelles.<br>"
-                "En dehors de la connexion, de l'inscription et de la session utilisateur, "
-                "toutes les autres pages restent en mode demonstration avec des donnees mockees.</p>"
                 "</div>"
             ),
             unsafe_allow_html=True,
