@@ -17,7 +17,7 @@ def _create_user() -> str:
         UserCreate(
             email="bot-user@example.com",
             username="botuser",
-            password="SecurePass123!",  # noqa: S106
+            password="SecurePass123!",
         )
     )
     return user.id
@@ -276,7 +276,7 @@ class TestBotService:
     def test_user_performance_summary_distinguishes_bots_and_filters_model(self, patch_db_session, monkeypatch):
         from bots.models import BotOrder, BotTrade, TradingDecision
         from bots.schemas import UserBotCreate
-        from bots.service import BotService, MLFLOW_RSI_MODEL_NAME
+        from bots.service import MLFLOW_RSI_MODEL_NAME, BotService
 
         user_id = _create_user()
         service = BotService()
@@ -499,7 +499,7 @@ class TestBotService:
 
     def test_rsi_bot_uses_ml_api_and_records_model_trace(self, patch_db_session, monkeypatch):
         from bots.schemas import UserBotCreate
-        from bots.service import BotService, MLFLOW_RSI_MODEL_NAME
+        from bots.service import MLFLOW_RSI_MODEL_NAME, BotService
 
         class FakeExecutionGateway:
             def __init__(self):
@@ -613,7 +613,7 @@ class TestBotService:
     def test_sync_builtin_templates_migrates_existing_rsi_snapshot_to_ml_api(self, patch_db_session, monkeypatch):
         from bots.models import UserBotInstance
         from bots.schemas import UserBotCreate
-        from bots.service import BotService, MLFLOW_RSI_MODEL_NAME, MLFLOW_RSI_MODEL_TYPE
+        from bots.service import MLFLOW_RSI_MODEL_NAME, MLFLOW_RSI_MODEL_TYPE, BotService
 
         user_id = _create_user()
         service = BotService()
