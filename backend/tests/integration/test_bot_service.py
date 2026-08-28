@@ -624,3 +624,127 @@ class TestBotService:
         assert model_output["model_result"]["model_type"] == "trend_classifier_v1"
         assert strategy_signal in {"BUY", "SELL", "HOLD"}
         assert requested_action in {"BUY", "SELL", "HOLD"}
+
+    def test_generate_ml_templates_builds_one_template_per_trained_combo(self, patch_db_session):
+        from bots.service import PAIR_QUALIFIED_ML_STRATEGY_TYPE, BotService
+
+        class FakeMlClient:
+            def list_trained_combos(self):
+                return [
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                    {"symbol": "ETHUSDC", "model_name": "xgboost", "registered_name": "xgboost_ethusdc"},
+                ]
+
+        service = BotService(ml_client=FakeMlClient())
+        templates = service._generate_ml_templates()
+
+        assert {template["slug"] for template in templates} == {
+            "ml-random_forest-btcusdc-1h-v1",
+            "ml-xgboost-ethusdc-1h-v1",
+        }
+        rf_template = next(item for item in templates if item["slug"] == "ml-random_forest-btcusdc-1h-v1")
+        assert rf_template["symbol"] == "BTCUSDC"
+        assert rf_template["model_type"] == "ml_random_forest"
+        assert rf_template["strategy_type"] == PAIR_QUALIFIED_ML_STRATEGY_TYPE
+        assert rf_template["signal_source"] == "mlflow:random_forest_btcusdc"
+        assert rf_template["execution_params"]["registry_model_name"] == "random_forest_btcusdc"
+
+    def test_generate_ml_templates_returns_empty_when_ml_api_unavailable(self, patch_db_session):
+        from bots.ml_client import BotModelUnavailable
+        from bots.service import BotService
+
+        class UnavailableMlClient:
+            def list_trained_combos(self):
+                raise BotModelUnavailable("ML API unavailable: connection refused")
+
+        service = BotService(ml_client=UnavailableMlClient())
+
+        assert service._generate_ml_templates() == []
+
+    def test_sync_builtin_templates_seeds_ml_templates_from_trained_combos(self, patch_db_session):
+        from bots.service import BotService
+
+        class FakeMlClient:
+            def list_trained_combos(self):
+                return [
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                ]
+
+        service = BotService(ml_client=FakeMlClient())
+        result = service.sync_builtin_templates()
+
+        assert result["templates_synced"] >= 3  # 2 templates figes + 1 template ML genere
+        templates = service.list_templates()
+        assert any(item.slug == "ml-random_forest-btcusdc-1h-v1" for item in templates)
+
+    def test_pair_qualified_ml_bot_computes_signal_from_live_features(self, patch_db_session, monkeypatch):
+        import pandas as pd
+        from bots.schemas import UserBotCreate
+        from bots.service import BotService
+
+        class FakeExecutionGateway:
+            def __init__(self):
+                self.orders = []
+
+            def open_orders(self, user_id, symbol, *, exchange="binance"):
+                return []
+
+            def balances(self, user_id, *, non_zero=True, exchange="binance"):
+                return [{"asset": "USDC", "free": "1000", "locked": "0"}]
+
+            def place_order(self, user_id, order, *, exchange="binance"):
+                self.orders.append(order)
+                return {
+                    "symbol": order.symbol,
+                    "orderId": 30001,
+                    "clientOrderId": order.client_order_id,
+                    "status": "FILLED",
+                    "executedQty": "0.002",
+                    "cummulativeQuoteQty": "100",
+                }
+
+        class FakeMlClient:
+            def __init__(self):
+                self.calls = []
+
+            def list_trained_combos(self):
+                return [
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                ]
+
+            def predict(self, *, model_name, features, model_version=None):
+                self.calls.append({"model_name": model_name, "features": features})
+                return {
+                    "model_source": "mlflow",
+                    "model_name": model_name,
+                    "model_version": "2",
+                    "signal": "BUY",
+                    "confidence": 0.77,
+                    "probabilities": {"BUY": 0.77, "SELL": 0.13, "HOLD": 0.10},
+                    "features": features,
+                    "generated_at": "2026-06-27T00:00:00+00:00",
+                }
+
+        fake_frame = pd.DataFrame(
+            [{"open_time": 1, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 10.0, "rsi_14": 55.0}]
+        )
+        monkeypatch.setattr("bots.service.build_live_feature_frame", lambda symbol, timeframe: fake_frame)
+
+        user_id = _create_user()
+        _grant_binance_credentials(patch_db_session, user_id, monkeypatch)
+        fake_binance = FakeExecutionGateway()
+        fake_ml = FakeMlClient()
+        service = BotService(execution_gateway=fake_binance, ml_client=fake_ml)
+        service.sync_builtin_templates()
+        template = next(item for item in service.list_templates() if item.slug == "ml-random_forest-btcusdc-1h-v1")
+        instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
+        service.start_user_bot(user_id, instance.id)
+
+        decision = service.execute_once(instance.id, worker_id="test-worker")
+
+        assert fake_ml.calls
+        assert fake_ml.calls[0]["model_name"] == "random_forest_btcusdc"
+        assert fake_ml.calls[0]["features"]["rsi_14"] == 55.0
+        assert decision.final_action == "BUY"
+        assert decision.model_output["model_source"] == "ml_api"
+        assert decision.model_output["model_version"] == "2"
