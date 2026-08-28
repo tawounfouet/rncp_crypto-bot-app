@@ -559,7 +559,12 @@ class TestBotService:
 
         assert decision.final_action == "HOLD"
         assert decision.risk_decision == "SKIP_MODEL_UNAVAILABLE"
-        assert decision.strategy_signal == "SKIP_MODEL_UNAVAILABLE"
+        # strategy_signal est un String(20) (bots/models.py) : SQLite (ce test) n'applique
+        # pas cette contrainte de longueur contrairement a Postgres (prod/staging), d'ou
+        # l'assertion de longueur explicite -- sinon une regression ne serait visible qu'en
+        # conditions reelles (StringDataRightTruncation), comme ca a ete le cas une fois.
+        assert decision.strategy_signal == "SKIP_UNAVAILABLE"
+        assert len(decision.strategy_signal) <= 20
         assert decision.model_output["status"] == "SKIP_MODEL_UNAVAILABLE"
         assert "MLflow model not found" in decision.model_output["error"]
 
@@ -757,6 +762,48 @@ class TestBotService:
         assert decision.final_action == "BUY"
         assert decision.model_output["model_source"] == "ml_api"
         assert decision.model_output["model_version"] == "2"
+
+    def test_pair_qualified_ml_bot_records_skip_when_model_unavailable(self, patch_db_session, monkeypatch):
+        """Regression pour le StringDataRightTruncation constate en Postgres reel : le
+        decision.strategy_signal ecrit ici doit tenir dans String(20) (bots/models.py),
+        contrainte que SQLite (ce test) n'applique pas -- assertion de longueur explicite."""
+        import pandas as pd
+        from bots.ml_client import BotModelUnavailable
+        from bots.schemas import UserBotCreate
+        from bots.service import BotService
+
+        class FakeExecutionGateway:
+            def place_order(self, user_id, order, *, exchange="binance"):
+                raise AssertionError("Model unavailable must never send an order")
+
+        class MissingModelClient:
+            def list_trained_combos(self):
+                return [
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                ]
+
+            def predict(self, *, model_name, features, model_version=None):
+                raise BotModelUnavailable("MLflow model not found in registry")
+
+        fake_frame = pd.DataFrame(
+            [{"open_time": 1, "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.5, "volume": 10.0}]
+        )
+        monkeypatch.setattr("bots.service.build_live_feature_frame", lambda symbol, timeframe: fake_frame)
+
+        user_id = _create_user()
+        _grant_binance_credentials(patch_db_session, user_id, monkeypatch)
+        service = BotService(execution_gateway=FakeExecutionGateway(), ml_client=MissingModelClient())
+        service.sync_builtin_templates()
+        template = next(item for item in service.list_templates() if item.slug == "ml-random_forest-btcusdc-1h-v1")
+        instance = service.create_user_bot(user_id, UserBotCreate(bot_template_id=template.id))
+        service.start_user_bot(user_id, instance.id)
+
+        decision = service.execute_once(instance.id, worker_id="test-worker")
+
+        assert decision.final_action == "HOLD"
+        assert decision.strategy_signal == "SKIP_UNAVAILABLE"
+        assert len(decision.strategy_signal) <= 20
+        assert decision.model_output["status"] == "SKIP_MODEL_UNAVAILABLE"
 
     def test_user_creates_two_bots_with_different_trained_combos_start_stop_and_results(
         self, patch_db_session, monkeypatch

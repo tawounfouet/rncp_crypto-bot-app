@@ -40,6 +40,14 @@ from bots.schemas import (
 
 logger = logging.getLogger(__name__)
 
+# TradingDecision.strategy_signal est un String(20) (bots/models.py) -- "SKIP_MODEL_
+# UNAVAILABLE" (22 caracteres) le depasse. SQLite (utilise en test) n'applique pas cette
+# contrainte de longueur, contrairement a Postgres (prod/staging) : le bug etait invisible
+# en test, decouvert seulement en conditions reelles (StringDataRightTruncation). Le status
+# complet reste "SKIP_MODEL_UNAVAILABLE" dans model_output/risk_decision (colonnes non
+# contraintes), seul ce libelle-la doit rester court.
+MODEL_UNAVAILABLE_STRATEGY_SIGNAL = "SKIP_UNAVAILABLE"
+
 MLFLOW_RSI_MODEL_TYPE = "mlflow_bot_rsi_reversal_v1"
 # Nom du modele tel qu'enregistre dans le registre MLflow existant -- pas renomme en
 # "...btcusdc..." malgre le template ci-dessous qui trade desormais en BTCUSDC (conformite
@@ -995,7 +1003,7 @@ class BotService:
                 "action": "HOLD",
                 "indicators": indicators,
             }
-            return market_snapshot, model_output, "SKIP_MODEL_UNAVAILABLE", "HOLD"
+            return market_snapshot, model_output, MODEL_UNAVAILABLE_STRATEGY_SIGNAL, "HOLD"
 
     def _compute_pair_qualified_ml_signal(
         self, snapshot: dict[str, Any]
@@ -1071,7 +1079,7 @@ class BotService:
                 "action": "HOLD",
                 "indicators": {},
             }
-            return market_snapshot, model_output, "SKIP_MODEL_UNAVAILABLE", "HOLD"
+            return market_snapshot, model_output, MODEL_UNAVAILABLE_STRATEGY_SIGNAL, "HOLD"
 
     @staticmethod
     def _uses_mlflow_rsi_model(snapshot: dict[str, Any]) -> bool:
