@@ -25,6 +25,24 @@ from src.training.train_xgboost import train_from_processed_dataset as train_xgb
 from src.utils.logger import configure_logging, get_logger
 from src.validation.mvp_check import check_mvp
 
+from utils.connectors.exchanges.registry import list_configured_symbols
+
+logger = get_logger(__name__)
+
+
+def _resolve_symbol(symbol: str | None) -> str:
+    """Paire fournie, sinon la premiere paire configuree (utils, source unique de verite).
+
+    Meme logique que models/src/api/main.py::_resolve_symbol -- duplique ici car ce CLI et
+    l'API HTTP sont deux points d'entree distincts vers train_from_processed_dataset(),
+    chacun devant pouvoir tourner sans dependre de l'autre.
+    """
+    if symbol:
+        return symbol
+    default_symbol = list_configured_symbols()[0]
+    logger.warning("symbol non fourni, utilisation de la paire par defaut: %s", default_symbol)
+    return default_symbol
+
 
 def config_command(args: argparse.Namespace) -> None:
     settings = load_config(args.config)
@@ -44,7 +62,7 @@ def features_command(args: argparse.Namespace) -> None:
 
 
 def train_rf_command(args: argparse.Namespace) -> None:
-    artifact_dir = train_from_processed_dataset(args.dataset, args.config)
+    artifact_dir = train_from_processed_dataset(args.dataset, args.config, symbol=_resolve_symbol(args.symbol))
     print(f"random_forest artifacts: {artifact_dir}")
 
 
@@ -59,7 +77,7 @@ def train_mlp_command(args: argparse.Namespace) -> None:
 
 
 def train_xgboost_command(args: argparse.Namespace) -> None:
-    artifact_dir = train_xgboost_from_processed_dataset(args.dataset, args.config)
+    artifact_dir = train_xgboost_from_processed_dataset(args.dataset, args.config, symbol=_resolve_symbol(args.symbol))
     print(f"xgboost artifacts: {artifact_dir}")
 
 
@@ -115,6 +133,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
     )
+    train_rf_parser.add_argument(
+        "--symbol", default=None, help="Traded pair (default: first configured pair, cf. utils)"
+    )
     train_rf_parser.set_defaults(func=train_rf_command)
 
     train_lstm_parser = subparsers.add_parser("train-lstm", help="Train LSTM classifier")
@@ -138,6 +159,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--dataset",
         default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
+    )
+    train_xgboost_parser.add_argument(
+        "--symbol", default=None, help="Traded pair (default: first configured pair, cf. utils)"
     )
     train_xgboost_parser.set_defaults(func=train_xgboost_command)
 

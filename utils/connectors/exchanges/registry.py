@@ -9,6 +9,12 @@ _NATIVE_DRIVERS = {
     "binance": BinanceMarketDataDriver,
 }
 
+# Paires tradees par l'app, source unique de verite (remplace a terme les listes dupliquees
+# dans backend/src/market/router.py, orchestration/dags/*.py). L'ordre compte : le premier
+# element sert de paire par defaut partout ou une paire n'est pas explicitement fournie
+# (cf. list_configured_symbols()).
+SUPPORTED_SYMBOLS = ["BTCUSDC", "ETHUSDC"]
+
 
 def get_market_data_driver(exchange: str) -> MarketDataDriver:
     """Retourne le driver de données de marché pour un exchange.
@@ -29,6 +35,11 @@ def list_configured_exchanges() -> list[str]:
     enregistrés. Pas de catalogue distinct à maintenir côté API/frontend.
     """
     return sorted(set(CCXT_IDS) | set(_NATIVE_DRIVERS))
+
+
+def list_configured_symbols() -> list[str]:
+    """Paires tradees par l'app. list_configured_symbols()[0] est la paire par defaut."""
+    return list(SUPPORTED_SYMBOLS)
 
 
 def supports_sandbox_credentials(exchange: str) -> bool:

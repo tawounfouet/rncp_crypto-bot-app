@@ -1,19 +1,31 @@
 """DAG ML Pipeline : features → training → déploiement → vérification.
 
 Enchaîne les étapes du pipeline ML après que les données brutes ont été
-ingérées par le DAG ``ingest_ohlcv_binance_to_minio`` :
+ingérées par le DAG ``ingest_ohlcv_binance_to_minio``. Le graphe exact (nombre
+de tâches d'entraînement/déploiement) dépend de SYMBOLS (source unique de
+vérité : utils.connectors.exchanges.registry.list_configured_symbols()) et de
+TRAINABLE_MODELS ci-dessous -- pas de liste figée dans cette docstring, elle
+se périmerait au premier ajout de paire ou de modèle :
 
     start
-      ├── build_features_BTCUSDC_1h
-      ├── build_features_ETHUSDC_1h
+      ├── build_features_<symbol>_1h        (un par symbole configuré)
       │
-      ├── train_random_forest    (attendent toutes les features)
-      ├── train_mlp
-      ├── train_xgboost
+      ├── train_<model>_<symbol>            (un par couple modèle x symbole,
+      │                                       cf. TRAINABLE_MODELS x SYMBOLS)
+      ├── train_mlp                         (un seul symbole, hors scope pour
+      │                                       l'instant, cf. TRAINABLE_MODELS)
       │
-      ├── deploy_model           (copie les meilleurs modèles → MinIO)
+      ├── deploy_model_<model>              (un par modèle, copie vers MinIO,
+      │                                       chemin A inchangé)
       │
-      └── verify_inference       (appelle l'endpoint backend)
+      └── verify_inference                  (appelle l'endpoint backend)
+
+RF et XGBoost sont en plus enregistrés dans le MLflow Model Registry sous un
+nom qualifié par paire ("random_forest_btcusdc", "xgboost_ethusdc", ...) :
+c'est ce registre que le module bots/ interroge pour exécuter un bot
+(BotMlClient.predict()), par opposition au registre local ci-dessus
+(chemin A, un seul emplacement par type de modèle, utilisé par
+/signals/latest et l'ancien module strategy/).
 
 Planning : quotidien à 06:00 UTC (après les runs d'ingestion nocturnes).
 
@@ -44,6 +56,9 @@ import requests
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
+from utils.connectors.exchanges.registry import list_configured_symbols
+from utils.ml.registry import list_configured_models
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -68,8 +83,27 @@ except ImportError:
 # Configuration
 # ---------------------------------------------------------------------------
 
-SYMBOLS = ["BTCUSDC", "ETHUSDC"]
+# Source unique de verite (utils/connectors/exchanges/registry.py) -- plus de liste
+# dupliquee ici. Ajouter une paire cote app (utils) suffit a l'entrainer, aucune autre
+# modification necessaire dans ce DAG.
+SYMBOLS = list_configured_symbols()
 INTERVAL = "1h"
+
+# Modeles entraines sur le chemin B (MLflow Model Registry, nom qualifie par paire,
+# interroge par bots/ via BotMlClient.predict()). Convention stricte cote ml-api : la
+# route d'entrainement d'un modele "X" est toujours POST /internal/pipeline/train-X
+# (cf. models/src/api/main.py) -- pas de mapping a maintenir a la main ici, juste le nom
+# du modele.
+#
+# TRAINABLE_MODELS est un SOUS-ENSEMBLE explicite de utils.ml.registry (source unique de
+# verite pour "quels modeles l'app implemente"), pas une liste independante : un modele
+# retire/renomme cote utils disparait automatiquement d'ici. LSTM pas encore automatise
+# dans ce DAG (pas de route HTTP d'entrainement cote ml-api) ; propose en perspective
+# d'amelioration pour la soutenance. MLP reste hors de cette boucle : son comportement
+# pre-existant (un seul symbole, chemin A uniquement, pas de qualification par paire) n'a
+# pas ete retouche, cf. decision produit de se concentrer sur RF et XGBoost.
+_AUTOMATED_MODELS = {"random_forest", "xgboost"}
+TRAINABLE_MODELS = [model for model in list_configured_models() if model in _AUTOMATED_MODELS]
 
 # Dataset processed (output de build_features, input de train-rf). Chemin relatif au
 # cwd de crypto-bot-ml-api (/app), PAS a MODELS_DIR (bind-mount cote Airflow) : ml-api
@@ -105,16 +139,30 @@ def _build_features_callable(symbol: str) -> None:
     logger.info("build_features %s: %s", symbol, response.json())
 
 
-def _train_random_forest_callable() -> None:
-    """Appelle POST /internal/pipeline/train-rf sur crypto-bot-ml-api."""
-    dataset = _feature_path(SYMBOLS[0])
+def _train_model_callable(model_name: str, symbol: str) -> None:
+    """Appelle POST /internal/pipeline/train-<model_name> sur crypto-bot-ml-api.
+
+    Un appel par couple modele x symbole (cf. TRAINABLE_MODELS x SYMBOLS dans la
+    configuration du DAG) : chaque paire est enregistree dans le MLflow Model Registry
+    sous un nom qualifie ("<model_name>_<symbol>"), sinon la paire entrainee en second
+    ecraserait la premiere au meme nom de modele.
+    """
+    dataset = _feature_path(symbol)
+    url = f"{ML_API_URL}/internal/pipeline/train-{model_name}"
     response = requests.post(
-        f"{ML_API_URL}/internal/pipeline/train-rf",
-        json={"dataset": dataset, "config": "config.yaml"},
+        url,
+        json={"dataset": dataset, "config": "config.yaml", "symbol": symbol},
         timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
     )
+    if response.status_code == 404:
+        raise RuntimeError(
+            f"Route d'entrainement introuvable: {url}. TRAINABLE_MODELS contient "
+            f"'{model_name}' mais aucune route POST /internal/pipeline/train-{model_name} "
+            f"n'existe cote ml-api (models/src/api/main.py) -- verifier la convention de "
+            f"nommage ou ajouter la route manquante."
+        )
     response.raise_for_status()
-    logger.info("train_random_forest: %s", response.json())
+    logger.info("train_%s %s: %s", model_name, symbol, response.json())
 
 
 def _train_mlp_callable() -> None:
@@ -127,18 +175,6 @@ def _train_mlp_callable() -> None:
     )
     response.raise_for_status()
     logger.info("train_mlp: %s", response.json())
-
-
-def _train_xgboost_callable() -> None:
-    """Appelle POST /internal/pipeline/train-xgboost sur crypto-bot-ml-api."""
-    dataset = _feature_path(SYMBOLS[0])
-    response = requests.post(
-        f"{ML_API_URL}/internal/pipeline/train-xgboost",
-        json={"dataset": dataset, "config": "config.yaml"},
-        timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    logger.info("train_xgboost: %s", response.json())
 
 
 def _verify_inference_callable() -> None:
@@ -162,7 +198,7 @@ def _verify_inference_callable() -> None:
     logger.info("verify_inference: %s", response.json())
 
 
-def _deploy_callable(model_name: str = "random_forest") -> None:
+def _deploy_callable(model_name: str) -> None:
     """Appelle le job de déploiement (importé depuis jobs/).
 
     ``registry_root`` doit être explicite : le registre local est écrit par
@@ -206,67 +242,65 @@ with DAG(
     tags=["ml", "training", "deployment", "inference"],
 ) as dag:
 
-    # -- 1. Build features pour chaque symbole (appel HTTP a crypto-bot-ml-api) ---
-    build_tasks = []
+    # -- 1. Build features pour chaque symbole configuré (appel HTTP a crypto-bot-ml-api) --
+    build_tasks_by_symbol = {}
     for symbol in SYMBOLS:
-        task = PythonOperator(
+        build_tasks_by_symbol[symbol] = PythonOperator(
             task_id=f"build_features_{symbol}_{INTERVAL}",
             python_callable=_build_features_callable,
             op_kwargs={"symbol": symbol},
             retries=2,
             retry_delay=timedelta(minutes=2),
         )
-        build_tasks.append(task)
 
     # -- 2. Entraînements (appels HTTP a crypto-bot-ml-api) -----------------------
-    train_rf = PythonOperator(
-        task_id="train_random_forest",
-        python_callable=_train_random_forest_callable,
-        retries=1,
-        retry_delay=timedelta(minutes=5),
-    )
+    # Une tache par couple (modele, symbole) dans TRAINABLE_MODELS x SYMBOLS -- ajouter
+    # une paire (utils) ou un modele (TRAINABLE_MODELS) suffit, aucune duplication de code.
+    train_tasks_by_model = {model_name: {} for model_name in TRAINABLE_MODELS}
+    for model_name in TRAINABLE_MODELS:
+        for symbol in SYMBOLS:
+            task = PythonOperator(
+                task_id=f"train_{model_name}_{symbol}",
+                python_callable=_train_model_callable,
+                op_kwargs={"model_name": model_name, "symbol": symbol},
+                retries=1,
+                retry_delay=timedelta(minutes=5),
+            )
+            task.set_upstream(build_tasks_by_symbol[symbol])
+            train_tasks_by_model[model_name][symbol] = task
+
+    # MLP reste sur le comportement pre-existant (un seul symbole, chemin A / registre
+    # local uniquement) -- hors scope de ce changement, cf. decision de se concentrer sur
+    # RF et XGBoost pour la soutenance.
     train_mlp = PythonOperator(
         task_id="train_mlp",
         python_callable=_train_mlp_callable,
         retries=1,
         retry_delay=timedelta(minutes=5),
     )
-    train_xgboost = PythonOperator(
-        task_id="train_xgboost",
-        python_callable=_train_xgboost_callable,
-        retries=1,
-        retry_delay=timedelta(minutes=5),
-    )
+    train_mlp.set_upstream(list(build_tasks_by_symbol.values()))
 
-    # -- 3. Déploiement vers MinIO -------------------------------------------------
-    deploy_rf = PythonOperator(
-        task_id="deploy_model_random_forest",
-        python_callable=_deploy_callable,
-        op_kwargs={"model_name": "random_forest"},
-    )
+    # -- 3. Déploiement vers MinIO (chemin A, un emplacement par modele, inchangé) --
+    deploy_tasks_by_model = {}
+    for model_name in TRAINABLE_MODELS:
+        deploy_task = PythonOperator(
+            task_id=f"deploy_model_{model_name}",
+            python_callable=_deploy_callable,
+            op_kwargs={"model_name": model_name},
+        )
+        deploy_task.set_upstream(list(train_tasks_by_model[model_name].values()))
+        deploy_tasks_by_model[model_name] = deploy_task
+
     deploy_mlp = PythonOperator(
         task_id="deploy_model_mlp",
         python_callable=_deploy_callable,
         op_kwargs={"model_name": "mlp"},
     )
-    deploy_xgboost = PythonOperator(
-        task_id="deploy_model_xgboost",
-        python_callable=_deploy_callable,
-        op_kwargs={"model_name": "xgboost"},
-    )
+    deploy_mlp.set_upstream(train_mlp)
 
     # -- 4. Vérification de l'API d'inférence -----------------------------------
     verify = PythonOperator(
         task_id="verify_inference",
         python_callable=_verify_inference_callable,
     )
-
-    # -- Ordonnancement ---------------------------------------------------------
-    # Toutes les features en parallèle → puis les entraînements (parallèles)
-    # → puis les déploiements (parallèles) → puis la vérification
-    for task in (train_rf, train_mlp, train_xgboost):
-        task.set_upstream(build_tasks)
-    deploy_rf.set_upstream(train_rf)
-    deploy_mlp.set_upstream(train_mlp)
-    deploy_xgboost.set_upstream(train_xgboost)
-    verify.set_upstream([deploy_rf, deploy_mlp, deploy_xgboost])
+    verify.set_upstream([*deploy_tasks_by_model.values(), deploy_mlp])

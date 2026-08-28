@@ -59,6 +59,7 @@ class BuildFeaturesResponse(BaseModel):
 
 class TrainRandomForestRequest(BaseModel):
     dataset: str
+    symbol: str | None = None
     config: str = "config.yaml"
 
 
@@ -77,6 +78,7 @@ class TrainMLPResponse(BaseModel):
 
 class TrainXGBoostRequest(BaseModel):
     dataset: str
+    symbol: str | None = None
     config: str = "config.yaml"
 
 

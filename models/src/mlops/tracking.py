@@ -79,7 +79,9 @@ class MlflowRun:
 
 
 @contextmanager
-def start_run(settings: AppSettings, model_name: str, run_id: str | None = None) -> Iterator[MlflowRun]:
+def start_run(
+    settings: AppSettings, model_name: str, run_id: str | None = None, symbol: str | None = None
+) -> Iterator[MlflowRun]:
     """Start a tracked MLflow run and write JSON sidecars for CLI access."""
     actual_run_id = run_id or new_run_id(settings)
     run_dir = Path("mlruns") / settings.mlops.experiment_name / model_name / actual_run_id
@@ -107,6 +109,8 @@ def start_run(settings: AppSettings, model_name: str, run_id: str | None = None)
     with mlflow.start_run(run_name=f"{model_name}/{actual_run_id}") as active_run:
         mlflow.set_tag("model_name", model_name)
         mlflow.set_tag("run_id", actual_run_id)
+        if symbol:
+            mlflow.set_tag("symbol", symbol.upper())
         run = MlflowRun(run_dir, active_run.info.run_id)
         try:
             yield run

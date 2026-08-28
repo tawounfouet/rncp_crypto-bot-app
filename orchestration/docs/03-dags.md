@@ -180,15 +180,26 @@ load_<exchange>_<symbol>_<interval>
 Schedule : quotidien à 06:00 UTC (après les runs d'ingestion nocturnes).
 
 ```
-build_features_BTCUSDC_1h ─┐
-build_features_ETHUSDC_1h ─┴─► train_random_forest ─► deploy_model ─► verify_inference
+build_features_<symbol>_1h  ─┬─► train_random_forest_<symbol> ─┬─► deploy_model_random_forest ─┐
+                              ├─► train_xgboost_<symbol> ───────┼─► deploy_model_xgboost ────────┼─► verify_inference
+                              └─► train_mlp (un seul symbole) ──┴─► deploy_model_mlp ────────────┘
 ```
 
-`build_features_*` et `train_random_forest` appellent `crypto-bot-ml-api` en HTTP
-(`POST /internal/pipeline/features`, `POST /internal/pipeline/train-rf`) plutôt que
-d'exécuter `python -m src.main` dans le conteneur Airflow — cf.
-`04-troubleshooting.md`, Problème 8. `deploy_model` copie le meilleur modèle vers
-MinIO, `verify_inference` appelle l'endpoint d'inférence du backend.
+Une tâche `build_features_*` par paire configurée (`utils.connectors.exchanges.registry.
+list_configured_symbols()`, actuellement BTCUSDC/ETHUSDC), et une tâche `train_<model>_<symbol>`
+par couple (modèle, paire) dans `TRAINABLE_MODELS × SYMBOLS` (actuellement random_forest et
+xgboost — `TRAINABLE_MODELS` filtre `utils.ml.registry.list_configured_models()`). Random Forest
+et XGBoost sont en plus enregistrés dans le MLflow Model Registry sous un nom qualifié par
+paire (`random_forest_btcusdc`, `xgboost_ethusdc`, ...) : c'est ce registre qu'interroge le
+module `bots/` pour exécuter un bot. MLP reste hors de cette boucle (un seul symbole, registre
+local uniquement, comportement historique non retouché).
+
+`build_features_*` et `train_<model>_<symbol>` appellent `crypto-bot-ml-api` en HTTP
+(`POST /internal/pipeline/features`, `POST /internal/pipeline/train-random_forest`,
+`POST /internal/pipeline/train-xgboost`) plutôt que d'exécuter `python -m src.main` dans le
+conteneur Airflow — cf. `04-troubleshooting.md`, Problème 8. `deploy_model_*` copie le
+meilleur modèle vers MinIO (registre local, indépendant de la paire), `verify_inference`
+appelle l'endpoint d'inférence du backend.
 
 ### `purge_inactive_users.py` — purge RGPD des comptes inactifs
 

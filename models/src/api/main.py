@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -32,6 +33,11 @@ from src.training.train_mlp import train_from_processed_dataset as train_mlp_fro
 from src.training.train_random_forest import train_from_processed_dataset
 from src.training.train_xgboost import train_from_processed_dataset as train_xgboost_from_processed_dataset
 
+from utils.connectors.exchanges.registry import list_configured_symbols
+from utils.ml.registry import list_configured_models
+
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="CryptoBot Models Training API", version="0.1.0")
 
@@ -40,14 +46,24 @@ def get_settings():
     return load_config("config.yaml")
 
 
+def _resolve_symbol(symbol: str | None) -> str:
+    """Paire fournie, sinon la premiere paire configuree (utils, source unique de verite)."""
+    if symbol:
+        return symbol
+    default_symbol = list_configured_symbols()[0]
+    logger.warning("symbol non fourni, utilisation de la paire par defaut: %s", default_symbol)
+    return default_symbol
+
+
 def registry_model_path(model_name: str) -> Path:
     settings = get_settings()
     return Path(settings.mlops.model_registry_path) / model_name / "best"
 
 
 # Modeles exposes par /models (entraines via config.yaml) — l'inférence
-# n'est servie que pour INFERENCE_MODELS (layout joblib partage).
-AVAILABLE_MODELS = ("random_forest", "mlp", "xgboost", "lstm")
+# n'est servie que pour INFERENCE_MODELS (layout joblib partage). Source unique de
+# verite : utils/ml/registry.py (meme principe que list_configured_symbols() ci-dessus).
+AVAILABLE_MODELS = tuple(list_configured_models())
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -121,10 +137,11 @@ def build_features(request: BuildFeaturesRequest) -> BuildFeaturesResponse:
     return BuildFeaturesResponse(results=results)
 
 
-@app.post("/internal/pipeline/train-rf", response_model=TrainRandomForestResponse)
+@app.post("/internal/pipeline/train-random_forest", response_model=TrainRandomForestResponse)
 def train_random_forest_endpoint(request: TrainRandomForestRequest) -> TrainRandomForestResponse:
     try:
-        artifact_dir = train_from_processed_dataset(request.dataset, request.config)
+        symbol = _resolve_symbol(request.symbol)
+        artifact_dir = train_from_processed_dataset(request.dataset, request.config, symbol=symbol)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_random_forest failed: {exc}") from exc
     return TrainRandomForestResponse(artifact_dir=str(artifact_dir))
@@ -142,7 +159,8 @@ def train_mlp_endpoint(request: TrainMLPRequest) -> TrainMLPResponse:
 @app.post("/internal/pipeline/train-xgboost", response_model=TrainXGBoostResponse)
 def train_xgboost_endpoint(request: TrainXGBoostRequest) -> TrainXGBoostResponse:
     try:
-        artifact_dir = train_xgboost_from_processed_dataset(request.dataset, request.config)
+        symbol = _resolve_symbol(request.symbol)
+        artifact_dir = train_xgboost_from_processed_dataset(request.dataset, request.config, symbol=symbol)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_xgboost failed: {exc}") from exc
     return TrainXGBoostResponse(artifact_dir=str(artifact_dir))
