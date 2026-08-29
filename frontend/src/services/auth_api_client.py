@@ -247,11 +247,16 @@ class AuthApiClient:
             access_token=access_token,
         )
 
-    def create_user_bot(self, access_token: str, *, template_id: str) -> ApiResponse:
+    def create_user_bot(
+        self, access_token: str, *, template_id: str, quote_order_quantity: float | None = None
+    ) -> ApiResponse:
+        json_body: dict[str, object] = {"bot_template_id": template_id}
+        if quote_order_quantity is not None:
+            json_body["quote_order_quantity"] = quote_order_quantity
         return self._request(
             "POST",
             f"{API_PREFIX}/user-bots",
-            json_body={"bot_template_id": template_id},
+            json_body=json_body,
             access_token=access_token,
         )
 

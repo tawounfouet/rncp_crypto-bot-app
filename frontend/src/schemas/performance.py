@@ -63,6 +63,7 @@ class BotPerformanceContribution(BaseModel):
     bot_name: str
     model_name: str | None = None
     model_version: str | None = None
+    capital_initial: float | None = None
     pnl_total: float | None = None
     pnl_realized: float
     pnl_unrealized: float | None = None

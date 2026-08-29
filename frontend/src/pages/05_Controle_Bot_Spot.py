@@ -334,6 +334,10 @@ def main() -> None:
             render_status_badge("Statut", bot.status.value)
             render_status_badge("Plateforme", bot.exchange.capitalize())
             render_status_badge("Mode", bot.mode_label)
+            if bot.quote_order_quantity is not None:
+                render_status_badge(
+                    "Montant alloue", f"{bot.quote_order_quantity:g} {bot.quote_asset}"
+                )
             _render_ai_badge(bot, badge_trace)
             st.caption(
                 f"Strategie: {bot.strategy} | "

@@ -161,6 +161,7 @@ def main() -> None:
             "bot_name",
             "model_name",
             "model_version",
+            "capital_initial",
             "pnl_total",
             "pnl_realized",
             "pnl_unrealized",
@@ -172,6 +173,7 @@ def main() -> None:
             "pnl_contribution_pct",
         ],
         {
+            "capital_initial": _currency_or_missing,
             "pnl_total": _currency_or_missing,
             "pnl_realized": _currency_or_missing,
             "pnl_unrealized": _currency_or_missing,
@@ -182,6 +184,7 @@ def main() -> None:
             "bot_name": "Bot",
             "model_name": "Modele",
             "model_version": "Version",
+            "capital_initial": "Montant initial",
             "pnl_total": "PnL bot",
             "pnl_realized": "PnL realise",
             "pnl_unrealized": "PnL latent",

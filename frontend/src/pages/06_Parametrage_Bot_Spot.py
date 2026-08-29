@@ -22,6 +22,13 @@ def _render_mapping(title: str, values: dict[str, object]) -> None:
         st.caption(f"{key}: {value}")
 
 
+def _template_default_amount(template: BotTemplate) -> float:
+    try:
+        return float(template.order_policy.get("quote_order_quantity") or 1.0)
+    except (TypeError, ValueError):
+        return 1.0
+
+
 def _render_template_details(template: BotTemplate, already_selected: bool) -> None:
     st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
     st.markdown(f"### {template.name}")
@@ -48,7 +55,7 @@ def _render_template_details(template: BotTemplate, already_selected: bool) -> N
     with c2:
         _render_mapping("Execution verrouillee", template.execution_params)
         _render_mapping("Risque verrouille", template.risk_limits)
-        _render_mapping("Ordres verrouilles", template.order_policy)
+        _render_mapping("Ordres (montant modifiable ci-dessous)", template.order_policy)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -105,11 +112,24 @@ def main() -> None:
 
     if already_selected:
         show_feedback("info", "Ce bot est deja ajoute a vos instances.")
-    elif compat_button("Choisir ce bot", type="primary", width="stretch"):
-        ok, message, _selection = service.select_template(template_id)
-        show_feedback("success" if ok else "error", message)
-        if ok:
-            st.rerun()
+    else:
+        default_amount = _template_default_amount(template)
+        quote_asset = str(template.order_policy.get("quote_asset") or "USDC")
+        amount = st.number_input(
+            f"Montant alloue par ordre ({quote_asset})",
+            min_value=1.0,
+            value=default_amount,
+            step=10.0,
+            help=(
+                "Montant investi a chaque ordre d'achat de ce bot. Les autres parametres "
+                "(strategie, timeframe, signal, risque) restent verrouilles au template."
+            ),
+        )
+        if compat_button("Choisir ce bot", type="primary", width="stretch"):
+            ok, message, _selection = service.select_template(template_id, amount)
+            show_feedback("success" if ok else "error", message)
+            if ok:
+                st.rerun()
 
     selections = service.list_user_selections()
     if selections:

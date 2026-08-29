@@ -356,6 +356,12 @@ class BotControlService:
         heartbeat_at = self._parse_datetime(payload.get("last_decision_at"), fallback=updated_at)
         mode_label = str(payload.get("mode") or snapshot.get("environment") or "PAPER").upper()
         ai_labels = ai_labels_from_snapshot(snapshot)
+        order_policy = dict(snapshot.get("order_policy") or {})
+        raw_quantity = order_policy.get("quote_order_quantity")
+        try:
+            quote_order_quantity = float(raw_quantity) if raw_quantity is not None else None
+        except (TypeError, ValueError):
+            quote_order_quantity = None
         return BotInfo(
             id=str(payload.get("id", "")),
             name=str(snapshot.get("name") or template.get("name") or "Bot Spot"),
@@ -369,6 +375,8 @@ class BotControlService:
             heartbeat_at=heartbeat_at,
             last_action_result=str(payload.get("status") or status.value),
             last_action_at=updated_at,
+            quote_order_quantity=quote_order_quantity,
+            quote_asset=str(order_policy.get("quote_asset") or "-"),
             **ai_labels,
         )
 

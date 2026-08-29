@@ -29,6 +29,9 @@ def _overview_to_dataframe(overview: DashboardOverview) -> pd.DataFrame:
                 "Plateforme": row.exchange.capitalize(),
                 "Statut": row.status,
                 "Mode": mode,
+                "Montant initial": (
+                    format_currency(row.capital_initial) if row.capital_initial is not None else "-"
+                ),
                 "PnL": format_currency(row.pnl_usdc),
                 "ROI": format_pct(row.roi_pct),
                 "Dernier signal": format_datetime(row.last_signal_at),

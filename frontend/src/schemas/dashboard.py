@@ -14,6 +14,7 @@ class DashboardBotRow(BaseModel):
     exchange: str = "-"
     mode_live: bool
     status: str
+    capital_initial: float | None = None
     pnl_usdc: float
     roi_pct: float
     fees_usdc: float
