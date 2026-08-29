@@ -212,6 +212,7 @@ class TradingService:
             # Convert to response models
             order_summaries = [OrderSummary.model_validate(order) for order in orders]
 
+            pages = math.ceil(total / size) if total > 0 else 0
             return PaginatedResponse(
                 success=True,
                 message=f"Retrieved {len(order_summaries)} orders",
@@ -220,7 +221,9 @@ class TradingService:
                     page=page,
                     size=size,
                     total=total,
-                    pages=math.ceil(total / size) if total > 0 else 0,
+                    pages=pages,
+                    has_next=page < pages,
+                    has_prev=page > 1,
                 ),
             )
 
@@ -450,6 +453,7 @@ class TradingService:
             # Convert to response models
             transaction_summaries = [TransactionSummary.model_validate(t) for t in transactions]
 
+            pages = math.ceil(total / size) if total > 0 else 0
             return PaginatedResponse(
                 success=True,
                 message=f"Retrieved {len(transaction_summaries)} transactions",
@@ -458,7 +462,9 @@ class TradingService:
                     page=page,
                     size=size,
                     total=total,
-                    pages=math.ceil(total / size) if total > 0 else 0,
+                    pages=pages,
+                    has_next=page < pages,
+                    has_prev=page > 1,
                 ),
             )
 

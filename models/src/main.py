@@ -24,7 +24,6 @@ from src.training.train_random_forest import train_from_processed_dataset
 from src.training.train_xgboost import train_from_processed_dataset as train_xgboost_from_processed_dataset
 from src.utils.logger import configure_logging, get_logger
 from src.validation.mvp_check import check_mvp
-
 from utils.connectors.exchanges.registry import list_configured_symbols
 
 logger = get_logger(__name__)
@@ -72,7 +71,7 @@ def train_lstm_command(args: argparse.Namespace) -> None:
 
 
 def train_mlp_command(args: argparse.Namespace) -> None:
-    artifact_dir = train_mlp_from_processed_dataset(args.dataset, args.config)
+    artifact_dir = train_mlp_from_processed_dataset(args.dataset, args.config, symbol=_resolve_symbol(args.symbol))
     print(f"mlp artifacts: {artifact_dir}")
 
 
@@ -151,6 +150,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--dataset",
         default=str(Path("data/processed/BTCUSDC/1h_features.parquet")),
         help="Processed dataset path",
+    )
+    train_mlp_parser.add_argument(
+        "--symbol", default=None, help="Traded pair (default: first configured pair, cf. utils)"
     )
     train_mlp_parser.set_defaults(func=train_mlp_command)
 

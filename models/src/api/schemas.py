@@ -69,6 +69,7 @@ class TrainRandomForestResponse(BaseModel):
 
 class TrainMLPRequest(BaseModel):
     dataset: str
+    symbol: str | None = None
     config: str = "config.yaml"
 
 

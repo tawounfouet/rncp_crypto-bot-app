@@ -12,16 +12,20 @@ se périmerait au premier ajout de paire ou de modèle :
       │
       ├── train_<model>_<symbol>            (un par couple modèle x symbole,
       │                                       cf. TRAINABLE_MODELS x SYMBOLS)
-      ├── train_mlp                         (un seul symbole, hors scope pour
-      │                                       l'instant, cf. TRAINABLE_MODELS)
       │
       ├── deploy_model_<model>              (un par modèle, copie vers MinIO,
       │                                       chemin A inchangé)
       │
-      └── verify_inference                  (appelle l'endpoint backend)
+      ├── verify_inference                  (appelle l'endpoint ml-api)
+      │
+      └── sync_bot_templates                (appelle POST /internal/bot-templates/sync
+                                               sur crypto-bot-backend, chemin B : rend
+                                               les modèles fraîchement entraînés visibles
+                                               dans le catalogue sans attendre un
+                                               redémarrage du backend)
 
-RF et XGBoost sont en plus enregistrés dans le MLflow Model Registry sous un
-nom qualifié par paire ("random_forest_btcusdc", "xgboost_ethusdc", ...) :
+RF, XGBoost et MLP sont en plus enregistrés dans le MLflow Model Registry sous
+un nom qualifié par paire ("random_forest_btcusdc", "mlp_ethusdc", ...) :
 c'est ce registre que le module bots/ interroge pour exécuter un bot
 (BotMlClient.predict()), par opposition au registre local ci-dessus
 (chemin A, un seul emplacement par type de modèle, utilisé par
@@ -100,9 +104,7 @@ INTERVAL = "1h"
 # BotMlClient.list_trained_combos() cote backend) : un modele retire/renomme cote utils
 # disparait automatiquement d'ici. LSTM pas encore automatise dans ce DAG (pas de route
 # HTTP d'entrainement cote ml-api) ; propose en perspective d'amelioration pour la
-# soutenance. MLP reste hors de cette boucle : son comportement pre-existant (un seul
-# symbole, chemin A uniquement, pas de qualification par paire) n'a pas ete retouche,
-# cf. decision produit de se concentrer sur RF et XGBoost.
+# soutenance. RF, XGBoost et MLP sont tous les trois qualifies par paire (chemin B).
 TRAINABLE_MODELS = list_pair_qualified_models()
 
 # Dataset processed (output de build_features, input de train-rf). Chemin relatif au
@@ -112,6 +114,7 @@ TRAINABLE_MODELS = list_pair_qualified_models()
 PROCESSED_DIR = os.path.join("data", "processed")
 
 ML_API_URL = os.environ.get("ML_API_URL", "http://crypto-bot-ml-api:8010")
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://crypto-bot-backend:8009")
 
 # Le training peut prendre plusieurs minutes sur le jeu de donnees complet.
 PIPELINE_HTTP_TIMEOUT_SECONDS = 900
@@ -162,18 +165,6 @@ def _train_model_callable(model_name: str, symbol: str) -> None:
     logger.info("train_%s %s: %s", model_name, symbol, response.json())
 
 
-def _train_mlp_callable() -> None:
-    """Appelle POST /internal/pipeline/train-mlp sur crypto-bot-ml-api."""
-    dataset = _feature_path(SYMBOLS[0])
-    response = requests.post(
-        f"{ML_API_URL}/internal/pipeline/train-mlp",
-        json={"dataset": dataset, "config": "config.yaml"},
-        timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    logger.info("train_mlp: %s", response.json())
-
-
 def _verify_inference_callable() -> None:
     """Verifie le pipeline d'inference cote ml-api.
 
@@ -193,6 +184,23 @@ def _verify_inference_callable() -> None:
     response.raise_for_status()
     body = response.json()
     logger.info("verify_inference signal=%s confidence=%s model=%s", body["signal"], body["confidence"], body["model_name"])
+
+
+def _sync_bot_templates_callable() -> None:
+    """Appelle POST /internal/bot-templates/sync sur crypto-bot-backend.
+
+    Le backend ne resynchronise sinon les templates ML (BotService.
+    sync_builtin_templates(), chemin B) qu'a son propre demarrage (cf.
+    lifespan() dans backend/src/main.py) : si celui-ci a lieu avant que ce DAG
+    n'ait entraine/enregistre les modeles dans le MLflow Model Registry
+    (typiquement au premier deploiement, backend et Airflow demarrant en
+    parallele), le catalogue reste vide jusqu'a un redemarrage manuel. Cet
+    appel ferme la boucle : le catalogue est a jour des la fin du pipeline,
+    sans dependre de l'ordre de demarrage des conteneurs.
+    """
+    response = requests.post(f"{BACKEND_URL}/internal/bot-templates/sync", timeout=60)
+    response.raise_for_status()
+    logger.info("sync_bot_templates: %s", response.json())
 
 
 def _deploy_callable(model_name: str) -> None:
@@ -266,17 +274,6 @@ with DAG(
             task.set_upstream(build_tasks_by_symbol[symbol])
             train_tasks_by_model[model_name][symbol] = task
 
-    # MLP reste sur le comportement pre-existant (un seul symbole, chemin A / registre
-    # local uniquement) -- hors scope de ce changement, cf. decision de se concentrer sur
-    # RF et XGBoost pour la soutenance.
-    train_mlp = PythonOperator(
-        task_id="train_mlp",
-        python_callable=_train_mlp_callable,
-        retries=1,
-        retry_delay=timedelta(minutes=5),
-    )
-    train_mlp.set_upstream(list(build_tasks_by_symbol.values()))
-
     # -- 3. Déploiement vers MinIO (chemin A, un emplacement par modele, inchangé) --
     deploy_tasks_by_model = {}
     for model_name in TRAINABLE_MODELS:
@@ -288,16 +285,18 @@ with DAG(
         deploy_task.set_upstream(list(train_tasks_by_model[model_name].values()))
         deploy_tasks_by_model[model_name] = deploy_task
 
-    deploy_mlp = PythonOperator(
-        task_id="deploy_model_mlp",
-        python_callable=_deploy_callable,
-        op_kwargs={"model_name": "mlp"},
-    )
-    deploy_mlp.set_upstream(train_mlp)
-
     # -- 4. Vérification de l'API d'inférence -----------------------------------
     verify = PythonOperator(
         task_id="verify_inference",
         python_callable=_verify_inference_callable,
     )
-    verify.set_upstream([*deploy_tasks_by_model.values(), deploy_mlp])
+    verify.set_upstream(list(deploy_tasks_by_model.values()))
+
+    # -- 5. Resynchronisation du catalogue de bots cote backend ------------------
+    sync_bot_templates = PythonOperator(
+        task_id="sync_bot_templates",
+        python_callable=_sync_bot_templates_callable,
+        retries=2,
+        retry_delay=timedelta(minutes=2),
+    )
+    sync_bot_templates.set_upstream(list(deploy_tasks_by_model.values()))

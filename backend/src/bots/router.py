@@ -22,9 +22,28 @@ from bots.service import BotService, bot_service
 
 router = APIRouter(tags=["Bots"])
 
+# Route interne, non authentifiee, mirroir de /internal/pipeline/* cote ml-api :
+# appelee uniquement depuis le reseau docker (Airflow, cf. orchestration/dags/ml_pipeline.py),
+# jamais montee sous API_PREFIX ni exposee publiquement.
+internal_router = APIRouter(tags=["Bots (internal)"])
+
 
 def get_bot_service() -> BotService:
     return bot_service
+
+
+@internal_router.post("/internal/bot-templates/sync")
+async def sync_bot_templates(
+    service: BotService = Depends(get_bot_service),
+) -> dict:
+    """Resynchronise les templates ML (BotService.sync_builtin_templates()).
+
+    Appelee par le DAG Airflow ``cryptobot_ml_pipeline`` juste apres le
+    deploiement des modeles, pour que le catalogue reflete les modeles
+    fraichement entraines sans attendre un redemarrage du backend (cf.
+    lifespan() dans main.py, qui ne resynchronise qu'au demarrage).
+    """
+    return service.sync_builtin_templates(migrate_instances=False)
 
 
 @router.get("/bot-templates", response_model=list[BotTemplateResponse])

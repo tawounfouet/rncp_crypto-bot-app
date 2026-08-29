@@ -10,11 +10,12 @@ from __future__ import annotations
 import json
 import math
 import os
+import secrets
 import shutil
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 
 import mlflow
 
@@ -22,13 +23,21 @@ from src.config.config_loader import dump_config_snapshot
 from src.config.settings import AppSettings
 from src.utils.logger import get_logger
 
-
 logger = get_logger(__name__)
 
 
 def new_run_id(settings: AppSettings) -> str:
-    """Create a timestamp-based run id."""
-    return datetime.now(tz=UTC).strftime(settings.mlops.run_id_format)
+    """Create a timestamp-based run id, unique even for two calls in the same second.
+
+    Le DAG ml_pipeline lance desormais un entrainement par couple (modele, symbole) en
+    parallele (ex. train_random_forest_BTCUSDC et train_random_forest_ETHUSDC) : sans le
+    suffixe aleatoire, un format seconde-pres (run_id_format, cf. config.yaml) produit le
+    MEME run_id pour deux appels concurrents tombant dans la meme seconde -- meme run_dir,
+    meme run MLflow, d'ou un IntegrityError (metric_pk) observe en conditions reelles le
+    2026-08-29 quand deux entrainements en parallele ecrivaient dans le run MLflow partage.
+    """
+    timestamp = datetime.now(tz=UTC).strftime(settings.mlops.run_id_format)
+    return f"{timestamp}-{secrets.token_hex(3)}"
 
 
 def _sanitize(value: object) -> object:
