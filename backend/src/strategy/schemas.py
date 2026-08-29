@@ -174,6 +174,46 @@ class BacktestCreate(BaseModel):
     )
 
 
+# Backtest sur modele ML (par opposition a BacktestCreate, sur une Strategy technique)
+class MLBacktestCreate(BaseModel):
+    """Schema for creating a backtest on a trained ML model (RF/XGBoost/MLP)."""
+
+    model_name: str = Field(..., description="Nom du modele (ex: random_forest, xgboost, mlp)")
+    symbol: str = Field(..., description="Trading symbol")
+    interval: str = Field(..., description="Timeframe entraine (ex: 1h)")
+    start_date: datetime = Field(..., description="Backtest start date")
+    end_date: datetime = Field(..., description="Backtest end date")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "model_name": "random_forest",
+                "symbol": "BTCUSDC",
+                "interval": "1h",
+                "start_date": "2025-01-01T00:00:00Z",
+                "end_date": "2025-06-01T00:00:00Z",
+            }
+        }
+    )
+
+
+class MLBacktestResponse(BaseModel):
+    """ML backtest result response."""
+
+    id: str
+    user_id: str
+    model_name: str
+    model_version: str
+    symbol: str
+    interval: str
+    start_date: datetime
+    end_date: datetime
+    candles: int
+    metrics: dict[str, Any]
+    equity_curve: list[float]
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Response Models
 class StrategyBase(BaseModel):
     """Base strategy fields."""
@@ -237,7 +277,9 @@ class BacktestResponse(BaseModel):
     """Backtest result response."""
 
     id: str
-    strategy_id: str
+    # None pour un backtest sur modele ML (aucune Strategy associee, cf.
+    # StrategyService.run_ml_backtest / parameters["source"] == "ml").
+    strategy_id: str | None = None
     user_id: str
     symbol: str
     timeframe: str

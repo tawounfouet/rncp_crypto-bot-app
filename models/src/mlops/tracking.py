@@ -89,7 +89,11 @@ class MlflowRun:
 
 @contextmanager
 def start_run(
-    settings: AppSettings, model_name: str, run_id: str | None = None, symbol: str | None = None
+    settings: AppSettings,
+    model_name: str,
+    run_id: str | None = None,
+    symbol: str | None = None,
+    interval: str | None = None,
 ) -> Iterator[MlflowRun]:
     """Start a tracked MLflow run and write JSON sidecars for CLI access."""
     actual_run_id = run_id or new_run_id(settings)
@@ -120,6 +124,8 @@ def start_run(
         mlflow.set_tag("run_id", actual_run_id)
         if symbol:
             mlflow.set_tag("symbol", symbol.upper())
+        if interval:
+            mlflow.set_tag("interval", interval)
         run = MlflowRun(run_dir, active_run.info.run_id)
         try:
             yield run

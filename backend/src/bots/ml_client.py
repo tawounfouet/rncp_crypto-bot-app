@@ -86,3 +86,51 @@ class BotMlClient:
             prediction.get("signal"),
         )
         return prediction
+
+    def backtest(
+        self,
+        *,
+        model_name: str,
+        symbol: str,
+        interval: str,
+        start_date: str,
+        end_date: str,
+        model_version: str | None = None,
+    ) -> dict[str, Any]:
+        """Backtest un modele qualifie par paire sur une plage historique (cf. ml-api
+        src/inference/mlflow_registry.py::backtest_registered_bot_model)."""
+        payload: dict[str, Any] = {
+            "model_name": model_name,
+            "symbol": symbol,
+            "interval": interval,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+        if model_version:
+            payload["model_version"] = model_version
+
+        try:
+            logger.info(
+                "Calling ML API backtest endpoint: POST %s/bot-models/backtest model=%s", self.base_url, model_name
+            )
+            response = requests.post(
+                f"{self.base_url}/bot-models/backtest",
+                json=payload,
+                timeout=max(
+                    self.timeout_seconds, 60.0
+                ),  # reconstruction de features + backtest, plus lent qu'un predict
+            )
+        except requests.RequestException as exc:
+            raise BotModelUnavailable(f"ML API unavailable: {exc}") from exc
+
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("detail")
+            except ValueError:
+                detail = response.text
+            raise BotModelUnavailable(f"ML API rejected backtest: {detail or response.status_code}")
+
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise BotModelUnavailable("ML API returned an invalid JSON backtest response") from exc

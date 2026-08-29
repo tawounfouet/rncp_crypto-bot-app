@@ -155,10 +155,6 @@ DEFAULT_BOT_TEMPLATES: list[dict[str, Any]] = [
 # jamais des regles techniques valides pour strategy.engine.registry.get_strategy(), donc
 # _compute_template_signal() doit intercepter ce cas AVANT tout appel a _create_strategy().
 PAIR_QUALIFIED_ML_STRATEGY_TYPE = "ml_registry_signal"
-# Timeframe des modeles entraines par le DAG ml_pipeline (orchestration/dags/ml_pipeline.py::
-# INTERVAL) -- a garder synchronise manuellement, comme build_live_feature_frame()
-# (inference/live_features.py) l'est deja avec models/config.yaml.
-PAIR_QUALIFIED_ML_TIMEFRAME = "1h"
 
 
 class BotService:
@@ -195,19 +191,20 @@ class BotService:
         for combo in combos:
             symbol = str(combo["symbol"]).upper()
             model_name = str(combo["model_name"])
+            interval = str(combo["interval"])
             registered_name = str(combo["registered_name"])
             templates.append(
                 {
-                    "slug": f"ml-{model_name}-{symbol.lower()}-{PAIR_QUALIFIED_ML_TIMEFRAME}-v1",
-                    "name": f"{model_name.replace('_', ' ').title()} {symbol} {PAIR_QUALIFIED_ML_TIMEFRAME}",
+                    "slug": f"ml-{model_name}-{symbol.lower()}-{interval}-v1",
+                    "name": f"{model_name.replace('_', ' ').title()} {symbol} {interval}",
                     "description": (
-                        f"Bot Testnet pilote par le modele {model_name} entraine sur {symbol} "
+                        f"Bot Testnet pilote par le modele {model_name} entraine sur {symbol} en {interval} "
                         f'(registre MLflow "{registered_name}").'
                     ),
                     "model_type": f"ml_{model_name}",
                     "strategy_type": PAIR_QUALIFIED_ML_STRATEGY_TYPE,
                     "symbol": symbol,
-                    "timeframe": PAIR_QUALIFIED_ML_TIMEFRAME,
+                    "timeframe": interval,
                     "signal_source": f"mlflow:{registered_name}",
                     "exchange": _DEFAULT_TEMPLATE_EXCHANGE,
                     "environment": "testnet",
@@ -220,6 +217,12 @@ class BotService:
                         "max_open_orders": 1,
                         "max_user_open_positions": 3,
                         "max_daily_loss_pct": 3.0,
+                        # Garde-fou : en dessous de ce seuil de confiance (proba de la classe
+                        # BUY/SELL predite, cf. predict_registered_bot_model), le signal est
+                        # force a HOLD -- cf. _compute_pair_qualified_ml_signal(). Fixe au
+                        # niveau du template (pas modifiable par l'utilisateur, contrairement
+                        # a max_daily_loss_pct), coherent avec le principe "bots verrouilles".
+                        "min_confidence_pct": 55.0,
                     },
                     "order_policy": {
                         "order_type": "MARKET",
@@ -300,7 +303,13 @@ class BotService:
             existing_amount = self._decimal_or_none(
                 dict(snapshot.get("order_policy") or {}).get("quote_order_quantity")
             )
-            updated_snapshot = self._snapshot_template(template, existing_amount)
+            # Meme logique de preservation pour le circuit breaker de drawdown journalier
+            # (cf. UserBotCreate.max_daily_loss_pct) : sans ca, un resync ecraserait le
+            # reglage choisi par l'utilisateur avec la valeur par defaut du template.
+            existing_max_daily_loss_pct = self._decimal_or_none(
+                dict(snapshot.get("risk_limits") or {}).get("max_daily_loss_pct")
+            )
+            updated_snapshot = self._snapshot_template(template, existing_amount, existing_max_daily_loss_pct)
             if snapshot != updated_snapshot or instance.bot_template_id != template.id:
                 instance.bot_template_id = template.id
                 instance.config_snapshot = updated_snapshot
@@ -360,7 +369,9 @@ class BotService:
                 mode="TESTNET",
                 status="STOPPED",
                 auto_trade_enabled=False,
-                config_snapshot=self._snapshot_template(template, payload.quote_order_quantity),
+                config_snapshot=self._snapshot_template(
+                    template, payload.quote_order_quantity, payload.max_daily_loss_pct
+                ),
             )
             session.add(instance)
             session.flush()
@@ -1064,6 +1075,26 @@ class BotService:
             ai_signal = str(prediction.get("signal") or "").upper()
             if ai_signal not in {"BUY", "SELL", "HOLD"}:
                 raise BotModelUnavailable(f"Invalid ML signal received: {ai_signal or '<empty>'}")
+            confidence = self._clean_value(prediction.get("confidence"))
+
+            # Garde-fou seuil de confiance : en dessous de risk_limits.min_confidence_pct,
+            # le signal BUY/SELL est force a HOLD plutot qu'execute -- ai_signal (3e valeur
+            # du tuple retourne) reste le signal brut du modele pour la tracabilite/l'audit,
+            # requested_action (4e valeur, ce qui est reellement execute) devient "HOLD".
+            requested_action = ai_signal
+            confidence_gate: dict[str, Any] | None = None
+            if ai_signal in {"BUY", "SELL"}:
+                risk_limits = dict(snapshot.get("risk_limits") or {})
+                min_confidence_pct = self._decimal(risk_limits.get("min_confidence_pct"))
+                confidence_pct = Decimal(str(confidence * 100)) if confidence is not None else None
+                if min_confidence_pct > 0 and (confidence_pct is None or confidence_pct < min_confidence_pct):
+                    requested_action = "HOLD"
+                    confidence_gate = {
+                        "min_confidence_pct": float(min_confidence_pct),
+                        "confidence_pct": float(confidence_pct) if confidence_pct is not None else None,
+                        "forced_hold": True,
+                    }
+
             model_output = {
                 "model_type": snapshot["model_type"],
                 "model_source": "ml_api",
@@ -1072,18 +1103,19 @@ class BotService:
                 "model_version": prediction.get("model_version"),
                 "signal_source": snapshot["signal_source"],
                 "strategy_type": snapshot["strategy_type"],
-                "confidence": self._clean_value(prediction.get("confidence")),
+                "confidence": confidence,
                 "probabilities": prediction.get("probabilities") or {},
                 "features": features,
-                "action": ai_signal,
+                "action": requested_action,
                 # raw_ai_signal : meme cle que le chemin RSI legacy (_compute_mlflow_rsi_
                 # signal), lue par le frontend (04_Performances_Spot.py, colonne "Signal
                 # IA") -- sans elle la colonne affiche "Donnee indisponible" pour tout bot
                 # de ce chemin, meme quand le modele a bien repondu.
                 "raw_ai_signal": ai_signal,
+                "confidence_gate": confidence_gate,
                 "indicators": {},
             }
-            return market_snapshot, model_output, ai_signal, ai_signal
+            return market_snapshot, model_output, ai_signal, requested_action
         except BotModelUnavailable as exc:
             model_output = {
                 "model_type": snapshot["model_type"],
@@ -1849,7 +1881,11 @@ class BotService:
         return None
 
     @staticmethod
-    def _snapshot_template(template: BotTemplate, quote_order_quantity: Decimal | None = None) -> dict[str, Any]:
+    def _snapshot_template(
+        template: BotTemplate,
+        quote_order_quantity: Decimal | None = None,
+        max_daily_loss_pct: Decimal | None = None,
+    ) -> dict[str, Any]:
         risk_limits = dict(template.risk_limits or {})
         order_policy = dict(template.order_policy or {})
         if quote_order_quantity is not None:
@@ -1860,6 +1896,10 @@ class BotService:
             amount = str(quote_order_quantity)
             order_policy["quote_order_quantity"] = amount
             risk_limits["max_order_quote_quantity"] = amount
+        if max_daily_loss_pct is not None:
+            # 2e champ modifiable par l'utilisateur (cf. UserBotCreate) : circuit breaker
+            # de drawdown journalier, applique par _daily_loss_status().
+            risk_limits["max_daily_loss_pct"] = str(max_daily_loss_pct)
         return {
             "template_id": template.id,
             "template_slug": template.slug,

@@ -108,6 +108,9 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
+      - AIRFLOW_API_URL=http://airflow-webserver:8080
+      - AIRFLOW_ADMIN_USER=${AIRFLOW_ADMIN_USER:-admin}
+      - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD:-admin}
       - ENVIRONMENT=staging
       - DEBUG=true
       - APP_VERSION=${APP_VERSION:-staging}
@@ -261,6 +264,8 @@ services:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      # cf. docker-compose.yml pour le pourquoi (API REST Airflow, trigger de DAG depuis le backend)
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
       - MINIO_ENDPOINT=minio:9000
@@ -305,6 +310,8 @@ services:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      # cf. docker-compose.yml pour le pourquoi (API REST Airflow, trigger de DAG depuis le backend)
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
       - MINIO_ENDPOINT=minio:9000
@@ -348,6 +355,8 @@ services:
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+      # cf. docker-compose.yml pour le pourquoi (API REST Airflow, trigger de DAG depuis le backend)
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
     entrypoint:
       - /bin/bash
       - -c

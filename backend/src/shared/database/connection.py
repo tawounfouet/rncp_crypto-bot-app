@@ -201,6 +201,21 @@ class DatabaseManager:
             if dialect == "postgresql" and token_length and token_length < 1024:
                 statements.append("ALTER TABLE user_sessions ALTER COLUMN token TYPE VARCHAR(1024)")
 
+        if inspector.has_table("backtest_results"):
+            backtest_columns = {column["name"]: column for column in inspector.get_columns("backtest_results")}
+            strategy_id_column = backtest_columns.get("strategy_id")
+            # Un backtest sur modele ML (StrategyService.run_ml_backtest) n'est rattache a
+            # aucune Strategy -- strategy_id doit devenir nullable sur une base existante ou
+            # cette colonne a ete creee NOT NULL avant l'ajout du flux ML.
+            if strategy_id_column is not None and strategy_id_column.get("nullable") is False:
+                if dialect == "postgresql":
+                    statements.append("ALTER TABLE backtest_results ALTER COLUMN strategy_id DROP NOT NULL")
+                else:
+                    logger.warning(
+                        "Skipping automatic backtest_results.strategy_id nullability migration for dialect: %s",
+                        dialect,
+                    )
+
         if not statements:
             return
 

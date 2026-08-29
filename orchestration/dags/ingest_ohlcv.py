@@ -5,7 +5,8 @@ collecte les klines des paires configurées et les stocke dans MinIO sous la
 convention ``raw/ohlcv/<exchange>/<SYMBOL>/<interval>/<date>.parquet``, puis les
 charge dans PostgreSQL (table ``market_data``, déjà scopée par exchange).
 
-Planning : toutes les heures. Ajouter un exchange = une entrée dans INGESTION_TARGETS.
+Planning : toutes les heures, pour chaque interval configuré dans INGESTION_TARGETS
+(1h/5m/1d par defaut). Ajouter un exchange = une entrée dans INGESTION_TARGETS.
 
 Flux (par DAG) :
     collect_<exchange>_<SYMBOL>_<interval> → load_<exchange>_<SYMBOL>_<interval>
@@ -48,9 +49,14 @@ except ImportError as exc:
 
 #: Cibles d'ingestion. Ajouter un exchange = ajouter une entrée ici.
 #: (paires par exchange : Binance en USDC, Kraken en EUR — cf. contexte MiCA #13)
+#: intervals : a garder synchronise avec models/config.yaml::data.intervals et
+#: orchestration/dags/{ml_pipeline,backfill_ohlcv}.py::INTERVALS -- run_ingestion()
+#: recupere toujours les 1000 dernieres bougies (pas de fenetre temporelle), donc
+#: ajouter un interval ici ne coute qu'un appel API de plus par heure et par paire,
+#: meme pour 5m/1d (peu de volume compare a un backfill qui pagine sur 2 ans).
 INGESTION_TARGETS = [
-    {"exchange": "binance", "symbols": ["BTCUSDC", "ETHUSDC"], "interval": "1h"},
-    {"exchange": "kraken", "symbols": ["BTCEUR", "ETHEUR"], "interval": "1h"},
+    {"exchange": "binance", "symbols": ["BTCUSDC", "ETHUSDC"], "intervals": ["1h", "5m", "1d"]},
+    {"exchange": "kraken", "symbols": ["BTCEUR", "ETHEUR"], "intervals": ["1h", "5m", "1d"]},
 ]
 LIMIT = 1000  # klines par run (max API = 1000)
 
@@ -109,7 +115,6 @@ default_args = {
 
 for _target in INGESTION_TARGETS:
     _exchange = _target["exchange"]
-    _interval = _target["interval"]
     _dag_id = f"ingest_ohlcv_{_exchange}_to_minio"
 
     with DAG(
@@ -122,15 +127,16 @@ for _target in INGESTION_TARGETS:
         tags=["ingestion", _exchange, "minio", "raw", "postgres"],
     ) as dag:
         for _symbol in _target["symbols"]:
-            _collect = PythonOperator(
-                task_id=f"collect_{_exchange}_{_symbol}_{_interval}",
-                python_callable=_make_collect_callable(_exchange, _symbol, _interval, LIMIT),
-            )
-            _load = PythonOperator(
-                task_id=f"load_{_exchange}_{_symbol}_{_interval}",
-                python_callable=_make_load_callable(_exchange, _symbol, _interval),
-            )
-            _collect >> _load
+            for _interval in _target["intervals"]:
+                _collect = PythonOperator(
+                    task_id=f"collect_{_exchange}_{_symbol}_{_interval}",
+                    python_callable=_make_collect_callable(_exchange, _symbol, _interval, LIMIT),
+                )
+                _load = PythonOperator(
+                    task_id=f"load_{_exchange}_{_symbol}_{_interval}",
+                    python_callable=_make_load_callable(_exchange, _symbol, _interval),
+                )
+                _collect >> _load
 
     # Airflow découvre les DAGs dans les variables globales du module
     globals()[_dag_id] = dag

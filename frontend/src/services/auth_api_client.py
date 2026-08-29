@@ -248,11 +248,18 @@ class AuthApiClient:
         )
 
     def create_user_bot(
-        self, access_token: str, *, template_id: str, quote_order_quantity: float | None = None
+        self,
+        access_token: str,
+        *,
+        template_id: str,
+        quote_order_quantity: float | None = None,
+        max_daily_loss_pct: float | None = None,
     ) -> ApiResponse:
         json_body: dict[str, object] = {"bot_template_id": template_id}
         if quote_order_quantity is not None:
             json_body["quote_order_quantity"] = quote_order_quantity
+        if max_daily_loss_pct is not None:
+            json_body["max_daily_loss_pct"] = max_daily_loss_pct
         return self._request(
             "POST",
             f"{API_PREFIX}/user-bots",
@@ -395,6 +402,7 @@ class AuthApiClient:
         form_body: Mapping[str, str] | None = None,
         query_params: Mapping[str, str] | None = None,
         access_token: str | None = None,
+        timeout: int | None = None,
     ) -> ApiResponse:
         url = self._build_url(path, query_params)
         body: bytes | None = None
@@ -413,7 +421,7 @@ class AuthApiClient:
         http_request = request.Request(url=url, data=body, headers=headers, method=method.upper())
 
         try:
-            with request.urlopen(http_request, timeout=self.timeout) as response:
+            with request.urlopen(http_request, timeout=timeout or self.timeout) as response:
                 raw_payload = response.read().decode("utf-8")
                 return ApiResponse(
                     status_code=response.status,

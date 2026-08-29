@@ -24,12 +24,15 @@ from strategy.models import Strategy, StrategyDeployment, StrategyState
 
 # from models.order import Order
 from strategy.schemas import (
+    MLBacktestCreate,
+    MLBacktestResponse,
     StrategyCreate,
     StrategyDeploymentCreate,
     StrategyDeploymentResponse,
     StrategyResponse,
     StrategyUpdate,
 )
+from utils.connectors.exchanges.base import interval_to_timedelta
 from utils.trading.signals import VALUE_TO_SIGNAL
 
 logger = logging.getLogger(__name__)
@@ -928,6 +931,176 @@ class StrategyService:
                 transactions=bt.transactions,
                 created_at=bt.created_at,
                 updated_at=bt.updated_at,
+            )
+
+    def _ensure_ohlcv_coverage(
+        self,
+        session,
+        symbol: str,
+        interval: str,
+        start_date: datetime,
+        end_date: datetime,
+        exchange: str = "binance",
+    ) -> None:
+        """Declenche un backfill Airflow si les donnees OHLCV demandees manquent.
+
+        Scope actuel : Binance uniquement (build_symbol_features cote ml-api n'est pas
+        encore exchange-aware, cf. memoire de session -- Kraken en suite separee). Ne
+        leve que si le backfill echoue/timeout ; ne fait rien si la couverture est deja
+        suffisante (tolerance de 5% pour les trous mineurs/bougies manquantes upstream).
+        """
+        import time
+
+        from market.insert_service import MarketDataInsertService
+        from shared.clients.airflow_client import AirflowClient, AirflowUnavailable
+
+        insert_service = MarketDataInsertService(session)
+        existing = insert_service.get_data_count(symbol, interval, start_date, end_date, exchange=exchange)
+        expected = max(1, int((end_date - start_date) / interval_to_timedelta(interval)))
+        if existing >= expected * 0.95:
+            logger.info(
+                "OHLCV coverage OK symbol=%s interval=%s existing=%s expected=%s", symbol, interval, existing, expected
+            )
+            return
+
+        logger.info(
+            "OHLCV coverage insuffisante symbol=%s interval=%s existing=%s expected=%s -- declenchement backfill",
+            symbol,
+            interval,
+            existing,
+            expected,
+        )
+        airflow = AirflowClient()
+        dag_id = f"backfill_ohlcv_{exchange.lower()}"
+        try:
+            run = airflow.trigger_dag_run(
+                dag_id,
+                conf={
+                    "symbols": [symbol],
+                    "interval": interval,
+                    "start_date": start_date.strftime("%Y-%m-%d"),
+                    "end_date": end_date.strftime("%Y-%m-%d"),
+                },
+            )
+            dag_run_id = run["dag_run_id"]
+
+            # Poll borne : le DAG estime ~10s pour 2 ans/1 symbole (cf. docstring du DAG),
+            # 90s laisse une marge confortable sans bloquer indefiniment la requete HTTP.
+            deadline = time.monotonic() + 90
+            state = run.get("state", "queued")
+            while state in {"queued", "running"} and time.monotonic() < deadline:
+                time.sleep(3)
+                state = airflow.get_dag_run_state(dag_id, dag_run_id)
+
+            if state != "success":
+                raise BusinessLogicError(
+                    f"Le backfill Airflow ({dag_id}, run={dag_run_id}) n'a pas terminé avec succès "
+                    f"(état: {state}). Vérifiez les logs de la tâche dans l'UI Airflow."
+                )
+        except AirflowUnavailable as exc:
+            raise BusinessLogicError(
+                f"Impossible de déclencher le backfill Airflow pour {symbol}/{interval}: {exc}"
+            ) from exc
+
+    async def run_ml_backtest(self, user_id: str, backtest_data: MLBacktestCreate) -> MLBacktestResponse:
+        """Backtest un modele ML entraine (RF/XGBoost/MLP), en completant les donnees
+        historiques manquantes via Airflow avant de lancer le backtest cote ml-api.
+
+        Contrairement a run_backtest() (strategies techniques), aucune Strategy n'est
+        requise : le modele est identifie par (model_name, symbol, interval) et resolu
+        dans le registre MLflow via BotMlClient.list_trained_combos().
+        """
+        import uuid
+
+        from bots.ml_client import BotMlClient, BotModelUnavailable
+
+        from strategy.models import BacktestResult
+
+        ml_client = BotMlClient()
+        try:
+            combos = ml_client.list_trained_combos()
+        except BotModelUnavailable as exc:
+            raise BusinessLogicError(f"ML API indisponible: {exc}") from exc
+
+        combo = next(
+            (
+                c
+                for c in combos
+                if c["symbol"].upper() == backtest_data.symbol.upper()
+                and c["model_name"] == backtest_data.model_name
+                and c["interval"] == backtest_data.interval
+            ),
+            None,
+        )
+        if combo is None:
+            raise NotFoundError(
+                f"Aucun modèle entraîné {backtest_data.model_name}/{backtest_data.symbol}/"
+                f"{backtest_data.interval} -- vérifiez qu'il a été entraîné (DAG ml_pipeline)."
+            )
+
+        with get_db_session() as session:
+            self._ensure_ohlcv_coverage(
+                session,
+                symbol=backtest_data.symbol.upper(),
+                interval=backtest_data.interval,
+                start_date=backtest_data.start_date,
+                end_date=backtest_data.end_date,
+            )
+
+            try:
+                result = ml_client.backtest(
+                    model_name=combo["registered_name"],
+                    symbol=backtest_data.symbol.upper(),
+                    interval=backtest_data.interval,
+                    start_date=backtest_data.start_date.strftime("%Y-%m-%d"),
+                    end_date=backtest_data.end_date.strftime("%Y-%m-%d"),
+                )
+            except BotModelUnavailable as exc:
+                raise BusinessLogicError(f"Backtest ML échoué: {exc}") from exc
+
+            bt = BacktestResult(
+                id=str(uuid.uuid4()),
+                strategy_id=None,
+                user_id=user_id,
+                symbol=backtest_data.symbol.upper(),
+                timeframe=backtest_data.interval,
+                start_date=backtest_data.start_date,
+                end_date=backtest_data.end_date,
+                parameters={
+                    "source": "ml",
+                    "model_name": result["model_name"],
+                    "model_version": result["model_version"],
+                },
+                results={"equity_curve": result["equity_curve"]},
+                metrics=result["metrics"],
+                transactions=None,
+            )
+            session.add(bt)
+            session.commit()
+            session.refresh(bt)
+
+            logger.info(
+                "ML backtest user=%s model=%s symbol=%s: candles=%s return=%s",
+                user_id,
+                result["model_name"],
+                backtest_data.symbol,
+                result["candles"],
+                result["metrics"].get("strategy_return"),
+            )
+
+            return MLBacktestResponse(
+                id=bt.id,
+                user_id=bt.user_id,
+                model_name=result["model_name"],
+                model_version=result["model_version"],
+                symbol=bt.symbol,
+                interval=bt.timeframe,
+                start_date=bt.start_date,
+                end_date=bt.end_date,
+                candles=result["candles"],
+                metrics=bt.metrics,
+                equity_curve=result["equity_curve"],
+                created_at=bt.created_at,
             )
 
     def get_user_backtests(self, user_id: str) -> list:

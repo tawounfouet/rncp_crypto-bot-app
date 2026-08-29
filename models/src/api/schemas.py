@@ -60,6 +60,7 @@ class BuildFeaturesResponse(BaseModel):
 class TrainRandomForestRequest(BaseModel):
     dataset: str
     symbol: str | None = None
+    interval: str = "1h"
     config: str = "config.yaml"
 
 
@@ -70,6 +71,7 @@ class TrainRandomForestResponse(BaseModel):
 class TrainMLPRequest(BaseModel):
     dataset: str
     symbol: str | None = None
+    interval: str = "1h"
     config: str = "config.yaml"
 
 
@@ -80,6 +82,7 @@ class TrainMLPResponse(BaseModel):
 class TrainXGBoostRequest(BaseModel):
     dataset: str
     symbol: str | None = None
+    interval: str = "1h"
     config: str = "config.yaml"
 
 
@@ -108,11 +111,38 @@ class BotModelPredictionResponse(BaseModel):
     generated_at: str
 
 
+class BacktestModelRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_name: str = Field(..., min_length=1)
+    model_version: str | None = Field(default=None, min_length=1)
+    symbol: str = Field(..., min_length=1)
+    interval: str = Field(..., min_length=1)
+    start_date: str
+    end_date: str
+
+
+class BacktestModelResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
+    model_name: str
+    model_version: str
+    symbol: str
+    interval: str
+    start_date: str
+    end_date: str
+    candles: int
+    metrics: dict[str, float | int | None]
+    equity_curve: list[float]
+    generated_at: str
+
+
 class TrainedModelCombo(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     symbol: str
     model_name: str
+    interval: str
     registered_name: str
 
 

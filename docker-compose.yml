@@ -21,6 +21,11 @@ x-airflow-common: &airflow-common
     - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
     - AIRFLOW__CORE__LOAD_EXAMPLES=false
     - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_WEBSERVER_SECRET_KEY}
+    # Auth basic activee sur l'API REST (defaut Airflow 2.8 = session uniquement, pas
+    # utilisable depuis un service backend sans navigateur) -- requis pour que
+    # backend/src/shared/clients/airflow_client.py declenche des DAGs via POST
+    # /api/v1/dags/{dag_id}/dagRuns avec AIRFLOW_ADMIN_USER/AIRFLOW_ADMIN_PASSWORD.
+    - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
     - POSTGRES_USER=${POSTGRES_USER:-postgres}
     - POSTGRES_PWD=${POSTGRES_PWD:-postgres}
     # MinIO — requis par les jobs d'ingestion
@@ -160,6 +165,9 @@ services:
       - MINIO_SECURE=0
       - MINIO_BUCKET=crypto-bot-data
       - ML_API_URL=http://crypto-bot-ml-api:8010
+      - AIRFLOW_API_URL=http://airflow-webserver:8080
+      - AIRFLOW_ADMIN_USER=${AIRFLOW_ADMIN_USER:-admin}
+      - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD:-admin}
       - BOT_TEMPLATE_AUTO_MIGRATE=1
       - ENVIRONMENT=development
       - DEBUG=true

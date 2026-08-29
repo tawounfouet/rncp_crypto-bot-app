@@ -114,6 +114,34 @@ def _coverage_index(coverage: list[dict]) -> dict[tuple[str, str], dict]:
     return {(c["symbol"], c["timeframe"]): c for c in coverage}
 
 
+def _load_ml_combos(client: BackendApiClient, token: str) -> list[dict]:
+    """Modèles ML réellement entraînés et disponibles, dérivés du catalogue de bots
+    (templates générés dynamiquement depuis le registre MLflow, cf. bots/service.py::
+    _generate_ml_templates). Un seul appel réutilisé pour la sélection modèle/paire/
+    timeframe — pas d'endpoint dédié côté backtesting, le catalogue de bots est déjà la
+    source unique de vérité pour "quels modèles sont vraiment entraînés"."""
+    resp = client.list_bot_templates(token)
+    if not resp.success or not isinstance(resp.data, list):
+        return []
+    combos = []
+    for tpl in resp.data:
+        if tpl.get("strategy_type") != "ml_registry_signal":
+            continue
+        model_name = str(tpl.get("model_type", "")).removeprefix("ml_")
+        combos.append(
+            {
+                "model_name": model_name,
+                "symbol": tpl.get("symbol"),
+                "interval": tpl.get("timeframe"),
+                "registry_model_name": (tpl.get("execution_params") or {}).get(
+                    "registry_model_name"
+                ),
+                "label": f"{model_name.replace('_', ' ').title()} — {tpl.get('symbol')} ({tpl.get('timeframe')})",
+            }
+        )
+    return combos
+
+
 # ---------------------------------------------------------------------------
 # Onglet 1 : Lancer un backtest
 # ---------------------------------------------------------------------------
@@ -214,9 +242,129 @@ def _render_result(result: dict) -> None:
         pass
 
 
+def _render_ml_result(result: dict) -> None:
+    metrics = result.get("metrics") or {}
+    theme_mode = get_theme_mode()
+
+    render_section_title(
+        f"Résultats — {result.get('model_name', '')} ({result.get('model_version', '')})",
+        f"{result.get('symbol', '')} {result.get('interval', '')} — "
+        f"{str(result.get('start_date', ''))[:10]} → {str(result.get('end_date', ''))[:10]} — "
+        f"{result.get('candles', 0):,} bougies",
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Rendement stratégie", _pct(metrics.get("strategy_return")))
+    c2.metric("Rendement buy & hold", _pct(metrics.get("buy_and_hold_return")))
+    c3.metric("Rendement excédentaire", _pct(metrics.get("excess_return")))
+    c4.metric("Max drawdown", _pct(metrics.get("max_drawdown")))
+
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Ratio de Sharpe", _f2(metrics.get("sharpe_ratio"), 3))
+    win_rate = metrics.get("win_rate")
+    c6.metric("Taux de succès", f"{win_rate * 100:.1f} %" if win_rate is not None else "—")
+    c7.metric("Nombre de trades", str(metrics.get("n_trades", 0)))
+    c8.metric("Frais payés", _pct(metrics.get("fees_paid")))
+
+    equity_curve = result.get("equity_curve") or []
+    if not equity_curve:
+        return
+
+    st.markdown("---")
+    render_section_title("Courbe d'equity")
+    df_eq = pd.DataFrame({"bar": range(len(equity_curve)), "equity": equity_curve})
+    if _HAS_PLOTLY:
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=df_eq["bar"],
+                y=df_eq["equity"],
+                mode="lines",
+                name="Equity",
+                line=dict(color=plotly_line_color(theme_mode), width=2),
+            )
+        )
+        fig.update_layout(
+            **themed_layout(
+                theme_mode,
+                height=300,
+                margin=dict(l=0, r=0, t=10, b=0),
+                xaxis_title=None,
+                yaxis_title=None,
+            )
+        )
+        fig.update_xaxes(**themed_axis(theme_mode))
+        fig.update_yaxes(**themed_axis(theme_mode))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.line_chart(df_eq.set_index("bar")[["equity"]])
+
+
+def _render_ml_backtest_form(service: BacktestService, ml_combos: list[dict]) -> None:
+    if not ml_combos:
+        show_feedback(
+            "warning",
+            "Aucun modèle ML entraîné disponible pour le moment. "
+            "Déclenchez le DAG `ml_pipeline` depuis Airflow pour en entraîner.",
+        )
+        return
+
+    render_section_title(
+        "Paramètres du backtest ML",
+        "Complète automatiquement les données historiques manquantes (Airflow) avant de lancer le backtest.",
+    )
+
+    combo_options = {c["label"]: c for c in ml_combos}
+
+    with st.form("ml_backtest_form", clear_on_submit=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            combo_label = st.selectbox("Modèle entraîné", options=list(combo_options.keys()))
+        with col2:
+            default_end = date.today()
+            default_start = default_end - timedelta(days=30)
+            start_date = st.date_input("Date de début", value=default_start, key="ml_bt_start")
+            end_date = st.date_input("Date de fin", value=default_end, key="ml_bt_end")
+
+        submitted = compat_form_submit_button(
+            "Lancer le backtest ML", type="primary", width="stretch"
+        )
+
+    if submitted:
+        if start_date >= end_date:
+            show_feedback("error", "La date de début doit être antérieure à la date de fin.")
+            return
+
+        combo = combo_options[combo_label]
+        with st.spinner(
+            "Backtest ML en cours... (peut prendre jusqu'à ~90s si des données doivent être collectées via Airflow)"
+        ):
+            success, message, result = service.run_ml_backtest(
+                model_name=combo["model_name"],
+                symbol=combo["symbol"],
+                interval=combo["interval"],
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+            )
+
+        show_feedback("success" if success else "error", message)
+        if success and result:
+            st.session_state["last_ml_backtest_result"] = result
+            st.rerun()
+
+
 def _render_backtest_tab(
-    service: BacktestService, strategies: list[dict], coverage_idx: dict
+    service: BacktestService, strategies: list[dict], coverage_idx: dict, ml_combos: list[dict]
 ) -> None:
+    last_ml_result = st.session_state.get("last_ml_backtest_result")
+    if last_ml_result:
+        _render_ml_result(last_ml_result)
+        st.markdown("---")
+        if st.button("Nouveau backtest", key="ml_bt_clear"):
+            del st.session_state["last_ml_backtest_result"]
+            st.rerun()
+        return
+
     last_result = st.session_state.get("last_backtest_result")
 
     if last_result:
@@ -225,6 +373,18 @@ def _render_backtest_tab(
         if st.button("Nouveau backtest", key="bt_clear"):
             del st.session_state["last_backtest_result"]
             st.rerun()
+        return
+
+    mode = st.radio(
+        "Type de backtest",
+        options=["Stratégie technique", "Modèle ML"],
+        horizontal=True,
+        key="bt_mode",
+    )
+    st.markdown("---")
+
+    if mode == "Modèle ML":
+        _render_ml_backtest_form(service, ml_combos)
         return
 
     if not strategies:
@@ -460,24 +620,51 @@ def _render_history_tab(service: BacktestService) -> None:
 
     for bt in history:
         m = bt.get("metrics") or {}
+        is_ml = (bt.get("parameters") or {}).get("source") == "ml"
         with st.container(border=True):
             col_info, col_btn = st.columns([5, 1])
             with col_info:
-                ret = m.get("total_return")
+                if is_ml:
+                    ret = m.get("strategy_return")
+                    trades = m.get("n_trades", 0)
+                    win_rate = m.get("win_rate")
+                    win_rate_pct = win_rate * 100 if win_rate is not None else 0
+                    model_name = (bt.get("parameters") or {}).get("model_name", "")
+                    label = (
+                        f"**[ML] {model_name} {bt.get('symbol', '')} {bt.get('timeframe', '')}**"
+                    )
+                else:
+                    ret = m.get("total_return")
+                    trades = m.get("total_trades", 0)
+                    win_rate_pct = m.get("win_rate", 0)
+                    label = f"**{bt.get('symbol', '')} {bt.get('timeframe', '')}**"
                 ret_str = f"{ret:+.2f} %" if ret is not None else "—"
                 st.write(
-                    f"**{bt.get('symbol', '')} {bt.get('timeframe', '')}** — "
+                    f"{label} — "
                     f"{str(bt.get('start_date', ''))[:10]} → {str(bt.get('end_date', ''))[:10]} | "
                     f"Rendement : **{ret_str}** | "
                     f"Drawdown : {_pct(m.get('max_drawdown'))} | "
-                    f"Trades : {m.get('total_trades', 0)} | "
-                    f"Win rate : {m.get('win_rate', 0):.1f} %"
+                    f"Trades : {trades} | "
+                    f"Win rate : {win_rate_pct:.1f} %"
                 )
             with col_btn:
                 if st.button("Détail", key=f"bt_hist_{bt.get('id', '')}"):
                     detail = service.get_backtest(bt["id"])
                     if detail:
-                        st.session_state["last_backtest_result"] = detail
+                        if is_ml:
+                            equity_curve = (detail.get("results") or {}).get("equity_curve", [])
+                            st.session_state["last_ml_backtest_result"] = {
+                                **detail,
+                                "model_name": (detail.get("parameters") or {}).get("model_name"),
+                                "model_version": (detail.get("parameters") or {}).get(
+                                    "model_version"
+                                ),
+                                "interval": detail.get("timeframe"),
+                                "candles": len(equity_curve),
+                                "equity_curve": equity_curve,
+                            }
+                        else:
+                            st.session_state["last_backtest_result"] = detail
                         st.session_state["_jump_to_bt_tab"] = True
                     st.rerun()
 
@@ -504,12 +691,17 @@ def main() -> None:
 
     strategies: list[dict] = []
     coverage: list[dict] = []
+    ml_combos: list[dict] = []
     try:
         strategies = _load_strategies(client, token)
     except Exception:
         pass
     try:
         coverage = _load_coverage(client, token)
+    except Exception:
+        pass
+    try:
+        ml_combos = _load_ml_combos(client, token)
     except Exception:
         pass
 
@@ -524,7 +716,7 @@ def main() -> None:
         st.info("Résultat chargé — consultez l'onglet **📈 Backtest**.")
 
     with tab_bt:
-        _render_backtest_tab(service, strategies, coverage_idx)
+        _render_backtest_tab(service, strategies, coverage_idx, ml_combos)
 
     with tab_data:
         _render_data_tab(client, token, coverage)

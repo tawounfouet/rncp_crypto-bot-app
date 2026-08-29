@@ -347,8 +347,10 @@ class BacktestResult(BaseModel):
 
     __tablename__ = "backtest_results"
 
-    # Foreign keys
-    strategy_id = Column(String(36), ForeignKey("strategies.id"), nullable=False, index=True)
+    # Foreign keys. strategy_id est nullable : un backtest sur modele ML (voir
+    # StrategyService.run_ml_backtest) n'est rattache a aucune Strategy (regle technique),
+    # seulement a un modele MLflow -- son nom qualifie est alors stocke dans `parameters`.
+    strategy_id = Column(String(36), ForeignKey("strategies.id"), nullable=True, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
 
     # Test configuration

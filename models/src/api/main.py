@@ -8,6 +8,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 
 from src.api.schemas import (
+    BacktestModelRequest,
+    BacktestModelResponse,
     BotModelPredictionRequest,
     BotModelPredictionResponse,
     BuildFeaturesRequest,
@@ -28,7 +30,13 @@ from src.api.schemas import (
 from src.config.config_loader import load_config
 from src.data.storage import read_dataset
 from src.features.build import build_symbol_features
-from src.inference.mlflow_registry import ModelUnavailable, list_trained_combos, predict_registered_bot_model
+from src.inference.mlflow_registry import (
+    BacktestUnavailable,
+    ModelUnavailable,
+    backtest_registered_bot_model,
+    list_trained_combos,
+    predict_registered_bot_model,
+)
 from src.inference.signal import INFERENCE_MODELS, predict_model_signal
 from src.training.train_mlp import train_from_processed_dataset as train_mlp_from_processed_dataset
 from src.training.train_random_forest import train_from_processed_dataset
@@ -140,7 +148,9 @@ def build_features(request: BuildFeaturesRequest) -> BuildFeaturesResponse:
 def train_random_forest_endpoint(request: TrainRandomForestRequest) -> TrainRandomForestResponse:
     try:
         symbol = _resolve_symbol(request.symbol)
-        artifact_dir = train_from_processed_dataset(request.dataset, request.config, symbol=symbol)
+        artifact_dir = train_from_processed_dataset(
+            request.dataset, request.config, symbol=symbol, interval=request.interval
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_random_forest failed: {exc}") from exc
     return TrainRandomForestResponse(artifact_dir=str(artifact_dir))
@@ -150,7 +160,9 @@ def train_random_forest_endpoint(request: TrainRandomForestRequest) -> TrainRand
 def train_mlp_endpoint(request: TrainMLPRequest) -> TrainMLPResponse:
     try:
         symbol = _resolve_symbol(request.symbol)
-        artifact_dir = train_mlp_from_processed_dataset(request.dataset, request.config, symbol=symbol)
+        artifact_dir = train_mlp_from_processed_dataset(
+            request.dataset, request.config, symbol=symbol, interval=request.interval
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_mlp failed: {exc}") from exc
     return TrainMLPResponse(artifact_dir=str(artifact_dir))
@@ -160,7 +172,9 @@ def train_mlp_endpoint(request: TrainMLPRequest) -> TrainMLPResponse:
 def train_xgboost_endpoint(request: TrainXGBoostRequest) -> TrainXGBoostResponse:
     try:
         symbol = _resolve_symbol(request.symbol)
-        artifact_dir = train_xgboost_from_processed_dataset(request.dataset, request.config, symbol=symbol)
+        artifact_dir = train_xgboost_from_processed_dataset(
+            request.dataset, request.config, symbol=symbol, interval=request.interval
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_xgboost failed: {exc}") from exc
     return TrainXGBoostResponse(artifact_dir=str(artifact_dir))
@@ -182,3 +196,32 @@ def predict_bot_model(payload: BotModelPredictionRequest) -> BotModelPredictionR
     except ModelUnavailable as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return BotModelPredictionResponse(**prediction)
+
+
+@app.post("/bot-models/backtest", response_model=BacktestModelResponse)
+def backtest_bot_model(payload: BacktestModelRequest) -> BacktestModelResponse:
+    try:
+        result = backtest_registered_bot_model(
+            model_name=payload.model_name,
+            model_version=payload.model_version,
+            symbol=payload.symbol,
+            interval=payload.interval,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        )
+    except ModelUnavailable as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except BacktestUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return BacktestModelResponse(
+        model_name=result["model_name"],
+        model_version=result["model_version"],
+        symbol=result["symbol"],
+        interval=result["interval"],
+        start_date=result["start_date"],
+        end_date=result["end_date"],
+        candles=result["candles"],
+        metrics=result["metrics"],
+        equity_curve=result["equity_curve"],
+        generated_at=result["generated_at"],
+    )

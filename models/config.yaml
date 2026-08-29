@@ -19,6 +19,8 @@ data:
   primary_interval: "1h"
   intervals:
     - "1h"
+    - "5m"
+    - "1d"
   history:
     start: "2024-01-01"
     end: null
