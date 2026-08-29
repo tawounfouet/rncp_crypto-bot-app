@@ -173,6 +173,14 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      # Sans cette dependance, backend demarre en parallele de ml-api (image plus
+      # lourde, plus longue a devenir healthy) : le sync des templates ML au demarrage
+      # (sync_builtin_templates(), one-shot) tente alors de contacter ml-api trop tot et
+      # echoue silencieusement (Connection refused) -- catalogue de bots vide jusqu'au
+      # prochain redemarrage du backend. Observe en conditions reelles sur staging le
+      # 2026-08-28 (meme docker-compose.staging.yml).
+      crypto-bot-ml-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
       interval: 30s
