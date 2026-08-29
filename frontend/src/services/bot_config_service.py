@@ -90,13 +90,19 @@ class BotConfigService:
         )
 
     def select_template(
-        self, template_id: str, quote_order_quantity: float | None = None
+        self,
+        template_id: str,
+        quote_order_quantity: float | None = None,
+        max_daily_loss_pct: float | None = None,
     ) -> tuple[bool, str, UserBotSelection | None]:
         access_token = get_access_token()
         if access_token:
             response = self._request_with_auth_refresh(
                 lambda token: self.client.create_user_bot(
-                    token, template_id=template_id, quote_order_quantity=quote_order_quantity
+                    token,
+                    template_id=template_id,
+                    quote_order_quantity=quote_order_quantity,
+                    max_daily_loss_pct=max_daily_loss_pct,
                 )
             )
             if response.success and isinstance(response.data, dict):

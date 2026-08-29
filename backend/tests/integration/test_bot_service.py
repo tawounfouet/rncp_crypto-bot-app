@@ -679,8 +679,8 @@ class TestBotService:
         class FakeMlClient:
             def list_trained_combos(self):
                 return [
-                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
-                    {"symbol": "ETHUSDC", "model_name": "xgboost", "registered_name": "xgboost_ethusdc"},
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "interval": "1h", "registered_name": "random_forest_btcusdc"},
+                    {"symbol": "ETHUSDC", "model_name": "xgboost", "interval": "1h", "registered_name": "xgboost_ethusdc"},
                 ]
 
         service = BotService(ml_client=FakeMlClient())
@@ -715,7 +715,7 @@ class TestBotService:
         class FakeMlClient:
             def list_trained_combos(self):
                 return [
-                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "interval": "1h", "registered_name": "random_forest_btcusdc"},
                 ]
 
         service = BotService(ml_client=FakeMlClient())
@@ -757,7 +757,7 @@ class TestBotService:
 
             def list_trained_combos(self):
                 return [
-                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "interval": "1h", "registered_name": "random_forest_btcusdc"},
                 ]
 
             def predict(self, *, model_name, features, model_version=None):
@@ -836,7 +836,7 @@ class TestBotService:
         class MissingModelClient:
             def list_trained_combos(self):
                 return [
-                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "interval": "1h", "registered_name": "random_forest_btcusdc"},
                 ]
 
             def predict(self, *, model_name, features, model_version=None):
@@ -911,8 +911,8 @@ class TestBotService:
 
             def list_trained_combos(self):
                 return [
-                    {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
-                    {"symbol": "ETHUSDC", "model_name": "xgboost", "registered_name": "xgboost_ethusdc"},
+                    {"symbol": "BTCUSDC", "model_name": "random_forest", "interval": "1h", "registered_name": "random_forest_btcusdc"},
+                    {"symbol": "ETHUSDC", "model_name": "xgboost", "interval": "1h", "registered_name": "xgboost_ethusdc"},
                 ]
 
             def predict(self, *, model_name, features, model_version=None):

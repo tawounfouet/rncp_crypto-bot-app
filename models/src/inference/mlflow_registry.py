@@ -21,6 +21,10 @@ from utils.connectors.exchanges.registry import list_configured_symbols
 from utils.ml.registry import list_pair_qualified_models
 
 
+class BacktestUnavailable(RuntimeError):
+    """Raised when a registered bot model cannot be backtested (no data, no model, ...)."""
+
+
 class ModelUnavailable(RuntimeError):
     """Raised when a registered bot model cannot be loaded or used."""
 
@@ -102,16 +106,19 @@ def _class_labels(model: Any) -> list[str]:
 
 
 def list_trained_combos(config_path: str = "config.yaml") -> list[dict[str, str]]:
-    """Couples (symbol, model_name) reellement entraines et disponibles dans le
-    registre MLflow, parmi les modeles/paires actuellement configures cote app.
+    """Triplets (symbol, model_name, interval) reellement entraines et disponibles dans
+    le registre MLflow, parmi les modeles/paires/timeframes actuellement configures cote
+    app.
 
-    Le nom d'enregistrement suit la convention "<model_name>_<symbol_lower>" (cf.
-    models/src/training/train_random_forest.py et train_xgboost.py) : un modele entraine
-    sous une ancienne configuration (paire ou modele retire depuis) est ignore ici,
-    seuls les combos correspondant a l'etat actuel de utils/ (source unique de verite)
-    sont retournes. C'est ce que BotMlClient.list_trained_combos() (backend/src/bots/
-    ml_client.py) interroge pour savoir quels bots peuvent etre proposes/crees.
+    Le nom d'enregistrement suit la convention "<model_name>_<symbol_lower>_<interval>"
+    (cf. models/src/training/train_random_forest.py et train_xgboost.py) : un modele
+    entraine sous une ancienne configuration (paire, modele ou timeframe retire depuis)
+    est ignore ici, seuls les combos correspondant a l'etat actuel de utils/ + config.yaml
+    (source unique de verite) sont retournes. C'est ce que BotMlClient.list_trained_combos()
+    (backend/src/bots/ml_client.py) interroge pour savoir quels bots/backtests peuvent
+    etre proposes/crees.
     """
+    settings = load_config(config_path)
     configure_mlflow(config_path)
     client = MlflowClient()
     registered_names = {model.name for model in client.search_registered_models()}
@@ -119,9 +126,17 @@ def list_trained_combos(config_path: str = "config.yaml") -> list[dict[str, str]
     combos = []
     for model_name in list_pair_qualified_models():
         for symbol in list_configured_symbols():
-            registered_name = f"{model_name}_{symbol.lower()}"
-            if registered_name in registered_names:
-                combos.append({"symbol": symbol, "model_name": model_name, "registered_name": registered_name})
+            for interval in settings.data.intervals:
+                registered_name = f"{model_name}_{symbol.lower()}_{interval}"
+                if registered_name in registered_names:
+                    combos.append(
+                        {
+                            "symbol": symbol,
+                            "model_name": model_name,
+                            "interval": interval,
+                            "registered_name": registered_name,
+                        }
+                    )
     return combos
 
 
@@ -169,5 +184,80 @@ def predict_registered_bot_model(
         "confidence": confidence,
         "probabilities": probabilities,
         "features": features,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def backtest_registered_bot_model(
+    *,
+    model_name: str,
+    symbol: str,
+    interval: str,
+    start_date: str,
+    end_date: str,
+    model_version: str | None = None,
+    config_path: str = "config.yaml",
+) -> dict[str, Any]:
+    """Backtest un modele qualifie par paire (RF/XGBoost/MLP) sur une plage historique.
+
+    Reutilise le meme run_backtest() que celui execute a l'entrainement sur le split de
+    test (cf. train_random_forest.py etc.) mais ici sur une plage arbitraire choisie par
+    l'utilisateur, avec les features reconstruites depuis les donnees brutes MinIO
+    (build_symbol_features) puis filtrees a [start_date, end_date] -- il n'existe pas
+    encore de dataset "features" par plage, seulement un dataset complet par symbole/
+    interval, donc on construit puis on decoupe plutot que l'inverse.
+
+    NB : build_symbol_features() ne lit aujourd'hui que les donnees brutes Binance (pas
+    de parametre exchange) -- ce backtest n'est donc fiable que pour des modeles entraines
+    sur Binance tant que ce gap n'est pas comble cote features/entrainement.
+    """
+    from src.backtesting.engine import BacktestConfig, run_backtest
+    from src.features.build import build_symbol_features
+
+    resolved = resolve_model(model_name, model_version, config_path)
+    model = _load_sklearn_model(resolved.name, resolved.version, config_path)
+    feature_columns = _load_feature_columns(resolved.run_id, config_path) if resolved.run_id else None
+
+    try:
+        features = build_symbol_features(symbol, interval, config_path)
+    except Exception as exc:
+        raise BacktestUnavailable(f"Failed to build features for {symbol} {interval}: {exc}") from exc
+    if features.empty:
+        raise BacktestUnavailable(f"No historical data available for {symbol} {interval}")
+
+    start_ts = pd.Timestamp(start_date, tz="UTC")
+    end_ts = pd.Timestamp(end_date, tz="UTC")
+    window = features[(features["open_time"] >= start_ts) & (features["open_time"] <= end_ts)].reset_index(drop=True)
+    if window.empty:
+        raise BacktestUnavailable(
+            f"No data in range [{start_date}, {end_date}] for {symbol} {interval} "
+            f"(available: [{features['open_time'].min()}, {features['open_time'].max()}])"
+        )
+
+    if feature_columns is None:
+        raise BacktestUnavailable(
+            f"No feature_columns.json artifact for {resolved.uri} -- cannot select model inputs safely"
+        )
+    missing = [column for column in feature_columns if column not in window.columns]
+    if missing:
+        raise BacktestUnavailable(f"Required features missing for {resolved.uri}: {', '.join(missing)}")
+
+    try:
+        signals = [str(label).upper() for label in model.predict(window[list(feature_columns)])]
+    except Exception as exc:
+        raise BacktestUnavailable(f"Failed to predict with MLflow model {resolved.uri}: {exc}") from exc
+
+    bt_result = run_backtest(prices=window["close"], signals=signals, config=BacktestConfig(min_hold_bars=3))
+
+    return {
+        "model_name": resolved.name,
+        "model_version": resolved.version,
+        "symbol": symbol.upper(),
+        "interval": interval,
+        "start_date": start_date,
+        "end_date": end_date,
+        "candles": len(window),
+        "metrics": bt_result.to_dict(),
+        "equity_curve": bt_result.equity_curve,
         "generated_at": datetime.now(UTC).isoformat(),
     }

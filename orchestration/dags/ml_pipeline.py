@@ -8,10 +8,12 @@ TRAINABLE_MODELS ci-dessous -- pas de liste figée dans cette docstring, elle
 se périmerait au premier ajout de paire ou de modèle :
 
     start
-      ├── build_features_<symbol>_1h        (un par symbole configuré)
+      ├── build_features_<symbol>_<interval>   (un par couple symbole x interval,
+      │                                          cf. SYMBOLS x INTERVALS)
       │
-      ├── train_<model>_<symbol>            (un par couple modèle x symbole,
-      │                                       cf. TRAINABLE_MODELS x SYMBOLS)
+      ├── train_<model>_<symbol>_<interval>    (un par triplet modèle x symbole x
+      │                                          interval, cf. TRAINABLE_MODELS x
+      │                                          SYMBOLS x INTERVALS)
       │
       ├── deploy_model_<model>              (un par modèle, copie vers MinIO,
       │                                       chemin A inchangé)
@@ -91,7 +93,15 @@ except ImportError:
 # dupliquee ici. Ajouter une paire cote app (utils) suffit a l'entrainer, aucune autre
 # modification necessaire dans ce DAG.
 SYMBOLS = list_configured_symbols()
-INTERVAL = "1h"
+
+# A garder synchronise manuellement avec models/config.yaml::data.intervals (mlflow_registry.
+# list_trained_combos() n'y fait apparaitre un combo entraine ici que si son interval y figure
+# aussi) -- pas de source unique automatique, Airflow n'importe pas la stack ML (cf. docstring
+# module plus haut) donc ce DAG ne peut pas lire config.yaml directement sans web de deps.
+# 1m/5m entraines en plus du 1h pour avoir des signaux/trades plus frequents en demo -- le
+# backfill correspondant (bien plus volumineux, cf. backfill_ohlcv_*) doit avoir ete fait au
+# prealable, sinon build_features echoue faute de donnees brutes a cet interval.
+INTERVALS = ["1h", "5m", "1d"]
 
 # Modeles entraines sur le chemin B (MLflow Model Registry, nom qualifie par paire,
 # interroge par bots/ via BotMlClient.predict()). Convention stricte cote ml-api : la
@@ -124,34 +134,34 @@ PIPELINE_HTTP_TIMEOUT_SECONDS = 900
 # ---------------------------------------------------------------------------
 
 
-def _feature_path(symbol: str) -> str:
-    return os.path.join(PROCESSED_DIR, symbol.upper(), f"{INTERVAL}_features.parquet")
+def _feature_path(symbol: str, interval: str) -> str:
+    return os.path.join(PROCESSED_DIR, symbol.upper(), f"{interval}_features.parquet")
 
 
-def _build_features_callable(symbol: str) -> None:
+def _build_features_callable(symbol: str, interval: str) -> None:
     """Appelle POST /internal/pipeline/features sur crypto-bot-ml-api."""
     response = requests.post(
         f"{ML_API_URL}/internal/pipeline/features",
-        json={"symbols": [symbol], "interval": INTERVAL, "config": "config.yaml"},
+        json={"symbols": [symbol], "interval": interval, "config": "config.yaml"},
         timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
-    logger.info("build_features %s: %s", symbol, response.json())
+    logger.info("build_features %s %s: %s", symbol, interval, response.json())
 
 
-def _train_model_callable(model_name: str, symbol: str) -> None:
+def _train_model_callable(model_name: str, symbol: str, interval: str) -> None:
     """Appelle POST /internal/pipeline/train-<model_name> sur crypto-bot-ml-api.
 
-    Un appel par couple modele x symbole (cf. TRAINABLE_MODELS x SYMBOLS dans la
-    configuration du DAG) : chaque paire est enregistree dans le MLflow Model Registry
-    sous un nom qualifie ("<model_name>_<symbol>"), sinon la paire entrainee en second
-    ecraserait la premiere au meme nom de modele.
+    Un appel par triplet modele x symbole x interval (cf. TRAINABLE_MODELS x SYMBOLS x
+    INTERVALS dans la configuration du DAG) : chaque triplet est enregistre dans le
+    MLflow Model Registry sous un nom qualifie ("<model_name>_<symbol>_<interval>"),
+    sinon un triplet entraine en second ecraserait le premier au meme nom.
     """
-    dataset = _feature_path(symbol)
+    dataset = _feature_path(symbol, interval)
     url = f"{ML_API_URL}/internal/pipeline/train-{model_name}"
     response = requests.post(
         url,
-        json={"dataset": dataset, "config": "config.yaml", "symbol": symbol},
+        json={"dataset": dataset, "config": "config.yaml", "symbol": symbol, "interval": interval},
         timeout=PIPELINE_HTTP_TIMEOUT_SECONDS,
     )
     if response.status_code == 404:
@@ -162,7 +172,7 @@ def _train_model_callable(model_name: str, symbol: str) -> None:
             f"nommage ou ajouter la route manquante."
         )
     response.raise_for_status()
-    logger.info("train_%s %s: %s", model_name, symbol, response.json())
+    logger.info("train_%s %s %s: %s", model_name, symbol, interval, response.json())
 
 
 def _verify_inference_callable() -> None:
@@ -178,7 +188,7 @@ def _verify_inference_callable() -> None:
     """
     response = requests.get(
         f"{ML_API_URL}/signals/latest",
-        params={"symbol": SYMBOLS[0], "interval": INTERVAL, "model": "random_forest"},
+        params={"symbol": SYMBOLS[0], "interval": INTERVALS[0], "model": "random_forest"},
         timeout=60,
     )
     response.raise_for_status()
@@ -247,32 +257,35 @@ with DAG(
     tags=["ml", "training", "deployment", "inference"],
 ) as dag:
 
-    # -- 1. Build features pour chaque symbole configuré (appel HTTP a crypto-bot-ml-api) --
-    build_tasks_by_symbol = {}
+    # -- 1. Build features pour chaque couple (symbole, interval) (appel HTTP a crypto-bot-ml-api) --
+    build_tasks_by_symbol_interval = {}
     for symbol in SYMBOLS:
-        build_tasks_by_symbol[symbol] = PythonOperator(
-            task_id=f"build_features_{symbol}_{INTERVAL}",
-            python_callable=_build_features_callable,
-            op_kwargs={"symbol": symbol},
-            retries=2,
-            retry_delay=timedelta(minutes=2),
-        )
+        for interval in INTERVALS:
+            build_tasks_by_symbol_interval[(symbol, interval)] = PythonOperator(
+                task_id=f"build_features_{symbol}_{interval}",
+                python_callable=_build_features_callable,
+                op_kwargs={"symbol": symbol, "interval": interval},
+                retries=2,
+                retry_delay=timedelta(minutes=2),
+            )
 
     # -- 2. Entraînements (appels HTTP a crypto-bot-ml-api) -----------------------
-    # Une tache par couple (modele, symbole) dans TRAINABLE_MODELS x SYMBOLS -- ajouter
-    # une paire (utils) ou un modele (TRAINABLE_MODELS) suffit, aucune duplication de code.
+    # Une tache par triplet (modele, symbole, interval) dans TRAINABLE_MODELS x SYMBOLS x
+    # INTERVALS -- ajouter une paire (utils), un modele (TRAINABLE_MODELS) ou un interval
+    # (INTERVALS ci-dessus) suffit, aucune duplication de code.
     train_tasks_by_model = {model_name: {} for model_name in TRAINABLE_MODELS}
     for model_name in TRAINABLE_MODELS:
         for symbol in SYMBOLS:
-            task = PythonOperator(
-                task_id=f"train_{model_name}_{symbol}",
-                python_callable=_train_model_callable,
-                op_kwargs={"model_name": model_name, "symbol": symbol},
-                retries=1,
-                retry_delay=timedelta(minutes=5),
-            )
-            task.set_upstream(build_tasks_by_symbol[symbol])
-            train_tasks_by_model[model_name][symbol] = task
+            for interval in INTERVALS:
+                task = PythonOperator(
+                    task_id=f"train_{model_name}_{symbol}_{interval}",
+                    python_callable=_train_model_callable,
+                    op_kwargs={"model_name": model_name, "symbol": symbol, "interval": interval},
+                    retries=1,
+                    retry_delay=timedelta(minutes=5),
+                )
+                task.set_upstream(build_tasks_by_symbol_interval[(symbol, interval)])
+                train_tasks_by_model[model_name][(symbol, interval)] = task
 
     # -- 3. Déploiement vers MinIO (chemin A, un emplacement par modele, inchangé) --
     deploy_tasks_by_model = {}

@@ -19,16 +19,19 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def train_from_processed_dataset(path: str | Path, config_path: str = "config.yaml", *, symbol: str) -> Path:
+def train_from_processed_dataset(
+    path: str | Path, config_path: str = "config.yaml", *, symbol: str, interval: str = "1h"
+) -> Path:
     """Train MLP from a processed dataset path and return artifact directory.
 
     Enregistre aussi le couple scaler+modele comme un seul sklearn.Pipeline dans le
-    MLflow Model Registry, sous un nom qualifie par paire (ex. "mlp_btcusdc") -- meme
-    convention que train_random_forest.py/train_xgboost.py, cf. leurs commentaires pour
-    le detail (Pipeline plutot que le MLPClassifier seul : features mises a l'echelle).
+    MLflow Model Registry, sous un nom qualifie par paire ET timeframe (ex.
+    "mlp_btcusdc_1h") -- meme convention que train_random_forest.py/train_xgboost.py, cf.
+    leurs commentaires pour le detail (Pipeline plutot que le MLPClassifier seul :
+    features mises a l'echelle).
     """
     settings = load_config(config_path)
-    logger.info("train_mlp job start dataset=%s config=%s symbol=%s", path, config_path, symbol)
+    logger.info("train_mlp job start dataset=%s config=%s symbol=%s interval=%s", path, config_path, symbol, interval)
     data = read_dataset(path)
     run_id = new_run_id(settings)
     logger.info("train_mlp run created run_id=%s rows=%s", run_id, len(data))
@@ -40,10 +43,10 @@ def train_from_processed_dataset(path: str | Path, config_path: str = "config.ya
         model_name="mlp",
         run_id=run_id,
         metrics=result["metrics"],
-        dataset_summary={"rows": len(data), "source": str(path), "symbol": symbol.upper()},
+        dataset_summary={"rows": len(data), "source": str(path), "symbol": symbol.upper(), "interval": interval},
     )
-    registered_model_name = f"mlp_{symbol.lower()}"
-    with start_run(settings, "mlp", run_id=run_id, symbol=symbol) as run:
+    registered_model_name = f"mlp_{symbol.lower()}_{interval}"
+    with start_run(settings, "mlp", run_id=run_id, symbol=symbol, interval=interval) as run:
         run.log_params(settings.models.mlp.model_dump())
         run.log_metrics(result["metrics"])
         run.log_artifacts(artifact_dir)
@@ -67,8 +70,9 @@ def main() -> None:
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--symbol", required=True)
+    parser.add_argument("--interval", default="1h")
     args = parser.parse_args()
-    train_from_processed_dataset(args.dataset, args.config, symbol=args.symbol)
+    train_from_processed_dataset(args.dataset, args.config, symbol=args.symbol, interval=args.interval)
 
 
 if __name__ == "__main__":

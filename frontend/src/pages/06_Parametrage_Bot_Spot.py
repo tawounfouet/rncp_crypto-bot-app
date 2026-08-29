@@ -29,6 +29,13 @@ def _template_default_amount(template: BotTemplate) -> float:
         return 1.0
 
 
+def _template_default_max_daily_loss_pct(template: BotTemplate) -> float:
+    try:
+        return float(template.risk_limits.get("max_daily_loss_pct") or 3.0)
+    except (TypeError, ValueError):
+        return 3.0
+
+
 def _render_template_details(template: BotTemplate, already_selected: bool) -> None:
     st.markdown("<div class='premium-card'>", unsafe_allow_html=True)
     st.markdown(f"### {template.name}")
@@ -125,8 +132,22 @@ def main() -> None:
                 "(strategie, timeframe, signal, risque) restent verrouilles au template."
             ),
         )
+        max_daily_loss_pct = st.slider(
+            "Circuit breaker — perte journaliere max (%)",
+            min_value=0.5,
+            max_value=20.0,
+            value=_template_default_max_daily_loss_pct(template),
+            step=0.5,
+            help=(
+                "Le bot arrete d'ouvrir de nouvelles positions des que sa perte cumulee "
+                "sur la journee depasse ce pourcentage du solde. Une position deja ouverte "
+                "reste vendable (ce garde-fou ne bloque que les nouveaux achats)."
+            ),
+        )
         if compat_button("Choisir ce bot", type="primary", width="stretch"):
-            ok, message, _selection = service.select_template(template_id, amount)
+            ok, message, _selection = service.select_template(
+                template_id, amount, max_daily_loss_pct
+            )
             show_feedback("success" if ok else "error", message)
             if ok:
                 st.rerun()

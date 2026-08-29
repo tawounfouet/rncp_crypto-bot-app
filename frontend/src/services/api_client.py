@@ -343,6 +343,36 @@ class BackendApiClient(AuthApiClient):
             access_token=access_token,
         )
 
+    def run_ml_backtest(
+        self,
+        access_token: str,
+        *,
+        model_name: str,
+        symbol: str,
+        interval: str,
+        start_date: str,
+        end_date: str,
+    ) -> ApiResponse:
+        """POST /strategies/backtests/ml — backtest d'un modele ML entraine (RF/XGBoost/MLP).
+
+        Complete automatiquement les donnees historiques manquantes via Airflow avant de
+        lancer le backtest (peut prendre jusqu'a ~90s si un backfill est declenche).
+        """
+        payload: dict[str, Any] = {
+            "model_name": model_name,
+            "symbol": symbol,
+            "interval": interval,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+        return self._request(
+            "POST",
+            f"{API_PREFIX}/strategies/backtests/ml",
+            json_body=payload,
+            access_token=access_token,
+            timeout=120,
+        )
+
     def list_backtests(self, access_token: str) -> ApiResponse:
         return self._request("GET", f"{API_PREFIX}/strategies/backtests", access_token=access_token)
 

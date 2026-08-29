@@ -54,9 +54,10 @@ class BotTemplateResponse(BaseModel):
 class UserBotCreate(BaseModel):
     """Create a user bot by selecting a complete immutable template.
 
-    quote_order_quantity est le seul champ du template modifiable par l'utilisateur : le
-    montant investi par ordre (en devise de cotation, ex. USDC) est verrouille avec le reste
-    de la config une fois la snapshot creee, cf. BotService._snapshot_template().
+    quote_order_quantity et max_daily_loss_pct sont les deux seuls champs du template
+    modifiables par l'utilisateur : le montant investi par ordre et le circuit breaker de
+    drawdown journalier sont verrouilles avec le reste de la config une fois la snapshot
+    creee, cf. BotService._snapshot_template().
     """
 
     bot_template_id: str = Field(..., description="Published bot template identifier")
@@ -65,6 +66,16 @@ class UserBotCreate(BaseModel):
         gt=0,
         description=(
             "Montant alloue par ordre, en devise de cotation. Si omis, utilise la valeur par defaut du template."
+        ),
+    )
+    max_daily_loss_pct: Decimal | None = Field(
+        None,
+        ge=0,
+        le=100,
+        description=(
+            "Circuit breaker : perte journaliere maximale (% du solde) au-dela de laquelle "
+            "le bot cesse d'ouvrir de nouvelles positions. Si omis, utilise la valeur par "
+            "defaut du template."
         ),
     )
 

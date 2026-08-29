@@ -70,6 +70,34 @@ class BacktestService:
         data = _unwrap_data(response)
         return True, "Backtest termine avec succes.", data if isinstance(data, dict) else None
 
+    def run_ml_backtest(
+        self,
+        model_name: str,
+        symbol: str,
+        interval: str,
+        start_date: str,
+        end_date: str,
+    ) -> tuple[bool, str, dict | None]:
+        """Lance un backtest sur un modele ML entraine. Retourne (success, message, result_dict|None)."""
+        try:
+            token = self._token()
+        except ServiceError as exc:
+            return False, str(exc), None
+
+        response = self.client.run_ml_backtest(
+            token,
+            model_name=model_name,
+            symbol=symbol,
+            interval=interval,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if not response.success:
+            return False, _extract_error(response), None
+
+        data = _unwrap_data(response)
+        return True, "Backtest ML termine avec succes.", data if isinstance(data, dict) else None
+
     def list_backtests(self) -> list[dict]:
         try:
             token = self._token()

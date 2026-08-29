@@ -58,7 +58,12 @@ def test_trained_combos_endpoint_returns_registry_combos(monkeypatch):
     from src.api import main as api_main
 
     fake_combos = [
-        {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"},
+        {
+            "symbol": "BTCUSDC",
+            "model_name": "random_forest",
+            "interval": "1h",
+            "registered_name": "random_forest_btcusdc_1h",
+        },
     ]
     monkeypatch.setattr(api_main, "list_trained_combos", lambda: fake_combos)
     response = TestClient(api_main.app).get("/bot-models/trained-combos")

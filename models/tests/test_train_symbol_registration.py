@@ -66,8 +66,8 @@ def test_train_registers_model_qualified_by_symbol(train_module, tmp_path, monke
 
     client = mlflow.tracking.MlflowClient()
     model_name_prefix = train_module.rsplit(".", 1)[-1].removeprefix("train_")
-    btc_versions = client.search_model_versions(f"name='{model_name_prefix}_btcusdc'")
-    eth_versions = client.search_model_versions(f"name='{model_name_prefix}_ethusdc'")
+    btc_versions = client.search_model_versions(f"name='{model_name_prefix}_btcusdc_1h'")
+    eth_versions = client.search_model_versions(f"name='{model_name_prefix}_ethusdc_1h'")
 
     # Chaque paire a sa propre entree, versionnee independamment -- la regression du
     # bug corrige serait: une seule des deux paires enregistree (l'autre l'ayant ecrasee).
@@ -96,8 +96,18 @@ def test_list_trained_combos_reports_only_actually_registered_pairs(tmp_path, mo
 
     combos = list_trained_combos(config_path=str(config_path))
 
-    assert {"symbol": "BTCUSDC", "model_name": "random_forest", "registered_name": "random_forest_btcusdc"} in combos
-    assert {"symbol": "ETHUSDC", "model_name": "xgboost", "registered_name": "xgboost_ethusdc"} in combos
+    assert {
+        "symbol": "BTCUSDC",
+        "model_name": "random_forest",
+        "interval": "1h",
+        "registered_name": "random_forest_btcusdc_1h",
+    } in combos
+    assert {
+        "symbol": "ETHUSDC",
+        "model_name": "xgboost",
+        "interval": "1h",
+        "registered_name": "xgboost_ethusdc_1h",
+    } in combos
     assert len(combos) == 2
 
 
@@ -127,7 +137,7 @@ def test_registered_model_predicts_with_scaled_features(train_module, tmp_path, 
     raw_features = {col: float(data.iloc[-1][col]) for col in feature_columns}
 
     prediction = predict_registered_bot_model(
-        model_name=f"{model_name_prefix}_btcusdc",
+        model_name=f"{model_name_prefix}_btcusdc_1h",
         features=raw_features,
         config_path=str(config_path),
     )

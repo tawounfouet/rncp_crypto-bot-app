@@ -14,6 +14,8 @@ from shared.schemas.common import BaseResponse
 from strategy.schemas import (
     BacktestCreate,
     BacktestResponse,
+    MLBacktestCreate,
+    MLBacktestResponse,
     ModelInfo,
     StrategyCreate,
     StrategyDeploymentCreate,
@@ -392,6 +394,28 @@ async def create_backtest(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Backtest failed: {e!s}",
+        ) from None
+
+
+@router.post("/backtests/ml", response_model=DataResponse[MLBacktestResponse], status_code=201)
+async def create_ml_backtest(
+    backtest_data: MLBacktestCreate,
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """Run a backtest for a trained ML model (RF/XGBoost/MLP), completing missing
+    historical data via Airflow first if needed."""
+    try:
+        result = await strategy_service.run_ml_backtest(current_user.id, backtest_data)
+        return DataResponse(success=True, message="Backtest ML terminé", data=result)
+    except Exception as e:
+        if isinstance(e, NotFoundError):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from None
+        if isinstance(e, BusinessLogicError):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from None
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"ML backtest failed: {e!s}",
         ) from None
 
 

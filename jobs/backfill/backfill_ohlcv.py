@@ -39,14 +39,10 @@ _JOBS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _JOBS_ROOT not in sys.path:
     sys.path.insert(0, _JOBS_ROOT)
 
-from ingest.collect_ohlcv import (  # noqa: E402
-    MINIO_BUCKET,
-    _ensure_bucket,
-    _get_minio_client,
-    fetch_klines,
-    upload_dataframe_parquet,
-)
-from transform.load_ohlcv import run_loading  # noqa: E402
+from transform.load_ohlcv import MINIO_BUCKET, run_loading  # noqa: E402
+
+from utils.connectors.exchanges import get_market_data_driver  # noqa: E402
+from utils.connectors.minio import MinioClient  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Logger
@@ -70,12 +66,13 @@ INTERVAL_MS: dict[str, int] = {
     "30m": 1_800_000,
     "1h": 3_600_000,
     "4h": 14_400_000,
+    "12h": 43_200_000,
     "1d": 86_400_000,
     "1w": 604_800_000,
 }
 
-BINANCE_KLINES_LIMIT = 1000  # maximum par appel API Binance
-API_SLEEP_S = 0.25  # pause entre deux appels pour respecter les rate limits Binance
+KLINES_LIMIT = 1000  # maximum par appel API, valable pour Binance comme pour ccxt/Kraken
+API_SLEEP_S = 0.25  # pause entre deux appels pour respecter les rate limits de l'exchange
 
 
 # ---------------------------------------------------------------------------
@@ -102,21 +99,27 @@ def run_backfill(
     interval: str,
     start_dt: datetime,
     end_dt: datetime,
+    exchange: str = "binance",
     bucket: str = MINIO_BUCKET,
     dry_run: bool = False,
 ) -> dict:
     """Télécharge l'historique OHLCV complet sur la plage [start_dt, end_dt).
 
-    Pagine automatiquement par chunks de 1 000 bougies.
+    Pagine automatiquement par chunks de 1 000 bougies, via le driver générique
+    ``utils.connectors.exchanges.get_market_data_driver`` (natif Binance, sinon ccxt --
+    donc Kraken et tout autre exchange configuré fonctionnent sans code specifique ici,
+    cf. jobs/ingest/collect_ohlcv.py::run_ingestion qui suit le meme principe pour
+    l'ingestion horaire).
     Chaque chunk est uploadé dans MinIO puis upserted dans PostgreSQL.
     L'opération est idempotente grâce à l'upsert sur la contrainte unique
     (symbol, exchange, interval_timeframe, open_time).
 
     Args:
-        symbol:    Paire de trading (ex: BTCUSDC)
+        symbol:    Paire de trading (ex: BTCUSDC, ETHEUR)
         interval:  Intervalle temporel (ex: 1h, 4h, 1d)
         start_dt:  Début de la plage, timezone-aware UTC
         end_dt:    Fin de la plage (exclusive), timezone-aware UTC
+        exchange:  Exchange source (ex: binance, kraken) -- résolu par le registry
         bucket:    Bucket MinIO cible
         dry_run:   Si True, collecte les données sans écrire dans MinIO ni PostgreSQL
 
@@ -128,18 +131,20 @@ def run_backfill(
     if interval not in INTERVAL_MS:
         raise ValueError(f"Intervalle inconnu: {interval!r}. Valeurs supportées: {sorted(INTERVAL_MS)}")
 
+    driver = get_market_data_driver(exchange)
     interval_ms = INTERVAL_MS[interval]
-    chunk_ms = BINANCE_KLINES_LIMIT * interval_ms
+    chunk_ms = KLINES_LIMIT * interval_ms
 
     # Estimation du nombre de chunks pour les logs
     total_candles_expected = max(
         1,
         int((end_dt - start_dt).total_seconds() * 1000 / interval_ms),
     )
-    total_chunks_est = (total_candles_expected + BINANCE_KLINES_LIMIT - 1) // BINANCE_KLINES_LIMIT
+    total_chunks_est = (total_candles_expected + KLINES_LIMIT - 1) // KLINES_LIMIT
 
     logger.info(
-        "backfill start  symbol=%s interval=%s  range=[%s → %s]  expected_candles~%s  chunks~%s  dry_run=%s",
+        "backfill start  exchange=%s  symbol=%s interval=%s  range=[%s → %s]  expected_candles~%s  chunks~%s  dry_run=%s",
+        exchange,
         symbol.upper(),
         interval,
         start_dt.strftime("%Y-%m-%d"),
@@ -149,10 +154,7 @@ def run_backfill(
         dry_run,
     )
 
-    minio_client = None
-    if not dry_run:
-        minio_client = _get_minio_client()
-        _ensure_bucket(minio_client, bucket)
+    minio_client = None if dry_run else MinioClient()
 
     stats: dict = {
         "symbol": symbol.upper(),
@@ -185,10 +187,10 @@ def run_backfill(
 
         # --- Fetch ---
         try:
-            rows = fetch_klines(
-                symbol=symbol,
-                interval=interval,
-                limit=BINANCE_KLINES_LIMIT,
+            rows = driver.fetch_klines(
+                symbol,
+                interval,
+                limit=KLINES_LIMIT,
                 start_time_ms=chunk_start_ms,
                 end_time_ms=chunk_end_ms - 1,  # endTime est inclusif côté Binance
             )
@@ -210,9 +212,14 @@ def run_backfill(
         if not dry_run:
             df = pd.DataFrame(rows)
             ts_label = chunk_start_dt.strftime("%Y-%m-%dT%H%M%S")
-            object_key = f"raw/ohlcv/{symbol.upper()}/{interval}/backfill/{ts_label}.parquet"
+            # Meme convention de prefixe que l'ingestion horaire (jobs/ingest/collect_ohlcv.py
+            # ::run_ingestion) -- indispensable pour que models/src/data/storage.py::
+            # read_raw_ohlcv_from_minio() (prefixe raw/ohlcv/{exchange}/{SYMBOL}/{interval}/)
+            # retrouve aussi les donnees issues d'un backfill.
+            object_key = f"raw/ohlcv/{exchange.lower()}/{symbol.upper()}/{interval}/backfill/{ts_label}.parquet"
             try:
-                upload_dataframe_parquet(minio_client, df, object_key, bucket)
+                if not minio_client.upload_dataframe(df, object_key, bucket=bucket, fmt="parquet"):
+                    raise RuntimeError(f"Échec de l'upload MinIO pour {object_key}")
                 run_loading(object_key=object_key, bucket=bucket)
                 stats["object_keys"].append(object_key)
                 stats["chunks_processed"] += 1
@@ -252,7 +259,8 @@ def main() -> None:
             "Par défaut : 2 ans d'historique à partir d'aujourd'hui."
         )
     )
-    parser.add_argument("--symbol", required=True, help="Paire ex: BTCUSDC, ETHUSDC")
+    parser.add_argument("--exchange", default="binance", help="Exchange source (ex: binance, kraken)")
+    parser.add_argument("--symbol", required=True, help="Paire ex: BTCUSDC, ETHEUR")
     parser.add_argument("--interval", required=True, help="Intervalle ex: 1h, 4h, 1d")
     parser.add_argument(
         "--start-date",
@@ -293,6 +301,7 @@ def main() -> None:
             interval=args.interval,
             start_dt=start_dt,
             end_dt=end_dt,
+            exchange=args.exchange,
             bucket=args.bucket,
             dry_run=args.dry_run,
         )
