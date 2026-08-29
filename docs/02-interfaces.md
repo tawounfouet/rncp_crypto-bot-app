@@ -168,8 +168,12 @@ et `03`.
 
 Convention de chemin : `crypto-bot-data/raw/ohlcv/{exchange}/{SYMBOL}/{interval}/{date}.parquet`.
 
-> Incoherence connue : variables d'env `MINIO_ACCESS_KEY` vs `MINIO_USER_ADMIN`
-> selon les docs.
+Source unique de verite pour les identifiants MinIO au niveau `.env`/host :
+`MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`, utilise a la fois pour initialiser le vrai compte
+root MinIO et pour deriver `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` cote conteneurs
+consommateurs (docker-compose). L'ancienne double convention `MINIO_USER_ADMIN`/
+`MINIO_PWD_ADMIN` a ete supprimee le 2026-08-28 (cf. `orchestration/docs/
+04-troubleshooting.md`, Probleme 9, qui a cause un `InvalidAccessKeyId` en staging).
 
 Sources : `docs/03-architecture-data-ml.md` §2, `docs/08-archi-mutualisation-data-layer.md`
 §1, `jobs/README.md`.

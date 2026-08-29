@@ -33,10 +33,8 @@ from src.inference.signal import INFERENCE_MODELS, predict_model_signal
 from src.training.train_mlp import train_from_processed_dataset as train_mlp_from_processed_dataset
 from src.training.train_random_forest import train_from_processed_dataset
 from src.training.train_xgboost import train_from_processed_dataset as train_xgboost_from_processed_dataset
-
 from utils.connectors.exchanges.registry import list_configured_symbols
 from utils.ml.registry import list_configured_models
-
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +149,8 @@ def train_random_forest_endpoint(request: TrainRandomForestRequest) -> TrainRand
 @app.post("/internal/pipeline/train-mlp", response_model=TrainMLPResponse)
 def train_mlp_endpoint(request: TrainMLPRequest) -> TrainMLPResponse:
     try:
-        artifact_dir = train_mlp_from_processed_dataset(request.dataset, request.config)
+        symbol = _resolve_symbol(request.symbol)
+        artifact_dir = train_mlp_from_processed_dataset(request.dataset, request.config, symbol=symbol)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"train_mlp failed: {exc}") from exc
     return TrainMLPResponse(artifact_dir=str(artifact_dir))

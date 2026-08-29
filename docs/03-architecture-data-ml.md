@@ -79,7 +79,7 @@ utils/
 | Problème avant | Solution |
 |---|---|
 | 5 `logging.basicConfig` dispersés + logger maison dans `models/` | Un `configure_logging()` unique, auto-détection TTY, rotation |
-| 3 clients MinIO (backend + 2 jobs) avec noms d'env vars différents | Un `MinioClient` acceptant `MINIO_ACCESS_KEY` ET `MINIO_USER_ADMIN` |
+| 3 clients MinIO (backend + 2 jobs) avec noms d'env vars différents | Un `MinioClient` (`utils/connectors/minio.py`) et un `ClientMinIO` (backend) lisant tous deux `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` — `MINIO_USER_ADMIN`/`MINIO_PWD_ADMIN` supprimées (2026-08-28) |
 | `map_kline` dupliqué entre `jobs/` et `models/` | `utils.connectors.binance.map_kline` — seule source de vérité |
 | `fetch_klines` réimplémenté dans les jobs | Fonction portable sans dépendance `python-binance` |
 

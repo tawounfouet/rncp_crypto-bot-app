@@ -87,8 +87,8 @@ POSTGRES_USER=postgres
 POSTGRES_PWD=your_password
 
 # MinIO
-MINIO_USER_ADMIN=minioadmin
-MINIO_PWD_ADMIN=your_minio_password
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=your_minio_password
 
 # Chiffrement des cles API exchange (Binance, Kraken, ...) en BDD
 # Generer avec : python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"

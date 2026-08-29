@@ -23,13 +23,9 @@ class ClientMinIO:
         """
         Initialisation du client MinIO avec les variables d'environnement
         """
-        # self.endpoint = os.environ.get("MINIO_ENDPOINT", "minio:9000")
         self.endpoint = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
-        # self.access_key = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
-        # self.secret_key = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
-        self.access_key = os.environ.get("MINIO_USER_ADMIN", "miniouser")
-        self.secret_key = os.environ.get("MINIO_PWD_ADMIN", "miniopassword")
-        # self.secure = os.environ.get("MINIO_SECURE", "0").lower
+        self.access_key = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+        self.secret_key = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
         self.secure = os.environ.get("MINIO_SECURE", "0").lower() in (
             "true",
             "1",

@@ -52,8 +52,8 @@ services:
       - "9000:9000"
       - "9010:9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_USER_ADMIN:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_PWD_ADMIN:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - staging_minio_data:/data
     command: server /data --console-address ":9001"
@@ -119,6 +119,13 @@ services:
       postgres:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      # Sans cette dependance, backend demarre en parallele de ml-api (image plus
+      # lourde, plus longue a devenir healthy) : le sync des templates ML au demarrage
+      # (sync_builtin_templates(), one-shot) tente alors de contacter ml-api trop tot et
+      # echoue silencieusement (Connection refused) -- catalogue de bots vide jusqu'au
+      # prochain redemarrage du backend. Observe en conditions reelles le 2026-08-28.
+      crypto-bot-ml-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8009/health"]

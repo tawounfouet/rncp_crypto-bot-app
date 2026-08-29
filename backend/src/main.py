@@ -280,6 +280,7 @@ async def api_info():
 # Router includes (after app configuration)
 from auth.router import router as auth_router  # noqa: E402
 from auth.users_router import router as users_router  # noqa: E402
+from bots.router import internal_router as bots_internal_router  # noqa: E402
 from bots.router import router as bots_router  # noqa: E402
 from inference.router import router as inference_router  # noqa: E402
 from market.router import router as market_router  # noqa: E402
@@ -290,6 +291,7 @@ from trading.router import router as trading_router  # noqa: E402
 app.include_router(auth_router, prefix=settings.API_PREFIX)
 app.include_router(users_router, prefix=settings.API_PREFIX)
 app.include_router(bots_router, prefix=settings.API_PREFIX)
+app.include_router(bots_internal_router)
 
 # Include strategy management router
 app.include_router(strategies_router, prefix=settings.API_PREFIX)

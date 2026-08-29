@@ -13,12 +13,7 @@ logger = get_logger("connectors.minio")
 
 
 class MinioClient:
-    """MinIO client with lazy initialisation and DataFrame helpers.
-
-    Supports both ``MINIO_USER_ADMIN`` / ``MINIO_PWD_ADMIN`` (legacy backend)
-    and ``MINIO_ACCESS_KEY`` / ``MINIO_SECRET_KEY`` (standard / jobs) env var
-    naming conventions.  The standard names take precedence.
-    """
+    """MinIO client with lazy initialisation and DataFrame helpers."""
 
     def __init__(
         self,
@@ -29,12 +24,8 @@ class MinioClient:
         default_bucket: str | None = None,
     ):
         self.endpoint = endpoint or os.environ.get("MINIO_ENDPOINT", "localhost:9000")
-        self.access_key = (
-            access_key or os.environ.get("MINIO_ACCESS_KEY") or os.environ.get("MINIO_USER_ADMIN", "miniouser")
-        )
-        self.secret_key = (
-            secret_key or os.environ.get("MINIO_SECRET_KEY") or os.environ.get("MINIO_PWD_ADMIN", "miniopassword")
-        )
+        self.access_key = access_key or os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
+        self.secret_key = secret_key or os.environ.get("MINIO_SECRET_KEY", "minioadmin")
         if secure is not None:
             self.secure = secure
         else:
