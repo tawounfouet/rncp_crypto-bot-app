@@ -72,7 +72,8 @@ async def create_user_bot(
 ) -> UserBotResponse:
     """Select a complete bot template for the current user.
 
-    The payload intentionally accepts no strategy, symbol, timeframe, signal, or risk fields.
+    The payload intentionally accepts no strategy, symbol, timeframe, signal, or risk fields --
+    quote_order_quantity (montant investi par ordre) est le seul champ modifiable.
     """
     return service.create_user_bot(current_user.id, payload)
 

@@ -89,11 +89,15 @@ class BotConfigService:
             for selection in self.store.user_bot_selections.get(email, [])
         )
 
-    def select_template(self, template_id: str) -> tuple[bool, str, UserBotSelection | None]:
+    def select_template(
+        self, template_id: str, quote_order_quantity: float | None = None
+    ) -> tuple[bool, str, UserBotSelection | None]:
         access_token = get_access_token()
         if access_token:
             response = self._request_with_auth_refresh(
-                lambda token: self.client.create_user_bot(token, template_id=template_id)
+                lambda token: self.client.create_user_bot(
+                    token, template_id=template_id, quote_order_quantity=quote_order_quantity
+                )
             )
             if response.success and isinstance(response.data, dict):
                 return (

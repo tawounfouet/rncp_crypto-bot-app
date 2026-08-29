@@ -240,6 +240,7 @@ class PerformanceService:
                     bot_name=str(item.get("bot_name") or ""),
                     model_name=self._optional_str(item.get("model_name")),
                     model_version=self._optional_str(item.get("model_version")),
+                    capital_initial=self._float_or_none(item.get("capital_initial")),
                     pnl_total=self._float_or_none(item.get("pnl_total")),
                     pnl_realized=self._float(item.get("pnl_realized")),
                     pnl_unrealized=self._float_or_none(item.get("pnl_unrealized")),

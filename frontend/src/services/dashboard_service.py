@@ -32,6 +32,7 @@ def aggregate_overview(
                 exchange=bot.exchange,
                 mode_live=bot.mode_live,
                 status=bot.status.value,
+                capital_initial=bot.quote_order_quantity,
                 pnl_usdc=metrics.pnl_realized_usdc if metrics else 0.0,
                 roi_pct=metrics.roi_pct if metrics else 0.0,
                 fees_usdc=metrics.fees_usdc if metrics else 0.0,

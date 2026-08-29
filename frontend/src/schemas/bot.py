@@ -24,6 +24,8 @@ class BotInfo(BaseModel):
     model_name: str = "-"
     model_version: str = "-"
     last_signal: str = "-"
+    quote_order_quantity: float | None = None
+    quote_asset: str = "-"
 
 
 class BotActionResult(BaseModel):

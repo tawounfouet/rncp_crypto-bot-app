@@ -293,7 +293,14 @@ class BotService:
             if template is None:
                 continue
 
-            updated_snapshot = self._snapshot_template(template)
+            # Preserve un montant choisi par l'utilisateur a la creation (cf. UserBotCreate.
+            # quote_order_quantity) : sans ca, une resynchronisation (BOT_TEMPLATE_AUTO_MIGRATE,
+            # cf. sync_builtin_templates()) l'ecraserait avec la valeur par defaut du template
+            # a chaque redemarrage du backend.
+            existing_amount = self._decimal_or_none(
+                dict(snapshot.get("order_policy") or {}).get("quote_order_quantity")
+            )
+            updated_snapshot = self._snapshot_template(template, existing_amount)
             if snapshot != updated_snapshot or instance.bot_template_id != template.id:
                 instance.bot_template_id = template.id
                 instance.config_snapshot = updated_snapshot
@@ -353,7 +360,7 @@ class BotService:
                 mode="TESTNET",
                 status="STOPPED",
                 auto_trade_enabled=False,
-                config_snapshot=self._snapshot_template(template),
+                config_snapshot=self._snapshot_template(template, payload.quote_order_quantity),
             )
             session.add(instance)
             session.flush()
@@ -622,6 +629,7 @@ class BotService:
                         bot_name=bot_name,
                         model_name=resolved_model_name,
                         model_version=latest_trace.get("model_version"),
+                        capital_initial=self._configured_quote_capital(snapshot),
                         pnl_total=bot_total_pnl,
                         pnl_realized=realized_pnl,
                         pnl_unrealized=unrealized_pnl,
@@ -1841,7 +1849,17 @@ class BotService:
         return None
 
     @staticmethod
-    def _snapshot_template(template: BotTemplate) -> dict[str, Any]:
+    def _snapshot_template(template: BotTemplate, quote_order_quantity: Decimal | None = None) -> dict[str, Any]:
+        risk_limits = dict(template.risk_limits or {})
+        order_policy = dict(template.order_policy or {})
+        if quote_order_quantity is not None:
+            # Seul champ du template modifiable par l'utilisateur (cf. UserBotCreate) : on
+            # aligne aussi risk_limits.max_order_quote_quantity sur le montant choisi, sinon
+            # le risk gate (create_user_bot -> _evaluate_risk_gate) bloquerait indefiniment
+            # tout ordre au-dela du plafond fige du template (cf. service.py ~L1206).
+            amount = str(quote_order_quantity)
+            order_policy["quote_order_quantity"] = amount
+            risk_limits["max_order_quote_quantity"] = amount
         return {
             "template_id": template.id,
             "template_slug": template.slug,
@@ -1855,8 +1873,8 @@ class BotService:
             "exchange": template.exchange,
             "environment": template.environment,
             "execution_params": dict(template.execution_params or {}),
-            "risk_limits": dict(template.risk_limits or {}),
-            "order_policy": dict(template.order_policy or {}),
+            "risk_limits": risk_limits,
+            "order_policy": order_policy,
         }
 
     def _ensure_running_run(

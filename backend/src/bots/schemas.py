@@ -52,9 +52,21 @@ class BotTemplateResponse(BaseModel):
 
 
 class UserBotCreate(BaseModel):
-    """Create a user bot by selecting a complete immutable template."""
+    """Create a user bot by selecting a complete immutable template.
+
+    quote_order_quantity est le seul champ du template modifiable par l'utilisateur : le
+    montant investi par ordre (en devise de cotation, ex. USDC) est verrouille avec le reste
+    de la config une fois la snapshot creee, cf. BotService._snapshot_template().
+    """
 
     bot_template_id: str = Field(..., description="Published bot template identifier")
+    quote_order_quantity: Decimal | None = Field(
+        None,
+        gt=0,
+        description=(
+            "Montant alloue par ordre, en devise de cotation. Si omis, utilise la valeur par defaut du template."
+        ),
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -183,6 +195,7 @@ class BotPerformanceContributionResponse(BaseModel):
     bot_name: str
     model_name: str | None = None
     model_version: str | None = None
+    capital_initial: Decimal | None = None
     pnl_total: Decimal | None = None
     pnl_realized: Decimal
     pnl_unrealized: Decimal | None = None
