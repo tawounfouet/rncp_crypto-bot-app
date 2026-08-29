@@ -99,7 +99,9 @@ flowchart TB
 | **Rangement** | client MinIO (JSON/CSV) | client MinIO (Parquet) | fichiers locaux (+ fiche `.meta.json`) | 3 façons de ranger, 2 destinations |
 
 **Petites incohérences au passage** (à corriger) :
-- Les 3 codes ne lisent pas les **mêmes noms de réglages MinIO** (l'un dit `MINIO_USER_ADMIN`, l'autre `MINIO_ACCESS_KEY`…).
+- ~~Les 3 codes ne lisent pas les mêmes noms de réglages MinIO~~ — corrigé le 2026-08-28,
+  `MINIO_ACCESS_KEY`/`MINIO_SECRET_KEY` partout (source unique `MINIO_ROOT_USER`/
+  `MINIO_ROOT_PASSWORD` côté `.env`).
 - Le job Airflow **refait** ce que le backend savait déjà faire.
 - La doc du job pointe vers un fichier `models-training/...` qui **n'existe pas** (le projet s'appelle `crypto-bot-models`).
 
