@@ -3,7 +3,19 @@
 Statut: référence
 Derniere revision: 2026-07-28
 
-Projet de trading automatise de cryptomonnaies — monorepo applicatif (backend + frontend).
+Projet de trading automatise de cryptomonnaies — monorepo **100 % Python** (backend FastAPI + frontend Streamlit + ML + jobs Airflow).
+
+> ⚠️ **Avertissement sécurité.** Un audit complet (voir [`CODEBASE_ANALYSIS.md`](./CODEBASE_ANALYSIS.md)) a identifié des **endpoints non authentifiés destructifs ou d'exécution** (purge de comptes, exécution de déploiements, entraînement ML) ainsi que des **ports internes publiés** et la **lecture anonyme du bucket MinIO**. Ces routes sont joignables dès que le backend est exposé sur un réseau non fiable. **Ne pas déployer publiquement avant d'avoir appliqué la Phase 1 de [`RECOMMANDATIONS.md`](./RECOMMANDATIONS.md)** (auth centralisée, jeton de service, fermeture des ports internes).
+
+## Documentation d'audit
+
+| Document | Contenu |
+|----------|---------|
+| [CODEBASE_ANALYSIS.md](CODEBASE_ANALYSIS.md) | Faits : architecture, endpoints, bugs `B1…B14`, vulnérabilités `V1…V13`, dette |
+| [ANALYSE_CRITIQUE.md](ANALYSE_CRITIQUE.md) | Verdict et critiques (sécurité, architecture, frontend, processus) |
+| [RECOMMANDATIONS.md](RECOMMANDATIONS.md) | Plan de remédiation priorisé et correctifs prêts à l'emploi |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Référence technique : flux, modèle de données, conventions |
+| [INDEX.md](INDEX.md) | Sommaire et navigation par tâche |
 
 ## Architecture
 
@@ -18,6 +30,12 @@ Crypto-bot-app/                 # Monorepo applicatif
 │   ├── src/
 │   ├── Dockerfile
 │   └── requirements.txt
+├── models/                     # Entrainement ML + API ml-api (:8010) + MLflow
+│   ├── src/
+│   └── tests/
+├── jobs/                       # Jobs batch Airflow (ingest -> MinIO, transform -> Postgres)
+├── orchestration/              # DAGs Airflow + plugins
+├── utils/                      # Package partage (connecteurs exchanges, MinIO, Postgres)
 ├── ci/                         # Docker Compose tests d'integration + resultats
 │   ├── docker-compose.test.yml
 │   └── test-results/           # Rapports JUnit/Cobertura (trackes pour tracabilite)
@@ -55,6 +73,64 @@ make health             # verifie la sante du backend
 
 Guide d'installation complet (venv, hooks pre-commit, tests, lint, workflow Git/CI,
 depannage) : **[docs/01-setup.md](docs/01-setup.md)**.
+
+### Tests & lint (local)
+
+```bash
+make lint           # ruff check + format (ruff epingle dans le venv)
+make test           # backend + frontend + utils + jobs + models
+make test-backend   # ou test-frontend / test-utils / test-jobs / test-models
+make ci-test        # rejoue le test d'integration CI (image Docker + Postgres reel)
+```
+
+> **Aucun couple de variables ne doit rester vide.** `JWT_SIGNING_KEY` est obligatoire
+> au demarrage du backend ; `EXCHANGE_ENC_KEY` est requis pour chiffrer les identifiants
+> d'echange. `.env.example` ne fournit que des placeholders de developpement.
+
+## Mode démonstration (soutenance)
+
+Un jeu de données déterministe et un environnement dédié permettent de dérouler un parcours
+utilisateur complet sans dépendre d'un exchange réel (worker de bots désactivé).
+
+> Guide complet (mise en place, déroulé, dépannage) : **[DEMO_SOUTENANCE.md](DEMO_SOUTENANCE.md)**.
+
+```bash
+make demo-up      # démarre la stack (surcharge docker-compose.demo.yml) + seed
+make demo-seed    # (re)peuple uniquement le jeu de données
+make demo-reset   # reset complet (volumes) puis redémarrage + seed
+make demo-down    # arrête l'environnement de démonstration
+```
+
+Comptes créés par le seed :
+
+| Compte | Email | Mot de passe |
+|---|---|---|
+| Utilisateur démo | `demo@cryptobot.dev` | `Demo12345!` |
+| Administrateur | `admin@cryptobot.dev` | `Admin12345!` |
+
+Le seed (`backend/scripts/seed_demo.py`) crée un exchange configuré (mode sandbox), 3 bots
+verrouillés dans différents états, leurs décisions/ordres/trades/positions, ~60 jours de
+bougies 1h (BTCUSDC/ETHUSDC), des backtests et un portefeuille Spot.
+
+> **Dépendances live** : les pages *Marché* et *Portefeuille* interrogent l'exchange réel
+> (prix publics, soldes) — elles nécessitent un accès réseau et des clés valides. Les autres
+> écrans (Tableau de bord, Performances, Contrôle/Paramétrage de bots, Backtesting, Compte,
+> Admin) sont entièrement servis par les données seedées.
+
+## Variables d'environnement
+
+Le fichier `.env` (non versionne) est la source des secrets ; `versions.env` est la source
+unique des versions d'images. Les principales variables (voir `.env.example`) :
+
+| Variable | Role |
+|---|---|
+| `JWT_SIGNING_KEY` | Cle de signature des JWT (obligatoire, distincte de `EXCHANGE_ENC_KEY`) |
+| `EXCHANGE_ENC_KEY` | Chiffrement au repos des identifiants d'exchange |
+| `CORS_ORIGINS` / `ALLOWED_HOSTS` | Origines CORS et hotes autorises (`TrustedHost`) |
+| `POSTGRES_USER` / `POSTGRES_PWD` | Identifiants PostgreSQL |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | Identifiants MinIO (pas de valeur par defaut en prod) |
+| `AIRFLOW_ADMIN_USER` / `_PASSWORD` / `_FERNET_KEY` / `_WEBSERVER_SECRET_KEY` | Airflow |
+| `ML_API_URL` | URL du service ml-api (defaut conteneur `http://crypto-bot-ml-api:8010`) |
 
 ## Services (developpement local)
 
@@ -130,3 +206,7 @@ interface de visualisation et d'alerte.
 | [docs/03-architecture-data-ml.md](docs/03-architecture-data-ml.md) | Flux de donnees Binance -> MinIO -> ML -> backend |
 | [docs/04-architecture-db.md](docs/04-architecture-db.md) | Schema de la base de donnees (tables, vues, index) |
 | [docs/05-multi-exchange-layer.md](docs/05-multi-exchange-layer.md) | Abstraction multi-exchange (drivers de marche, clients d'execution) |
+| [docs/06-testnet-simulation-modes.md](docs/06-testnet-simulation-modes.md) | Modes testnet / simulation |
+| [docs/07-bot-strategy-architecture.md](docs/07-bot-strategy-architecture.md) | Architecture des bots et strategies (catalogue verrouille) |
+| [docs/08-archi-mutualisation-data-layer.md](docs/08-archi-mutualisation-data-layer.md) | Mutualisation de la couche data |
+| [INDEX.md](INDEX.md) | Sommaire des documents d'audit et navigation par tache |

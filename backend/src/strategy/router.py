@@ -161,6 +161,25 @@ async def create_strategy(
         ) from None
 
 
+# NOTE : cette route statique DOIT être déclarée avant la route paramétrée
+# ``GET /{strategy_id}`` (ci-dessous), sinon Starlette la capture comme
+# ``strategy_id="backtests"`` et renvoie 404 (cf. B4).
+@router.get("/backtests", response_model=DataResponse[list[BacktestResponse]])
+async def list_backtests(
+    current_user: User = Depends(get_current_user),
+    strategy_service: StrategyService = Depends(get_strategy_service),
+):
+    """List all backtest results for the current user."""
+    try:
+        results = strategy_service.get_user_backtests(current_user.id)
+        return DataResponse(success=True, message=f"{len(results)} backtests", data=results)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list backtests: {e!s}",
+        ) from None
+
+
 @router.get("/{strategy_id}", response_model=DataResponse[StrategyResponse])
 async def get_strategy(
     strategy_id: str,
@@ -416,22 +435,6 @@ async def create_ml_backtest(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"ML backtest failed: {e!s}",
-        ) from None
-
-
-@router.get("/backtests", response_model=DataResponse[list[BacktestResponse]])
-async def list_backtests(
-    current_user: User = Depends(get_current_user),
-    strategy_service: StrategyService = Depends(get_strategy_service),
-):
-    """List all backtest results for the current user."""
-    try:
-        results = strategy_service.get_user_backtests(current_user.id)
-        return DataResponse(success=True, message=f"{len(results)} backtests", data=results)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list backtests: {e!s}",
         ) from None
 
 

@@ -283,6 +283,7 @@ from auth.users_router import router as users_router  # noqa: E402
 from bots.router import internal_router as bots_internal_router  # noqa: E402
 from bots.router import router as bots_router  # noqa: E402
 from inference.router import router as inference_router  # noqa: E402
+from market.binance_testnet_router import router as binance_testnet_router  # noqa: E402
 from market.router import router as market_router  # noqa: E402
 from strategy.router import router as strategies_router  # noqa: E402
 from trading.router import router as trading_router  # noqa: E402
@@ -301,6 +302,10 @@ app.include_router(trading_router, prefix=settings.API_PREFIX)
 
 # Include market data router
 app.include_router(market_router, prefix=settings.API_PREFIX)
+
+# Include Binance Spot Testnet lab router (routes protégées par get_current_user —
+# cf. B14, le routeur était défini mais jamais monté)
+app.include_router(binance_testnet_router, prefix=settings.API_PREFIX)
 
 # Include model inference router
 app.include_router(inference_router, prefix=settings.API_PREFIX)
