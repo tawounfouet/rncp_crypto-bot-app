@@ -1,340 +1,116 @@
-# Analyse critique de la codebase — CryptoBot App
+# Analyse critique — Crypto-Bot App
 
-> **Disclaimer :** Cette analyse critique est constructive et vise à identifier les axes de priorisation technique. Elle ne remet pas en cause la qualité globale du projet, qui démontre une architecture bien pensée et une CI/CD industrialisée.
-
----
-
-## 1. Failles de sécurité critiques
-
-### 1.1 Secrets par défaut en dur — **RÉSOLU (2026-08-02)**
-
-**Fichier :** `backend/src/shared/config/settings.py` (ex-`SECRET_KEY`, renommé `JWT_SIGNING_KEY`)
-```python
-JWT_SIGNING_KEY: SecretStr  # plus de valeur par defaut, obligatoire via l'environnement
-```
-
-La clé secrète JWT avait une valeur par défaut triviale. Si un déploiement oubliait de surcharger `.env`, **n'importe qui pouvait signer des JWT valides**. Corrigé : le champ n'a plus de défaut (`ValidationError` au démarrage si absent), la variable a été renommée `JWT_SIGNING_KEY` pour éviter l'ambiguïté avec les autres secrets du projet (`EXCHANGE_ENC_KEY`, `MINIO_SECRET_KEY`). Même constat pour `MINIO_SECRET_KEY` (ligne 77) — non traité par ce fix, reste à surveiller si sa valeur par défaut (`miniopassword`) est un jour exposée.
-
-**Risque :** Élevé — compromettait toute l'authentification.
+> Document d'**opinion** : évalue les choix de conception, pas seulement l'état des lieux. Les faits bruts et la liste exhaustive des bugs sont dans [`CODEBASE_ANALYSIS.md`](./CODEBASE_ANALYSIS.md) ; ici on répond à la question « ce code est-il bon, et pourquoi ? ».
 
 ---
 
-### 1.2 CORS et Allowed Hosts en wildcard — **RÉSOLU (2026-08-02)**
+## 1. Verdict global
 
-**Fichier :** `backend/src/shared/config/settings.py`
-```python
-CORS_ORIGINS: list[str]    # plus de valeur par defaut, obligatoire via l'environnement
-ALLOWED_HOSTS: list[str]   # idem
-```
+| Dimension | Note /10 | Commentaire |
+|---|---|---|
+| Fonctionnel | 5/10 | Le socle ingère, entraîne et affiche, mais des features centrales sont cassées (B1 profil, B2/B3 achats, B4 historique backtests, B11 page Testnet) et d'autres renvoient du faux (B6, B8). |
+| Sécurité | 3/10 | Cinq endpoints destructifs ou d'exécution sont accessibles anonymement (V1–V5) ; le contrôle d'accès n'est pas systématique. C'est le point le plus grave du dépôt. |
+| Architecture | 7/10 | Découpage par domaine clair, pipeline data/ML cohérent, source de versions unique. Quelques décisions (routeur interne monté sans préfixe, auth dispersée) fragilisent l'ensemble. |
+| Qualité de code | 6/10 | Code lisible et homogène, conventions respectées, mais beaucoup de `TODO` laissés en production et un chemin « simulé » jamais retiré. |
+| Testabilité / DX | 6/10 | 515 tests locaux et bonne outillage pre-commit, mais **la CI n'exécute aucun test unitaire** et ignore `models/` et `orchestration/`. |
+| Production-readiness | 4/10 | Le système prétend servir de vraies données et de vrais ordres tout en laissant des portes ouvertes et des horodatages figés. Non déployable en l'état sur un périmètre sensible. |
 
-En production, `CORS_ORIGINS: ["*"]` autorisait n'importe quel site à faire des requêtes cross-origin vers l'API. Combiné avec `ALLOWED_HOSTS: ["*"]`, le `TrustedHostMiddleware` était neutralisé. Corrigé : les deux champs n'ont plus de défaut (`ValidationError` au démarrage si absents), fournis via l'environnement sous forme de liste séparée par des virgules.
-
-**Risque :** Élevé — attaques CSRF potentielles, pas de protection Host header. *(historique, corrigé)*
-
----
-
-### 1.3 Mots de passe en clair dans les mocks
-
-**Fichier :** `frontend/src/mocks/db.py:33-58`
-```python
-MockUser(password="Passw0rd!"),
-MockUser(password="Admin123!"),
-```
-
-Les mots de passe des utilisateurs de démonstration sont stockés **en clair** dans la base mockée. Bien que ce soit une base mock, cela normalise un mauvais pattern et pourrait fuiter via les logs ou une page debug.
-
-**Risque :** Moyen — exposition via logs/erreurs.
+**En une phrase** : **un socle techniquement propre et bien découpé, miné par une confiance au client systématique — absence de garde sur les endpoints sensibles, données simulées présentées comme réelles — qui le rend inapte à la production tant que le contrôle d'accès n'est pas centralisé.**
 
 ---
 
-### 1.4 Timestamp en dur dans le health check
+## 2. Le problème n'est pas les bugs, c'est l'absence de frontière serveur
 
-**Fichier :** `backend/src/main.py:169`
-```python
-"timestamp": "2025-07-29T03:15:00Z",
-```
+Les neuf bugs métier et les cinq failles critiques ne sont pas des accidents indépendants : ils partagent la même cause racine — **le serveur fait confiance à l'appelant, et les protections ne sont jamais posées comme invariant.**
 
-Une date littérale figée en juillet 2025 dans un endpoint de health check. C'est un **cauchemar de débogage** : qui va penser à mettre à jour cette date ?
+- L'auth est ajoutée **endpoint par endpoint**, via `Depends(get_current_user)` recopié à la main. Cinq routes ont été oubliées (V1–V5) : `logout-all`, `purge-inactive`, `execute-active`, le routeur interne bots, l'API d'entraînement. Un `include_router(..., dependencies=[Depends(...)])` ou une dépendance de routeur aurait rendu l'oubli impossible.
+- Quand un endpoint a été conçu « pour Airflow », l'auteur l'a **explicitement laissé sans auth** en s'appuyant sur un commentaire (« appele uniquement depuis le reseau docker »), puis l'a monté sous `/api/v1` et publié le port. La sécurité repose sur la documentation, pas sur le code.
+- Le contrôle de propriété n'existe nulle part de façon générique : `logout_all_sessions(user_id)` accepte un identifiant client sans le confronter à `current_user` (V8).
+- Le même réflexe s'applique aux **données** : `market/service.py` renvoie une marche aléatoire (« For testing ») sur des endpoints authentifiés documentés comme réels (B6) ; `check_health` renvoie `"connected"` sans rien tester (B9) ; `/health/detailed` retourne une constante `2025-07-29T03:15:00Z` (B10). **Le système simule la santé et les données qu'il devrait mesurer.**
 
----
-
-## 2. Problèmes d'architecture et de conception
-
-### 2.1 Duplication de systèmes de configuration
-
-Deux systèmes de settings Pydantic coexistent :
-- `backend/src/shared/config/settings.py` (~350 lignes, backend complet)
-- `models/src/config/settings.py` (~? lignes, ML)
-
-Ils ne partagent rien. Si un paramètre commun change (ex: `BINANCE_API_URL`), il faut le modifier aux deux endroits. Le module `jobs/` gère sa config via **variables d'environnement brutes** (sans Pydantic).
+Corriger la liste des bugs ne suffira pas : tant que la sécurité et la véracité des données ne deviennent pas des **invariants transverses**, la prochaine route oubliée ou le prochain mock laissé en place recréera exactement les mêmes symptômes. Le défaut est architectural, pas ponctuel.
 
 ---
 
-### 2.2 Routers backend complets mais services vides
+## 3. Critiques d'architecture
 
-Le backend a **3 routers** volumineux avec une belle gestion d'erreurs :
-- `trading/router.py` : 721 lignes, 13 endpoints
-- `market/router.py` : 636 lignes, 10 endpoints
-- `strategy/router.py` : 370 lignes, 10 endpoints
+### 3.1 L'authentification est un décor, pas une barrière
+Recopier `Depends(get_current_user)` sur chaque route est simple à lire mais **sans rappel** : rien n'échoue au démarrage si une route l'oublie, aucun test ne vérifie systématiquement qu'une route sous `/users` est authentifiée. Résultat : cinq trous (V1–V5) et un test qui **défend** l'absence d'auth sur `execute-active` (`test_strategy_router.py:366`). Le choix « dépendance par endpoint » est défendable *si* complété par une dépendance de routeur et un test paramétré — ici ni l'un ni l'autre n'existe.
 
-Mais les services sous-jacents (`TradingService`, `StrategyService`) sont des stubs ou inexistants. Les imports fonctionnent mais les appels `await service.create_order(...)` échoueront à l'exécution.
+### 3.2 La séparation interne/public est purement déclarative
+`internal_router` (bots) et `/internal/pipeline/*` (ml-api) reposent sur une convention de nommage, pas sur une frontière réseau réelle : tous les ports sont publiés et les routeurs internes sont montés. La confiance dans le commentaire a remplacé le contrôle (V4, V5). Une architecture multi-composants **doit** isoler les surfaces internes (réseau privé, auth de service) au lieu de compter sur le nom des routes.
 
-**Problème :** illusion de complétude. Le code est écrit mais pas testable car les services ne sont pas implémentés.
+### 3.3 Le frontend n'est pas une source de vérité, mais l'UI le croit
+Le « mock-first » (`runtime_mode.py`) est un bon outil de démo, mais il laisse l'UI afficher un succès sur des endpoints qui échouent en silence : `list_backtests` renvoie `[]` en cas d'échec (`backtest_service.py:101-115`) et l'onglet historique affiche « Aucun backtest » au lieu de l'erreur (B4). Un échec de transport est ainsi déguisé en absence de données — l'utilisateur ne peut pas diagnostiquer. Le test `test_no_silent_mock_fallback.py` montre que l'équipe connaît le risque mais ne l'a pas généralisé.
 
----
+### 3.4 Le flux de trading « au marché » n'a jamais été terminé
+`market_buy`/`market_sell` et `_get_or_create_manual_deployment` sont des coquilles avec `TODO` (B2/B3), pourtant **documentées et exposées** (`backend/README.md:131-132`). Le module `trading` a été partiellement remplacé par `bots/`, mais ses endpoints cassés sont restés montés. C'est un symptôme de migration inachevée : deux chemins coexistent, l'un mort mais visible. Le même schéma touche le Testnet Lab : son routeur existe (13 routes) mais n'est **jamais monté** (B14), et sa page plante (B11) — la fonctionnalité est morte à ses deux extrémités, sans que rien ne l'indique.
 
-### 2.3 Duplication de code entre `jobs/` et `backend/`
-
-Les jobs `collect_ohlcv.py` et `load_ohlcv.py` réimplémentent :
-- Le client MinIO (identique à celui du backend)
-- Le mapping klines Binance (identique à `market/clients/`)
-- La logique de connexion DB
-
-Alors que le backend a déjà toute cette infrastructure via `shared/`. Les jobs auraient dû réutiliser le package `shared/` du backend.
+### 3.5 La CI ne protège pas là où le risque est le plus grand
+La décision « intégration backend seulement » laisse `models/` (entraînement, où une régression est silencieuse) **et** `orchestration/` (qui déclenche les pipelines) hors de tout filet. Les 226 tests frontend et 36 tests models existent mais ne sont jamais exécutés automatiquement. L'investissement de test est annulé par l'absence de porte de sortie.
 
 ---
 
-### 2.4 Script SQL MySQL pour une base PostgreSQL
+## 4. Critique sécurité (au-delà de la liste des failles)
 
-**Fichier :** `backend/src/shared/database/init_database.sql` (517 lignes)
-
-Ce fichier est écrit en **syntaxe MySQL** :
-```sql
-CREATE DATABASE crypto_trading_bot;
-USE crypto_trading_bot;           -- MySQL, en PostgreSQL : \c
-id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),  -- MySQL, PG: gen_random_uuid()
-updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,  -- MySQL pur
-```
-
-Tout le projet utilise PostgreSQL. Ce fichier est donc **inutilisable** et potentiellement dangereux si quelqu'un l'exécute sur la base de production.
+1. **Menace jamais envisagée : l'attaquant réseau anonyme.** Toute la conception postule des appelants coopératifs (Airflow, frontend). Or les composes publient les ports sur l'hôte : le scénario réaliste est un scan de ports → découverte de `/api/v1/users/purge-inactive` (destruction), `/api/v1/strategies/deployments/execute-active` (ordres réels) et `/internal/bot-templates/sync`. Aucun de ces appels n'exige de preuve d'identité.
+2. **Primitive détournée : le JWT devient décoratif.** Le mécanisme d'auth est correct en soi, mais son application partielle le vide de sens : on peut agir sur des ressources d'autrui (`logout-all`, V1/V8) ou sur des ressources globales (`execute-active`) sans jeton.
+3. **Confiance dans l'identifiant client.** `purge-inactive` accepte `days=1` (V2) et `logout-all` accepte n'importe quel `user_id` — deux paramètres de portée globale/étrangère pilotés par l'appelant. C'est un principe à interdire : un paramètre fourni par le client ne doit jamais élargir la portée d'une action.
+4. **Secret de signature.** L'échec est *fail-safe* (clé obligatoire), mais l'exemple vide (V10) invite à une configuration incomplète ; à surveiller en staging/prod.
+5. **Compromission réaliste en 5 minutes** : `curl`/enumération → purge ou exécution d'ordres, sans compte ni jeton, depuis n'importe quelle machine routant vers le port `8009`. Le manque de rate limiting (V7) rend en plus le brute-force du login trivial.
 
 ---
 
-### 2.5 `from_orm()` déprécié dans Pydantic V2
+## 5. Critique du frontend / interface
 
-**Fichier :** `backend/src/strategy/router.py:115`
-```python
-strategy_response = StrategyResponse.from_orm(strategy)
-```
-
-`from_orm()` est supprimé dans Pydantic V2. Remplacer par `model_validate(strategy)`. Le projet utilise `pydantic==2.12.5` donc cette ligne lèvera une `AttributeError` à l'exécution.
-
----
-
-## 3. Qualité du code et dette technique
-
-### 3.1 Prolifération des outils de formattage
-
-| Fichier | line-length | target-version |
-|---------|-------------|----------------|
-| `pyproject.toml` (racine) | 120 | py314 |
-| `frontend/pyproject.toml` | 100 | py310 |
-| `models/pyproject.toml` | ? | ? |
-
-Trois fichiers `pyproject.toml` avec des règles Ruff différentes. Le fichier racine cible Python 3.14 pendant que le frontend cible 3.10. Incohérence garantie.
+- **Deux clients HTTP** (`api_client.py` public, `auth_api_client.py` authentifié) avec un chevauchement fonctionnel et des conventions de retour hétérogènes (`ApiResponse` vs tuples `(bool, msg)`) — surface d'incohérence.
+- **Routage par nom de fichier** dans `pages/` avec numérotation dupliquée (`09_Backtesting.py` et `09_Binance_Testnet_Lab.py`) ; cette dernière n'est même pas déclarée dans `PAGES`, ce qui la rend buguée d'emblée (B11).
+- **État de session global** (`st.session_state`) utilisé directement dans `setup_page` (`layouts/page_shell.py`) : la page testnet crashe lors de l'appel à `can_access` — le point d'entrée de chaque page est donc une source de crash si la clé n'est pas référencée.
+- **Shim pydantic local** (`frontend/src/pydantic/`) qui masque le vrai paquet : choix assumé mais très fragile (un import pydantic réel inattendu change le comportement selon le `PYTHONPATH`).
+- **Style** : un `@import` Google Fonts externe dans `theme/styles.py:15` couple le rendu à un réseau tiers (V11).
 
 ---
 
-### 3.2 Pas de type checking dans la CI
+## 6. Critique du processus (DX, outillage, livrable)
 
-La CI exécute Ruff (lint + format) mais pas **mypy** ou **pyright**. Pour un projet de cette taille avec des appels asynchrones complexes et des relations SQLAlchemy, l'absence de type checking statique est une source de bugs silencieux.
-
----
-
-### 3.3 Base SQLite commitée
-
-**Fichier :** `backend/src/shared/database/db.sqlite3`
-
-Un fichier SQLite de 0-2 Ko est commité dans le dépôt. C'est un résidu de développement local qui n'aurait jamais dû être versionné. `.gitignore` ne l'exclut pas.
+- **Tests nombreux, CI partielle** : 515 tests au total, mais la CI ne joue que l'intégration backend. Le coût de cette absence est direct : les régressions `models/` et `frontend/` ne sont détectées qu'en local, donc « quand on y pense ».
+- **`orchestration/` sans lint ni test** : les DAGs qui pilotent la production ne passent aucune vérification automatique ; un changement YAML faux ne sera vu qu'à l'exécution en Airflow.
+- **Dépendances non épinglées à dur** : `skops` non pinné fait échouer deux tests ML ; `torch+cpu` n'est pas installable sur macOS, ce qui **décourage la reproduction locale** d'un composant clé.
+- **`.dockerignore` racine absent** : chaque build envoie tout le dépôt au démon (lent, risque d'inclure `.env` si mal configuré).
+- **README en retard** : l'architecture décrite omet `models/`, `jobs/`, `orchestration/`, `utils/` (voir mise à jour dans `README.md`). La prose diverge des sources exécutables, ce qui contredit la règle interne (AGENTS.md) qui donne priorité à `Makefile`/`versions.env`.
+- **Documentation abondante mais non vérifiée** : les docs affirment des contrats (ports, absence d'auth « volontaire ») que le code contredit (V4, V5). Une doc qui « couvre » une faiblesse la rend plus dangereuse qu'aucune doc.
 
 ---
 
-### 3.4 Migrations Alembic absentes
+## 7. Ce qui mérite d'être sauvegardé
 
-**Dossier :** `backend/src/shared/database/migrations/{versions}/` — vide
-
-Le dossier est préparé mais aucune migration n'a été générée. La création des tables se fait via `Base.metadata.create_all(bind=engine)` au démarrage — un pattern déconseillé en production car il ne permet pas les migrations incrémentales.
-
----
-
-### 3.5 Rate limiting déclaré mais pas implémenté
-
-Settings :
-```python
-RATE_LIMIT_ENABLED: bool = True
-RATE_LIMIT_REQUESTS: int = 100
-```
-
-Mais aucun middleware FastAPI de rate limiting n'est présent dans `main.py`. C'est un **dead code** qui donne une fausse impression de sécurité.
+- **Le découpage par domaine** (`router`/`service`/`models`/`schemas`) : lisible, prévisible, propice à une correction ciblée — c'est la base sur laquelle centraliser l'auth est facile.
+- **La gestion de versions unique** (`versions.env` + `scripts/check-infra.sh`) : pratique rare et saine.
+- **Le socle de sécurité correct** : argon2id, chiffrement des identifiants d'exchange, JWT complet (`exp/iat/jti/type`), `TrustedHost`, Semgrep bloquant, hooks pre-commit.
+- **Le pipeline data/ML** (ingest MinIO → transform Postgres → entraînement → ml-api) : cohérent et orchestré.
+- **La couverture de tests existante** : 515 tests, dont une suite d'intégration backend sérieuse (214) — le travail est là, il « suffit » de le brancher en CI.
+- **Le souci de traçabilité** : rapports de couverture suivis dans git, docs détaillées, commits conventionnels.
 
 ---
 
-### 3.6 `requirements.txt.template` en double emploi
+## 8. Réparer ou réécrire ?
 
-Les fichiers `requirements.txt.template` (backend, jobs, orchestration) sont compilés en `requirements.txt` via `generate-requirements.py`. Mais les `requirements.txt` finaux sont **aussi commités dans le dépôt**, créant une redondance et un risque de désynchronisation si on modifie l'un sans régénérer l'autre.
+| Option | Effort estimé | Verdict |
+|---|---|---|
+| **Réparer par patchs ciblés** (corriger les 14 bugs + 13 vulns) | 3–5 jours | Insuffisant seul : traite les symptômes sans empêcher la récidive (prochain endpoint oublié). À faire *après* la centralisation de l'auth. |
+| **Centraliser l'auth + corriger les bugs** | 1–2 semaines | **Recommandé.** Un middleware/dépendance de routeur + revue systématique + tests de sécurité d'accès rendent les trous impossibles à réintroduire. Le socle est bon, il ne faut pas jeter le découpage. |
+| **Réécrire le backend** | 1–2 mois | Non justifié : l'architecture est saine ; le problème est l'application incohérente d'un bon principe, pas le choix technologique. Le coût dépasse le bénéfice. |
+| **Réécrire le frontend** | 2–3 semaines | Non prioritaire : Streamlit convient à un usage interne/démo. Le risque frontend est limité au diagnostic d'erreurs, pas à la sécurité. |
 
----
-
-## 4. Problèmes opérationnels
-
-### 4.1 Pas de monitoring / alerting
-
-Aucun des éléments suivants n'est présent :
-- Prometheus metrics (`/metrics`)
-- Structured logging (JSON)
-- Sentry ou équivalent pour le crash reporting
-- Health check réel de dépendances (PostgreSQL, MinIO, Binance)
-
-Le health check `/health/detailed` retourne des infos mais n'est pas utilisé par un système de monitoring externe.
+**Quel que soit le chemin, trois non-négociables :**
+1. **Revalidation serveur obligatoire** : identité (`user_id` vient du jeton, jamais du client), portée des actions, et données sensibles (aucun mock servi comme réel).
+2. **Auth centrale + tests d'accès paramétrés** avant tout nouveau correctif, sinon les patchs resteront contournables.
+3. **Rotation/reconfiguration des secrets et fermeture des ports internes** (MinIO anonyme, ml-api, AuthFlow) avant toute exposition réseau.
 
 ---
 
-### 4.2 Dockerfile backend copie les tests en production
+## 9. Conclusion
 
-**Fichier :** `backend/Dockerfile:84`
-```dockerfile
-COPY --chown=app:app . .
-```
+Le dépôt présente un **socle technique au-dessus de la moyenne** — découpage clair, outillage soigné, pipeline data/ML complet, vraie suite de tests — mais il est **dangereusement confiant** : la sécurité et la véracité des données sont traitées comme des détails d'implémentation plutôt que comme des invariants. Les cinq endpoints anonymes destructifs et les données simulées servies comme réelles ne sont pas des scories isolées : ils expriment le même parti pris de faire confiance au client. C'est réparable sans réécriture, à condition de commencer par la frontière serveur et de brancher la CI sur les zones aujourd'hui non vérifiées (`models/`, `orchestration/`, tests unitaires).
 
-Cette instruction copie tout le dossier backend, y compris les tests, les fixtures, et les fichiers de configuration de test dans l'image de production. Cela augmente la surface d'attaque et la taille de l'image.
-
----
-
-### 4.3 Airflow en LocalExecutor seulement
-
-Airflow est configuré en `LocalExecutor`, ce qui signifie que toutes les tâches s'exécutent dans le processus du scheduler. En production, ça ne passera pas à l'échelle :
-- Impossible de paralléliser les tâches
-- Une tâche qui consomme trop de mémoire peut tuer le scheduler
-- Pas de résilience worker-by-worker
-
-Le passage à `CeleryExecutor` (avec Redis) ou `KubernetesExecutor` est indispensable pour la prod.
-
----
-
-### 4.4 Gestion des batches dans `load_ohlcv.py`
-
-```python
-records = df.to_dict(orient="records")
-with engine.begin() as conn:
-    conn.execute(upsert_stmt)
-```
-
-Si le DataFrame fait 1000 lignes, il envoie une seule requête avec 1000 lignes. C'est inefficace et peut causer des timeouts PostgreSQL. Aucun batching/chunking n'est implémenté.
-
----
-
-## 5. Problèmes frontend
-
-### 5.1 Dépendance directe à `plotly.express` avec fallback silencieux
-
-```python
-try:
-    import plotly.express as px
-except ModuleNotFoundError:
-    px = None
-```
-
-Si Plotly n'est pas installé (environnement minimal), les graphiques sont simplement masqués sans erreur visible. L'utilisateur voit une page vide sans comprendre pourquoi. Un check au démarrage serait préférable.
-
----
-
-### 5.2 Mock-first sans timeline de migration réelle
-
-La stratégie mock-first est pragmatique, mais il n'y a **aucun plan de migration** visible vers une vraie API backend. Les services mockés (`PortfolioService`, `AccountService`, etc.) ont des interfaces complètes mais appellent `MockStore` et non le backend. Sans roadmap claire, le risque est de stagner indéfiniment en mode "démo".
-
----
-
-### 5.3 `st.page_link` enveloppé dans try/except partout
-
-```python
-try:
-    st.page_link("pages/03_Portefeuille_Spot.py", label="...")
-except Exception:
-    st.caption("...")
-```
-
-Ce pattern try/except silencieux est répété dans quasiment toutes les pages. Il cache les vraies erreurs et rend le débogage difficile. Si une page est manquante, l'utilisateur voit juste un texte moins cliquable sans comprendre pourquoi.
-
----
-
-## 6. Tests et qualité
-
-### 6.1 Tests backend quasi absents
-
-> **✅ Résolu (2026-07-27)** — Constat périmé : ce n'est plus le cas. Le dossier
-> `backend/tests/` contient désormais 113 tests réels (auth, chiffrement des clés API,
-> exécution multi-exchange, endpoints publics...), en plus de 171 côté frontend, 32 côté
-> `utils/` et 3 côté `jobs/` (319 au total). Constat original conservé ci-dessous pour
-> mémoire, ne reflète plus l'état du code.
-
-Le dossier `backend/tests/` existe avec une belle structure :
-```
-tests/
-├── conftest.py
-├── fixtures/
-├── integration/
-└── unit/
-```
-
-Mais les fichiers sont vides ou squelettiques. Pour un backend avec ~2000 lignes de code métier (auth, database, settings, error handling), c'est un **vide critique**. Aucune garantie que le login, le refresh token, ou le fallback SQLite fonctionnent.
-
-### 6.2 Pre-commit hook exécute les tests à chaque commit
-
-> **✅ Partiellement résolu (2026-07-27)** — `scripts/run-tests-if-needed.sh` ne lance plus
-> systématiquement toute la suite : il cible désormais les suites concernées par les zones
-> modifiées (`backend/`, `frontend/`, `utils/`, `jobs/`), avec prise en compte des
-> dépendances (`utils/` relance aussi `backend`/`jobs`, qui en dépendent). Le déclenchement
-> du hook lui-même reste sur tout fichier `.py` modifié (pas de granularité par fichier de
-> test précis) — la remarque garde donc une part de validité, mais l'attente "toute la
-> suite à chaque commit" décrite ci-dessous n'est plus exacte.
-
-**Fichier :** `.pre-commit-config.yaml:53-58`
-```yaml
-- id: run-tests
-  name: "Run lint + tests for changed code"
-  entry: scripts/run-tests-if-needed.sh
-  files: '^(backend|frontend)/src/.*\.py$'
-```
-
-Ce hook s'exécute sur **n'importe quel** fichier `.py` modifié dans backend/frontend, pas seulement ceux impactés par le changement. Pour un commit d'une seule ligne, l'utilisateur attend que toute la suite de tests s'exécute.
-
----
-
-## 7. Sécurité des dépendances
-
-### 7.1 Dépendances non utilisées
-
-**Fichier :** `backend/requirements.txt`
-```
-pyarrow==23.0.1      # Non utilisé dans le backend (utile dans jobs)
-fastparquet==2026.3.0  # Idem — non utilisé dans le backend
-```
-
-Ces dépendances alourdissent l'image Docker backend inutilement.
-
----
-
-## 8. Synthèse et priorités
-
-| Priorité | Problème | Impact | Effort |
-|----------|----------|--------|--------|
-| **P0** | ~~`SECRET_KEY`/`JWT_SIGNING_KEY` par défaut~~ | 🔴 Critique | ✅ Résolu 2026-08-02 |
-| **P0** | ~~CORS/ALLOWED_HOSTS en wildcard~~ | 🔴 Critique | ✅ Résolu 2026-08-02 |
-| **P0** | `from_orm()` cassé en Pydantic V2 | 🔴 Critique (runtime error) | 2 min |
-| **P1** | Script SQL en syntaxe MySQL | 🟠 Élevé | 30 min |
-| **P1** | Timestamp en dur dans health check | 🟠 Élevé (debugging) | 1 min |
-| **P1** | Migrations DB absentes | 🟠 Élevé (prod) | 2h |
-| **P1** | Mots de passe en clair dans mocks | 🟠 Élevé | 10 min |
-| **P2** | Pas de type checking dans CI | 🟡 Moyen | 30 min |
-| **P2** | Rate limiting non implémenté | 🟡 Moyen | 2h |
-| **P2** | Tests backend absents | 🟡 Moyen | 8h+ |
-| **P2** | Duplication jobs vs backend | 🟡 Moyen | 4h |
-| **P3** | Deux configs Ruff divergentes | 🔵 Faible | 15 min |
-| **P3** | SQLite commité dans le dépôt | 🔵 Faible | 1 min |
-| **P3** | Plotly import silencieux | 🔵 Faible | 10 min |
-
-### Résumé
-
-**3 problèmes bloquants P0** qui causeront un runtime error ou une faille de sécurité en production. Le plus urgent est le `from_orm()` déprécié qui fait planter tous les endpoints `/strategies`.
-
-La force du projet réside dans son **architecture** et sa **CI/CD**. La faiblesse est dans le **décalage entre le volume de code écrit et ce qui est réellement testé/fonctionnel**. Les routers backend font illusion (2000+ lignes d'endpoints) mais les services sous-jacents sont des stubs.
+> **Note finale : 4/10 en l'état — potentiel 8/10 atteignable en 2 semaines** si (et seulement si) l'authentification devient une dépendance de routeur centrale, les données simulées sont retirées des chemins de production, et la CI exécute enfin les tests déjà écrits.
