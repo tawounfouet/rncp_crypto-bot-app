@@ -13,6 +13,22 @@ from utils.dates import parse_dt_or_now
 from utils.numeric import to_float as _float
 
 
+def _unwrap_list(data: object, key: str) -> list:
+    """Normalise les formes de reponse du backend en une liste.
+
+    Le backend enveloppe ses reponses listes dans {"success":..., "data":[...]}.
+    On accepte aussi une liste brute ou {"<key>": [...]} pour rester tolerant.
+    """
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for candidate in (key, "data", "items", "results"):
+            value = data.get(candidate)
+            if isinstance(value, list):
+                return value
+    return []
+
+
 class PortfolioService:
     def __init__(self, store: MockStore, client: BackendApiClient | None = None) -> None:
         self.store = store
@@ -62,8 +78,8 @@ class PortfolioService:
         # --- Open orders ---
         orders_resp = self.client.list_orders(token, status="NEW", limit=50)
         open_orders: list[OpenOrder] = []
-        if orders_resp.success and isinstance(orders_resp.data, list):
-            for o in orders_resp.data:
+        if orders_resp.success:
+            for o in _unwrap_list(orders_resp.data, "orders"):
                 open_orders.append(
                     OpenOrder(
                         order_id=o.get("id", ""),
@@ -80,14 +96,7 @@ class PortfolioService:
         tx_resp = self.client.list_transactions(token, limit=20)
         recent_trades: list[SpotTrade] = []
         if tx_resp.success:
-            raw_list = (
-                tx_resp.data
-                if isinstance(tx_resp.data, list)
-                else (tx_resp.data or {}).get("transactions", [])
-                if isinstance(tx_resp.data, dict)
-                else []
-            )
-            for t in raw_list[:20]:
+            for t in _unwrap_list(tx_resp.data, "transactions")[:20]:
                 recent_trades.append(
                     SpotTrade(
                         trade_id=t.get("id", ""),

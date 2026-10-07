@@ -108,12 +108,14 @@ def main() -> None:
 
     _render_status_banner(snapshot)
     if not snapshot.system_status.exchange_ok:
+        # Exchange injoignable/indisponible (ex. cles sandbox de demonstration) : on affiche
+        # le message reel du backend et on CONTINUE -> les ordres/trades issus de la base
+        # (seed) restent visibles au lieu d'etre masques par un return premature.
         show_feedback(
             "warning",
-            f"{snapshot.system_status.exchange.capitalize()} n'est pas configure. "
-            "Ajoutez vos cles dans Gestion de compte.",
+            f"{snapshot.system_status.exchange.capitalize()} : "
+            f"{snapshot.system_status.exchange_message or 'exchange non connecte'}",
         )
-        return
 
     kpis = [
         KpiItem("Valeur totale", format_currency(snapshot.total_value_usdc)),
