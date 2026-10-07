@@ -64,6 +64,31 @@ dev-down: ## Arreter l'environnement dev
 dev-down-v: ## Arreter dev ET supprimer tous les volumes du projet (reset complet "from 0")
 	docker compose down -v --remove-orphans
 
+# ===========================================================================
+# Demo soutenance (jeu de donnees deterministe, worker de bots desactive)
+# ===========================================================================
+
+demo-up: generate-requirements prepare-dirs ## Demarrer l'environnement de demonstration + seed (worker bots off)
+	docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+	@echo ">>> Attente de la sante du backend..."
+	@for i in $$(seq 1 30); do \
+		if docker compose -f docker-compose.yml -f docker-compose.demo.yml exec -T crypto-bot-backend curl -fsS http://localhost:8009/health >/dev/null 2>&1; then \
+			echo ">>> backend pret"; break; fi; \
+		sleep 2; \
+	done
+	docker compose -f docker-compose.yml -f docker-compose.demo.yml exec -T crypto-bot-backend python /app/scripts/seed_demo.py --reset
+	@echo ">>> Demo prete : http://localhost:8501  (demo@cryptobot.dev / Demo12345!)"
+
+demo-seed: ## (Re)peupler le jeu de donnees de demonstration (backend deja demarre)
+	docker compose -f docker-compose.yml -f docker-compose.demo.yml exec -T crypto-bot-backend python /app/scripts/seed_demo.py --reset
+
+demo-down: ## Arreter l'environnement de demonstration
+	docker compose -f docker-compose.yml -f docker-compose.demo.yml down
+
+demo-reset: ## Reset complet de la demo (volumes supprimes) puis redemarrage + seed
+	docker compose -f docker-compose.yml -f docker-compose.demo.yml down -v --remove-orphans
+	$(MAKE) demo-up
+
 dev-config: generate-requirements ## Valider la configuration dev
 	docker compose config
 

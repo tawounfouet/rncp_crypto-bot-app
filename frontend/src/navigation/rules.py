@@ -88,6 +88,17 @@ PAGES: dict[str, NavPage] = {
         requires_auth=True,
         show_when_authenticated=True,
     ),
+    # Page isolée temporaire (hors barre latérale : absente de
+    # allowed_page_keys_in_sidebar). Déclarée ici pour éviter la KeyError au
+    # chargement (cf. B11) ; l'entrée doit correspondre au page_key passé par
+    # pages/09_Binance_Testnet_Lab.py.
+    "binance_testnet_lab": NavPage(
+        key="binance_testnet_lab",
+        label="Binance Testnet Lab",
+        path="pages/09_Binance_Testnet_Lab.py",
+        requires_auth=True,
+        show_when_authenticated=True,
+    ),
     "admin": NavPage(
         key="admin",
         label="Admin",

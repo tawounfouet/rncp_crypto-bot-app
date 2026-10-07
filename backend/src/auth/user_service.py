@@ -178,6 +178,10 @@ class UserService:
                 if hasattr(user, field):
                     setattr(user, field, value)
 
+            # Flush obligatoire AVANT refresh : la session est créée avec autoflush=False
+            # (cf. shared/database/connection.py), donc refresh() rechargerait les valeurs
+            # BDD et écraserait les modifications en attente (cf. B1).
+            session.flush()
             session.refresh(user)
             session.expunge(user)
             return user

@@ -1,0 +1,18 @@
+# Surcharge Docker Compose pour la DÉMONSTRATION de soutenance.
+# ============================================================
+# Objectif : un environnement déterministe, sans aucun appel à un exchange réel.
+#
+# Usage :
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+#   make demo-seed          # peuple le jeu de données de démonstration
+#
+# Ne remplace pas docker-compose.yml : il le surcharge (fusion par clé).
+# Les variables de versions.env sont chargées par le Makefile.
+
+services:
+  crypto-bot-backend:
+    environment:
+      # Le worker de bots est désactivé : pas d'exécution réelle, pas d'appel exchange,
+      # les décisions/ordres sont fournis par le seed (déterministe).
+      - ENABLE_BACKGROUND_TASKS=0
+      - BOT_TEMPLATE_AUTO_MIGRATE=0
