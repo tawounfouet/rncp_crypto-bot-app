@@ -44,6 +44,7 @@ dev-up: generate-requirements prepare-dirs ## Demarrer l'environnement dev (retr
 	@n=5; d=5; for i in $$(seq 1 $$n); do \
 		echo ">>> dev-up : tentative $$i/$$n" ; \
 		if docker compose up -d ; then \
+			docker rm -f airflow-init 2>/dev/null || true ; \
 			echo ">>> Pour creer un compte admin : make dev-admin" ; \
 			exit 0 ; \
 		fi ; \
@@ -105,7 +106,7 @@ ml-train-bot-rsi: ## Entrainer et versionner le modele MLflow du bot RSI BTCUSDT
 # ===========================================================================
 
 staging-up: generate-requirements ## Demarrer staging
-	docker compose -f docker-compose.staging.yml up -d
+	docker compose -f docker-compose.staging.yml up -d && (docker rm -f staging-airflow-init 2>/dev/null || true)
 
 staging-down: ## Arreter staging
 	docker compose -f docker-compose.staging.yml down
@@ -121,7 +122,7 @@ staging-logs: ## Suivre les logs staging
 # ===========================================================================
 
 prod-up: generate-requirements ## Demarrer la production
-	docker compose -f docker-compose.prod.yml up -d
+	docker compose -f docker-compose.prod.yml up -d && (docker rm -f prod-airflow-init 2>/dev/null || true)
 
 prod-down: ## Arreter la production
 	docker compose -f docker-compose.prod.yml down
